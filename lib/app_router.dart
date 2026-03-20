@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'presentation/providers/auth_provider.dart';
+import 'presentation/screens/splash/splash_screen.dart';
+import 'presentation/screens/auth/auth_screen.dart';
+import 'presentation/screens/auth/expired_screen.dart';
+import 'presentation/screens/home/home_screen.dart';
+import 'presentation/screens/live_tv/live_tv_screen.dart';
+import 'presentation/screens/live_tv/player_screen.dart';
+import 'presentation/screens/movies/movies_screen.dart';
+import 'presentation/screens/movies/movie_detail_screen.dart';
+import 'presentation/screens/movies/vod_player_screen.dart';
+import 'presentation/screens/series/series_screen.dart';
+import 'presentation/screens/series/series_detail_screen.dart';
+import 'presentation/screens/favourites/favourites_screen.dart';
+import 'presentation/screens/settings/settings_screen.dart';
+import 'domain/entities/vod.dart';
+import 'domain/entities/series.dart';
+import 'screens/activation_screen.dart';
+
+class _AuthListenable extends ChangeNotifier {
+  _AuthListenable(Ref ref) {
+    _sub = ref.listen<AuthState>(authProvider, (_, __) => notifyListeners());
+  }
+  late final ProviderSubscription<AuthState> _sub;
+  @override
+  void dispose() {
+    _sub.close();
+    super.dispose();
+  }
+}
+
+GoRouter buildRouter(Ref ref) {
+  return GoRouter(
+    initialLocation: '/splash',
+    refreshListenable: _AuthListenable(ref),
+    redirect: (context, state) {
+      final auth = ref.read(authProvider);
+      final loc  = state.matchedLocation;
+
+      if (auth is AuthUnknown || auth is AuthLoading) return null;
+      if (auth is AuthAuthenticated) {
+        return (loc == '/splash' || loc == '/auth' || loc == '/activation')
+            ? '/home'
+            : null;
+      }
+      if (auth is AuthExpired) return loc == '/expired'    ? null : '/expired';
+      if (auth is AuthInitial) return loc == '/activation' ? null : '/activation';
+      // AuthError → manual login
+      return loc == '/auth' ? null : '/auth';
+    },
+    routes: [
+      GoRoute(path: '/splash',     builder: (_, __) => const SplashScreen()),
+      GoRoute(path: '/auth',       builder: (_, __) => const AuthScreen()),
+      GoRoute(path: '/activation', builder: (_, __) => const IzoActivationScreen()),
+      GoRoute(path: '/expired',    builder: (_, __) => const ExpiredScreen()),
+      GoRoute(path: '/home',       builder: (_, __) => const HomeScreen()),
+      GoRoute(
+        path: '/live',
+        builder: (_, __) => const LiveTvScreen(),
+        routes: [
+          GoRoute(path: 'player', builder: (_, __) => const LivePlayerScreen()),
+        ],
+      ),
+      GoRoute(
+        path: '/movies',
+        builder: (_, __) => const MoviesScreen(),
+        routes: [
+          // player MUST be declared BEFORE :id
+          GoRoute(
+            path: 'player',
+            builder: (_, state) => VodPlayerScreen(vod: state.extra as VodItem),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (_, state) {
+              final id = int.parse(state.pathParameters['id']!);
+              return MovieDetailScreen(vodId: id);
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/series',
+        builder: (_, __) => const SeriesScreen(),
+        routes: [
+          // player MUST be declared BEFORE :id
+          GoRoute(
+            path: 'player',
+            builder: (_, state) {
+              final ep = state.extra as Episode;
+              return VodPlayerScreen(
+                vod: VodItem(
+                  id:          ep.id,
+                  name:        ep.title,
+                  streamUrl:   ep.streamUrl,
+                  categoryId:  0,
+                  durationSecs: ep.durationSecs,
+                ),
+              );
+            },
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (_, state) {
+              final id = int.parse(state.pathParameters['id']!);
+              return SeriesDetailScreen(seriesId: id);
+            },
+          ),
+        ],
+      ),
+      GoRoute(path: '/favourites', builder: (_, __) => const FavouritesScreen()),
+      GoRoute(path: '/settings',   builder: (_, __) => const SettingsScreen()),
+    ],
+  );
+}
+
+final routerProvider = Provider<GoRouter>((ref) => buildRouter(ref));
