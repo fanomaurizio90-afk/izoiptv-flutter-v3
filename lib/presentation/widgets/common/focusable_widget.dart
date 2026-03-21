@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Handles D-pad focus (TV remote), touch, and optional hover effects.
+/// Handles D-pad focus (TV remote), touch, and cyan glow focus effects.
 /// Use this for ALL interactive elements — never GestureDetector alone on TV.
 class FocusableWidget extends StatefulWidget {
   const FocusableWidget({
@@ -11,7 +11,7 @@ class FocusableWidget extends StatefulWidget {
     required this.onTap,
     this.borderRadius  = 0.0,
     this.autofocus     = false,
-    this.scaleOnFocus  = false, // no scale per spec — 1px border only
+    this.scaleOnFocus  = false,
     this.onLongPress,
     this.focusNode,
   });
@@ -55,11 +55,12 @@ class _FocusableWidgetState extends State<FocusableWidget> {
           duration: AppDurations.fast,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.borderRadius),
+            color: _focused ? AppColors.accentSoft : Colors.transparent,
             border: _focused
-                ? Border.all(
-                    color: AppColors.focusBorder,
-                    width: AppSpacing.focusBorderWidth,
-                  )
+                ? Border.all(color: AppColors.focusBorder, width: AppSpacing.focusBorderWidth)
+                : Border.all(color: Colors.transparent, width: AppSpacing.focusBorderWidth),
+            boxShadow: _focused
+                ? [BoxShadow(color: AppColors.focusGlow, blurRadius: 16, spreadRadius: 0)]
                 : null,
           ),
           child: widget.child,

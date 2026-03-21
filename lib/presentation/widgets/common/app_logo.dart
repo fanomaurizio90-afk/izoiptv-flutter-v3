@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/theme/app_theme.dart';
 
-/// IZO IPTV hexagon logo — white monochrome, any size
+/// IZO IPTV hexagon logo — cyan gradient, any size
 class IzoLogo extends StatelessWidget {
   const IzoLogo({super.key, this.size = 72});
   final double size;
@@ -24,59 +23,58 @@ class _IzoLogoPainter extends CustomPainter {
     final cy = size.height / 2;
     final r  = size.width  / 2;
 
-    // ── Hexagon outline ─────────────────────────────────────────────────────
+    // ── Hexagon outline — cyan gradient ─────────────────────────────────────
+    final hexPath = _hexPath(cx, cy, r * 0.88);
     final hexPaint = Paint()
-      ..color       = AppColors.textPrimary
+      ..shader = LinearGradient(
+          begin:  Alignment.topLeft,
+          end:    Alignment.bottomRight,
+          colors: const [Color(0xFF00F0FF), Color(0xFFA855F7)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style       = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.045
+      ..strokeWidth = size.width * 0.05
       ..strokeJoin  = StrokeJoin.miter;
-
-    final hexPath = Path();
-    for (int i = 0; i < 6; i++) {
-      final angle = math.pi / 180 * (60 * i - 30);
-      final x     = cx + r * 0.88 * math.cos(angle);
-      final y     = cy + r * 0.88 * math.sin(angle);
-      if (i == 0) {
-        hexPath.moveTo(x, y);
-      } else {
-        hexPath.lineTo(x, y);
-      }
-    }
-    hexPath.close();
     canvas.drawPath(hexPath, hexPaint);
 
-    // ── IZO lettering ────────────────────────────────────────────────────────
-    final textPaint = Paint()
-      ..color = AppColors.textPrimary
+    // ── Corner accent dots ───────────────────────────────────────────────────
+    final dotPaint = Paint()
+      ..color = const Color(0xFF00F0FF)
       ..style = PaintingStyle.fill;
+    for (int i = 0; i < 6; i++) {
+      final angle = math.pi / 180 * (60 * i - 30);
+      final x = cx + r * 0.88 * math.cos(angle);
+      final y = cy + r * 0.88 * math.sin(angle);
+      canvas.drawCircle(Offset(x, y), size.width * 0.03, dotPaint);
+    }
 
-    final fontSize   = size.width * 0.28;
-    final letterSpacing = size.width * 0.01;
+    // ── IZO lettering ────────────────────────────────────────────────────────
+    final fontSize = size.width * 0.28;
+    final offset   = size.width * 0.01;
 
-    // I
-    _drawLetter(canvas, textPaint, 'I', cx - fontSize * 0.85, cy, fontSize);
-    // Z
-    _drawLetter(canvas, textPaint, 'Z', cx - fontSize * 0.08 + letterSpacing, cy, fontSize);
-    // O
-    _drawLetter(canvas, textPaint, 'O', cx + fontSize * 0.72 + letterSpacing * 2, cy, fontSize);
+    _drawLetter(canvas, 'I', cx - fontSize * 0.85,             cy, fontSize);
+    _drawLetter(canvas, 'Z', cx - fontSize * 0.08 + offset,    cy, fontSize);
+    _drawLetter(canvas, 'O', cx + fontSize * 0.72 + offset * 2, cy, fontSize);
   }
 
-  void _drawLetter(
-    Canvas canvas,
-    Paint paint,
-    String letter,
-    double x,
-    double y,
-    double fontSize,
-  ) {
+  Path _hexPath(double cx, double cy, double r) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = math.pi / 180 * (60 * i - 30);
+      final x = cx + r * math.cos(angle);
+      final y = cy + r * math.sin(angle);
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    return path..close();
+  }
+
+  void _drawLetter(Canvas canvas, String letter, double x, double y, double fontSize) {
     final tp = TextPainter(
       text: TextSpan(
         text:  letter,
         style: TextStyle(
-          color:      AppColors.textPrimary,
+          color:      const Color(0xFF00F0FF),
           fontSize:   fontSize,
           fontWeight: FontWeight.w700,
-          letterSpacing: 0,
           height:     1.0,
         ),
       ),

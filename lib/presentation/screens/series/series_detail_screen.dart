@@ -21,8 +21,9 @@ final seasonsProvider = FutureProvider.autoDispose.family<List<Season>, int>((re
 final selectedSeasonProvider = StateProvider<int>((ref) => 1);
 
 class SeriesDetailScreen extends ConsumerStatefulWidget {
-  const SeriesDetailScreen({super.key, required this.seriesId});
-  final int seriesId;
+  const SeriesDetailScreen({super.key, required this.seriesId, this.series});
+  final int        seriesId;
+  final SeriesItem? series; // pre-loaded from list — shown instantly
 
   @override
   ConsumerState<SeriesDetailScreen> createState() => _SeriesDetailScreenState();
@@ -40,8 +41,15 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
+    // If we already have the series from navigation extra, show it immediately
+    if (widget.series != null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _SeriesDetailBody(series: widget.series!),
+      );
+    }
 
+    final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
     return Scaffold(
       backgroundColor: AppColors.background,
       body: seriesAsync.when(
@@ -144,14 +152,15 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                       children: [
                         // Season tabs
                         SizedBox(
-                          height: 32,
+                          height: 40,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             itemCount:       seasons.length,
                             itemBuilder:     (_, i) {
                               final s          = seasons[i];
                               final isSelected = s.number == selectedSeason;
-                              return GestureDetector(
+                              return FocusableWidget(
+                                autofocus: i == 0,
                                 onTap: () => ref.read(selectedSeasonProvider.notifier).state = s.number,
                                 child: Padding(
                                   padding: const EdgeInsets.only(right: AppSpacing.lg),
@@ -170,7 +179,12 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         // Episodes
-                        ...season.episodes.map((ep) => _EpisodeRow(episode: ep)),
+                        ...season.episodes.asMap().entries.map((e) => _EpisodeRow(
+                          episode:   e.value,
+                          episodes:  season.episodes,
+                          index:     e.key,
+                          autofocus: e.key == 0,
+                        )),
                       ],
                     );
                   },
@@ -187,13 +201,21 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({required this.episode});
-  final Episode episode;
+  const _EpisodeRow({required this.episode, required this.episodes, required this.index, this.autofocus = false});
+  final Episode       episode;
+  final List<Episode> episodes;
+  final int           index;
+  final bool          autofocus;
 
   @override
   Widget build(BuildContext context) {
     return FocusableWidget(
-      onTap: () => context.push('/series/player', extra: episode),
+      autofocus: autofocus,
+      onTap: () => context.push('/series/player', extra: {
+        'episode':  episode,
+        'episodes': episodes,
+        'index':    index,
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         decoration: const BoxDecoration(

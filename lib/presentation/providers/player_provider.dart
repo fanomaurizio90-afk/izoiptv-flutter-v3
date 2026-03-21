@@ -46,8 +46,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentIndex: state.currentIndex,
       );
     });
+    // Throttle position to 2x/sec — 10x/sec is unnecessary and burns CPU
+    DateTime _lastPos = DateTime.fromMillisecondsSinceEpoch(0);
     _player.stream.position.listen((v) {
-      if (mounted) state = PlayerState(
+      final now = DateTime.now();
+      if (!mounted || now.difference(_lastPos).inMilliseconds < 500) return;
+      _lastPos = now;
+      state = PlayerState(
         isPlaying:    state.isPlaying,
         isBuffering:  state.isBuffering,
         position:     v,

@@ -9,6 +9,8 @@ import '../../providers/channel_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/loading_widget.dart';
+import '../../widgets/common/pin_dialog.dart';
+import '../../../core/utils/parental_control.dart';
 
 class LiveTvScreen extends ConsumerStatefulWidget {
   const LiveTvScreen({super.key});
@@ -182,11 +184,20 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       itemBuilder: (_, i) {
         final ch = _filtered[i];
         return FocusableWidget(
-          onTap: () {
+          autofocus: i == 0,
+          onTap: () async {
+            final cat = _categories.firstWhere(
+              (c) => c.id == ch.categoryId,
+              orElse: () => const ChannelCategory(id: 0, name: ''),
+            );
+            if (isAdultCategory(cat.name) || isAdultCategory(ch.name)) {
+              final ok = await showPinDialog(context);
+              if (!ok || !mounted) return;
+            }
             ref.read(selectedChannelProvider.notifier).state     = ch;
             ref.read(currentChannelListProvider.notifier).state  = _filtered;
             ref.read(currentChannelIndexProvider.notifier).state = i;
-            context.push('/live/player');
+            if (mounted) context.push('/live/player');
           },
           child: Container(
             height:  AppConstants_channelRowHeight,

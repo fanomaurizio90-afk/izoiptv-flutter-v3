@@ -48,18 +48,34 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      color:  AppColors.surface,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Row(
         children: [
-          const IzoLogo(size: 28),
+          const IzoLogo(size: 30),
+          const SizedBox(width: AppSpacing.md),
+          const Text(
+            'IZO IPTV',
+            style: TextStyle(
+              color:         AppColors.accentPrimary,
+              fontSize:      13,
+              fontWeight:    FontWeight.w600,
+              letterSpacing: 2.0,
+            ),
+          ),
           const Spacer(),
-          GestureDetector(
+          FocusableWidget(
             onTap: () => context.push('/settings'),
-            child: const Icon(
-              Icons.settings_outlined,
-              color: AppColors.textSecondary,
-              size:  AppSpacing.iconMd,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              child: const Icon(
+                Icons.settings_outlined,
+                color: AppColors.textSecondary,
+                size:  AppSpacing.iconMd,
+              ),
             ),
           ),
         ],
@@ -78,11 +94,13 @@ class _MainTiles extends StatelessWidget {
     ];
 
     return Row(
-      children: tiles.map((t) {
+      children: tiles.asMap().entries.map((e) {
+        final t = e.value;
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
             child: FocusableWidget(
+              autofocus:    e.key == 0,
               borderRadius: AppSpacing.radiusCard,
               onTap: () => context.push(t.route),
               child: Container(
@@ -95,14 +113,15 @@ class _MainTiles extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(t.icon, color: AppColors.textPrimary, size: AppSpacing.iconLg),
+                    Icon(t.icon, color: AppColors.accentPrimary, size: AppSpacing.iconLg),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       t.label,
                       style: const TextStyle(
-                        color:      AppColors.textPrimary,
-                        fontSize:   13,
-                        fontWeight: FontWeight.w400,
+                        color:         AppColors.textPrimary,
+                        fontSize:      12,
+                        fontWeight:    FontWeight.w400,
+                        letterSpacing: 1.0,
                       ),
                     ),
                   ],

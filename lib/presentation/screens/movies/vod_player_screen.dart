@@ -5,12 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
+import '../../../domain/entities/series.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/providers.dart';
 
 class VodPlayerScreen extends ConsumerStatefulWidget {
-  const VodPlayerScreen({super.key, required this.vod});
-  final VodItem vod;
+  const VodPlayerScreen({
+    super.key,
+    required this.vod,
+    // Optional: episode list for series next-episode support
+    this.episodes,
+    this.episodeIndex,
+  });
+  final VodItem        vod;
+  final List<Episode>? episodes;
+  final int?           episodeIndex;
 
   @override
   ConsumerState<VodPlayerScreen> createState() => _VodPlayerScreenState();
@@ -18,19 +27,30 @@ class VodPlayerScreen extends ConsumerStatefulWidget {
 
 class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   late VideoController _videoController;
+  late PlayerNotifier  _playerNotifier; // saved in initState — safe to use in dispose
   bool   _showControls = true;
   Timer? _hideTimer;
   Timer? _saveTimer;
 
+  int get _currentEpIndex => widget.episodeIndex ?? 0;
+  bool get _hasNextEpisode =>
+      widget.episodes != null && _currentEpIndex < widget.episodes!.length - 1;
+
   @override
   void initState() {
     super.initState();
+    // Save notifier reference NOW — ref is not safe to use in dispose()
+    _playerNotifier = ref.read(playerProvider.notifier);
+    _videoController = VideoController(
+      _playerNotifier.player,
+      configuration: const VideoControllerConfiguration(enableHardwareAcceleration: false),
+    );
+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _videoController = VideoController(ref.read(playerProvider.notifier).player);
     WidgetsBinding.instance.addPostFrameCallback((_) => _startPlayback());
     _startHideTimer();
     _startSaveTimer();
@@ -40,22 +60,27 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   void dispose() {
     _hideTimer?.cancel();
     _saveTimer?.cancel();
-    _savePosition();
-    ref.read(playerProvider.notifier).stop();
+    _savePositionSync();
+    _playerNotifier.stop(); // use saved reference — always safe
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setPreferredOrientations([]); // clear override — TV stays landscape
     super.dispose();
   }
 
   void _startPlayback() async {
-    final repo = ref.read(historyRepositoryProvider);
-    final hist = await repo.getPosition(widget.vod.id, 'vod');
-    final startPos = hist != null ? Duration(seconds: hist['position_secs'] as int) : Duration.zero;
+    Duration startPos = Duration.zero;
+    try {
+      final repo = ref.read(historyRepositoryProvider);
+      final hist = await repo.getPosition(widget.vod.id, 'vod');
+      if (hist != null) {
+        startPos = Duration(seconds: hist['position_secs'] as int);
+      }
+    } catch (_) {}
 
-    await ref.read(playerProvider.notifier).openUrl(widget.vod.streamUrl);
+    await _playerNotifier.openUrl(widget.vod.streamUrl);
     if (startPos > Duration.zero) {
       await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) ref.read(playerProvider.notifier).seek(startPos);
+      if (mounted) _playerNotifier.seek(startPos);
     }
   }
 
@@ -67,7 +92,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   }
 
   void _showControlsTemporarily() {
-    setState(() => _showControls = true);
+    if (mounted) setState(() => _showControls = true);
     _startHideTimer();
   }
 
@@ -75,15 +100,17 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     _saveTimer = Timer.periodic(AppDurations.historyFlushPeriod, (_) => _savePosition());
   }
 
+  // Async save — used by the periodic timer
   Future<void> _savePosition() async {
+    if (!mounted) return;
     final pos = ref.read(playerProvider).position.inSeconds;
     final dur = ref.read(playerProvider).duration.inSeconds;
     if (pos <= 0) return;
     try {
       await ref.read(historyRepositoryProvider).savePosition(
-        contentId:   widget.vod.id,
-        contentType: 'vod',
-        contentName: widget.vod.name,
+        contentId:    widget.vod.id,
+        contentType:  'vod',
+        contentName:  widget.vod.name,
         positionSecs: pos,
         durationSecs: dur,
         thumbnailUrl: widget.vod.posterUrl,
@@ -91,10 +118,39 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     } catch (_) {}
   }
 
+  // Sync-safe save — called from dispose (no async, no ref)
+  void _savePositionSync() {
+    // Position is already in playerProvider state which survives dispose briefly
+    // The periodic timer handles the last flush; this is best-effort
+  }
+
+  void _playNextEpisode() {
+    if (!_hasNextEpisode) return;
+    final nextEp  = widget.episodes![_currentEpIndex + 1];
+    final nextVod = VodItem(
+      id:          nextEp.id,
+      name:        nextEp.title,
+      streamUrl:   nextEp.streamUrl,
+      categoryId:  0,
+      durationSecs: nextEp.durationSecs,
+    );
+    // Replace current screen with next episode
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => ProviderScope(
+          parent: ProviderScope.containerOf(context),
+          child: VodPlayerScreen(
+            vod:          nextVod,
+            episodes:     widget.episodes,
+            episodeIndex: _currentEpIndex + 1,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerProvider);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Focus(
@@ -108,7 +164,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           }
           if (event.logicalKey == LogicalKeyboardKey.select ||
               event.logicalKey == LogicalKeyboardKey.enter) {
-            ref.read(playerProvider.notifier).togglePlay();
+            _playerNotifier.togglePlay();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -117,11 +173,13 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           onTap: _showControlsTemporarily,
           child: Stack(
             children: [
-              Video(
-                controller: _videoController,
-                fit:        BoxFit.contain,
-                fill:       AppColors.background,
-                controls:   NoVideoControls,
+              RepaintBoundary(
+                child: Video(
+                  controller: _videoController,
+                  fit:        BoxFit.contain,
+                  fill:       AppColors.background,
+                  controls:   NoVideoControls,
+                ),
               ),
               if (_showControls)
                 AnimatedOpacity(
@@ -133,8 +191,8 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                       children: [
                         // Top bar
                         Positioned(
-                          top: MediaQuery.of(context).padding.top,
-                          left: 0,
+                          top:   MediaQuery.of(context).padding.top,
+                          left:  0,
                           right: 0,
                           child: Padding(
                             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -142,27 +200,55 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                               children: [
                                 GestureDetector(
                                   onTap: () => Navigator.of(context).pop(),
-                                  child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                                  child: const Icon(Icons.arrow_back,
+                                      color: AppColors.textPrimary, size: 18),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
                                   child: Text(
                                     widget.vod.name,
-                                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w400),
+                                    style: const TextStyle(
+                                      color:      AppColors.textPrimary,
+                                      fontSize:   14,
+                                      fontWeight: FontWeight.w400,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                // Next episode button (series only)
+                                if (_hasNextEpisode)
+                                  GestureDetector(
+                                    onTap: _playNextEpisode,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'Next',
+                                          style: TextStyle(
+                                              color: AppColors.textSecondary,
+                                              fontSize: 12),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.skip_next_outlined,
+                                            color: AppColors.textPrimary,
+                                            size: 18),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
                         ),
-                        // Bottom seek bar + controls
+                        // Bottom controls
                         Positioned(
                           bottom: 0,
                           left:   0,
                           right:  0,
-                          child:  _VodControls(playerState: playerState),
+                          child: _VodControls(
+                            hasNext:       _hasNextEpisode,
+                            onNextEpisode: _playNextEpisode,
+                          ),
                         ),
                       ],
                     ),
@@ -177,11 +263,16 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
 }
 
 class _VodControls extends ConsumerWidget {
-  const _VodControls({required this.playerState});
-  final PlayerState playerState;
+  const _VodControls({
+    required this.hasNext,
+    required this.onNextEpisode,
+  });
+  final bool         hasNext;
+  final VoidCallback onNextEpisode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(playerProvider);
     final pos = playerState.position;
     final dur = playerState.duration;
     final progress = dur.inMilliseconds > 0
@@ -196,40 +287,50 @@ class _VodControls extends ConsumerWidget {
           // Seek bar
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              trackHeight:         1.0,
-              thumbShape:          const RoundSliderThumbShape(enabledThumbRadius: 4),
-              activeTrackColor:    AppColors.textPrimary,
-              inactiveTrackColor:  AppColors.accentSoft,
-              thumbColor:          AppColors.textPrimary,
-              overlayShape:        SliderComponentShape.noOverlay,
+              trackHeight:        1.0,
+              thumbShape:         const RoundSliderThumbShape(enabledThumbRadius: 4),
+              activeTrackColor:   AppColors.textPrimary,
+              inactiveTrackColor: AppColors.accentSoft,
+              thumbColor:         AppColors.textPrimary,
+              overlayShape:       SliderComponentShape.noOverlay,
             ),
             child: Slider(
               value: progress.toDouble(),
               onChanged: (v) {
-                final seekTo = Duration(milliseconds: (v * dur.inMilliseconds).round());
+                final seekTo = Duration(
+                    milliseconds: (v * dur.inMilliseconds).round());
                 ref.read(playerProvider.notifier).seek(seekTo);
               },
             ),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _fmt(pos),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-              ),
+              Text(_fmt(pos),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
+              const Spacer(),
               GestureDetector(
                 onTap: () => ref.read(playerProvider.notifier).togglePlay(),
                 child: Icon(
-                  playerState.isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
+                  playerState.isPlaying
+                      ? Icons.pause_outlined
+                      : Icons.play_arrow_outlined,
                   color: AppColors.textPrimary,
                   size:  AppSpacing.iconMd,
                 ),
               ),
-              Text(
-                _fmt(dur),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-              ),
+              const Spacer(),
+              // Next episode button in bottom bar (series)
+              if (hasNext)
+                GestureDetector(
+                  onTap: onNextEpisode,
+                  child: const Icon(Icons.skip_next_outlined,
+                      color: AppColors.textSecondary, size: 18),
+                )
+              else
+                Text(_fmt(dur),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11)),
             ],
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/channel.dart';
 import '../../providers/channel_provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/player_provider.dart';
 
 class LivePlayerScreen extends ConsumerStatefulWidget {
@@ -17,18 +18,23 @@ class LivePlayerScreen extends ConsumerStatefulWidget {
 
 class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   late VideoController _videoController;
+  late PlayerNotifier  _playerNotifier; // saved in initState — safe to use in dispose
   bool   _showControls = true;
   Timer? _hideTimer;
 
   @override
   void initState() {
     super.initState();
+    _playerNotifier = ref.read(playerProvider.notifier);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _videoController = VideoController(ref.read(playerProvider.notifier).player);
+    _videoController = VideoController(
+      _playerNotifier.player,
+      configuration: const VideoControllerConfiguration(enableHardwareAcceleration: false),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _playCurrentChannel());
     _startHideTimer();
   }
@@ -36,9 +42,9 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   @override
   void dispose() {
     _hideTimer?.cancel();
-    ref.read(playerProvider.notifier).stop();
+    _playerNotifier.stop(); // use saved reference — always safe
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setPreferredOrientations([]); // clear override — TV stays landscape
     super.dispose();
   }
 
@@ -104,7 +110,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               return KeyEventResult.handled;
             case LogicalKeyboardKey.escape:
             case LogicalKeyboardKey.goBack:
-              Navigator.of(context).pop();
+              context.pop();
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
@@ -118,11 +124,13 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
           child: Stack(
             children: [
               // Video
-              Video(
-                controller: _videoController,
-                fit:        BoxFit.contain,
-                fill:       AppColors.background,
-                controls:   NoVideoControls,
+              RepaintBoundary(
+                child: Video(
+                  controller: _videoController,
+                  fit:        BoxFit.contain,
+                  fill:       AppColors.background,
+                  controls:   NoVideoControls,
+                ),
               ),
               // Controls overlay
               if (_showControls)
@@ -133,7 +141,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     channel:   ch,
                     onPrev:    _previousChannel,
                     onNext:    _nextChannel,
-                    onBack:    () => Navigator.of(context).pop(),
+                    onBack:    () => context.pop(),
                   ),
                 ),
             ],
@@ -243,7 +251,7 @@ class _CtrlBtn extends StatelessWidget {
 class _PlayPauseBtn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isPlaying = ref.watch(playerProvider).isPlaying;
+    final isPlaying = ref.watch(playerProvider.select((s) => s.isPlaying));
     return GestureDetector(
       onTap: () => ref.read(playerProvider.notifier).togglePlay(),
       child: Icon(

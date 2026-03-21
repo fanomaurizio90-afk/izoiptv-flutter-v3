@@ -115,6 +115,7 @@ class _MovieDetailBody extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl3),
                 // Play button
                 FocusableWidget(
+                  autofocus:    true,
                   borderRadius: AppSpacing.radiusCard,
                   onTap: () => context.push('/movies/player', extra: vod),
                   child: Container(

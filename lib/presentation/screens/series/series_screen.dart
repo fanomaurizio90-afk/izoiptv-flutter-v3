@@ -8,6 +8,8 @@ import '../../../domain/entities/series.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/loading_widget.dart';
+import '../../widgets/common/pin_dialog.dart';
+import '../../../core/utils/parental_control.dart';
 
 class SeriesScreen extends ConsumerStatefulWidget {
   const SeriesScreen({super.key});
@@ -168,7 +170,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     return GridView.builder(
       padding:     const EdgeInsets.all(AppSpacing.md),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount:   3,
+        crossAxisCount:   5,
         crossAxisSpacing: AppSpacing.sm,
         mainAxisSpacing:  AppSpacing.sm,
         childAspectRatio: 2 / 3,
@@ -177,8 +179,19 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       itemBuilder: (_, i) {  // CRITICAL: use _ not context
         final s = display[i];
         return FocusableWidget(
+          autofocus:    i == 0,
           borderRadius: AppSpacing.radiusCard,
-          onTap: () => context.push('/series/${s.id}'),
+          onTap: () async {
+            final cat = _categories.firstWhere(
+              (c) => c.id == s.categoryId,
+              orElse: () => const SeriesCategory(id: 0, name: ''),
+            );
+            if (isAdultCategory(cat.name) || isAdultCategory(s.name)) {
+              final ok = await showPinDialog(context);
+              if (!ok || !mounted) return;
+            }
+            if (mounted) context.push('/series/${s.id}', extra: s);
+          },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
             child: Container(
@@ -211,7 +224,7 @@ class _SeriesCategoryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 36,
+      height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -219,7 +232,8 @@ class _SeriesCategoryBar extends StatelessWidget {
         itemBuilder:     (_, i) {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
-          return GestureDetector(
+          return FocusableWidget(
+            autofocus: i == 0,
             onTap: () => onSelect(cat.id),
             child: Padding(
               padding: const EdgeInsets.only(right: AppSpacing.lg),

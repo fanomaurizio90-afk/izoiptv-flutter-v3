@@ -89,7 +89,10 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: 'player',
             builder: (_, state) {
-              final ep = state.extra as Episode;
+              final extra    = state.extra as Map<String, dynamic>;
+              final ep       = extra['episode']  as Episode;
+              final episodes = extra['episodes'] as List<Episode>;
+              final index    = extra['index']    as int;
               return VodPlayerScreen(
                 vod: VodItem(
                   id:          ep.id,
@@ -98,14 +101,17 @@ GoRouter buildRouter(Ref ref) {
                   categoryId:  0,
                   durationSecs: ep.durationSecs,
                 ),
+                episodes:     episodes,
+                episodeIndex: index,
               );
             },
           ),
           GoRoute(
             path: ':id',
             builder: (_, state) {
-              final id = int.parse(state.pathParameters['id']!);
-              return SeriesDetailScreen(seriesId: id);
+              final id     = int.parse(state.pathParameters['id']!);
+              final series = state.extra as SeriesItem?;
+              return SeriesDetailScreen(seriesId: id, series: series);
             },
           ),
         ],
