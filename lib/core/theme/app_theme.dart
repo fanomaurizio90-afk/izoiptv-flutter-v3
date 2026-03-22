@@ -1,39 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 abstract final class AppColors {
-  // Backgrounds — deep cyber space
-  static const background    = Color(0xFF030308);
-  static const surface       = Color(0xFF050510);
-  static const card          = Color(0xFF0A0A14);
+  static const background    = Color(0xFF080808);
+  static const surface       = Color(0xFF0F0F0F);
+  static const card          = Color(0xFF141414);
+  static const cardElevated  = Color(0xFF1A1A1A);
 
-  // Brand accents
-  static const accentPrimary = Color(0xFF00F0FF);   // electric cyan
-  static const accentPurple  = Color(0xFFA855F7);   // violet
-  static const accentSoft    = Color(0x1A00F0FF);   // cyan 10% — subtle card bg
-  static const accentBright  = Color(0xFF00F0FF);
+  static const accentPrimary = Color(0xFF00F0FF);
+  static const accentPurple  = Color(0xFFA855F7);
+  static const accentSoft    = Color(0x1400F0FF);
 
-  // Borders — cyan-tinted
-  static const border        = Color(0x2600F0FF);   // cyan 15%
-  static const borderSubtle  = Color(0x1200F0FF);   // cyan 7%
+  static const border        = Color(0xFF2A2A2A);
+  static const borderSubtle  = Color(0xFF1A1A1A);
 
-  // Text hierarchy
   static const textPrimary   = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0x99FFFFFF);   // white 60%
-  static const textMuted     = Color(0x4DFFFFFF);   // white 30%
+  static const textSecondary = Color(0x99FFFFFF);
+  static const textMuted     = Color(0x4DFFFFFF);
 
-  // Interaction
-  static const focusBorder   = Color(0xFF00F0FF);   // cyan
-  static const focusGlow     = Color(0x4000F0FF);   // cyan glow 25%
+  // Focus: 1px white border only — no glow
+  static const focusBorder   = Color(0xFFFFFFFF);
+  static const focusGlow     = Colors.transparent;  // no glow
 
-  // Semantic
   static const error         = Color(0xFFF87171);
   static const errorSurface  = Color(0x33F87171);
   static const success       = Color(0xFF22C55E);
   static const warning       = Color(0xFFF59E0B);
 
-  // Player
-  static const playerOverlay = Color(0xEA030308);
+  static const playerOverlay = Color(0xEA080808);
   static const transparent   = Colors.transparent;
+  static const skeleton      = Color(0xFF1A1A1A);
+  static const skeletonShine = Color(0xFF2C2C2C);
 }
 
 abstract final class AppSpacing {
@@ -49,10 +46,9 @@ abstract final class AppSpacing {
   static const double xl6 = 64.0;
   static const double radiusCard       = 8.0;
   static const double radiusInput      = 6.0;
-  static const double radiusPill       = 0.0;
+  static const double radiusPill       = 20.0;
   static const double focusBorderWidth = 1.0;
-  static const double focusBlurRadius  = 0.0;
-  static const double iconSm  = 18.0;
+  static const double iconSm  = 16.0;
   static const double iconMd  = 18.0;
   static const double iconLg  = 24.0;
 }
@@ -61,6 +57,7 @@ abstract final class AppDurations {
   static const fast              = Duration(milliseconds: 100);
   static const medium            = Duration(milliseconds: 150);
   static const slow              = Duration(milliseconds: 250);
+  static const press             = Duration(milliseconds: 100);
   static const controlsAutoHide = Duration(seconds: 3);
   static const volumeFadeDelay  = Duration(milliseconds: 800);
   static const reconnectBase    = Duration(seconds: 2);
@@ -69,70 +66,61 @@ abstract final class AppDurations {
 
 abstract final class AppTheme {
   static ThemeData get dark {
-    final base = ThemeData.dark();
+    final base    = ThemeData.dark();
+    final dmSans  = GoogleFonts.dmSansTextTheme(base.textTheme);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
+      textTheme: dmSans.copyWith(
+        bodyLarge:   GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 14, height: 1.5),
+        bodyMedium:  GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 13, height: 1.5),
+        bodySmall:   GoogleFonts.dmSans(color: AppColors.textSecondary, fontWeight: FontWeight.w300, fontSize: 11, height: 1.4),
+        labelLarge:  GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
+        labelMedium: GoogleFonts.dmSans(color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
+        labelSmall:  GoogleFonts.dmSans(color: AppColors.textMuted,     fontWeight: FontWeight.w400, fontSize: 11, letterSpacing: 0.5),
+        titleLarge:  GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 16),
+        titleMedium: GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
+        titleSmall:  GoogleFonts.dmSans(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 13),
+      ),
       colorScheme: const ColorScheme.dark(
-        surface: AppColors.surface,
-        primary: AppColors.accentPrimary,
+        surface:   AppColors.surface,
+        primary:   AppColors.accentPrimary,
         secondary: AppColors.accentPurple,
-        error: AppColors.error,
+        error:     AppColors.error,
       ),
-      textTheme: base.textTheme.copyWith(
-        bodyLarge:   const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 14),
-        bodyMedium:  const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 13),
-        bodySmall:   const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w300, fontSize: 11),
-        labelLarge:  const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w400, fontSize: 14),
-        labelMedium: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
-        labelSmall:  const TextStyle(color: AppColors.textMuted,     fontWeight: FontWeight.w400, fontSize: 11),
-        titleLarge:  const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w600, fontSize: 16),
-        titleMedium: const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w600, fontSize: 14),
-        titleSmall:  const TextStyle(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 13),
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
+      appBarTheme: AppBarTheme(
+        backgroundColor:  AppColors.surface,
+        elevation:        0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+        titleTextStyle: GoogleFonts.dmSans(
+          color:      AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
+          fontSize:   14,
         ),
-        iconTheme: IconThemeData(color: AppColors.textPrimary, size: 18),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 18),
       ),
       cardTheme: const CardTheme(
-        color: AppColors.card,
+        color:     AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusCard)),
-          side: BorderSide(color: AppColors.border, width: 0.5),
+          side:         BorderSide(color: AppColors.border, width: 0.5),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.card,
-        border: OutlineInputBorder(
-          borderSide: const BorderSide(color: AppColors.border, width: 0.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: AppColors.border, width: 0.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: AppColors.accentPrimary, width: 1),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
-        ),
-        hintStyle: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w300, fontSize: 13),
-        labelStyle: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
+        filled:      true,
+        fillColor:   AppColors.card,
+        border:      const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border, width: 0.5)),
+        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border, width: 0.5)),
+        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.textPrimary, width: 1)),
+        hintStyle:   GoogleFonts.dmSans(color: AppColors.textMuted, fontWeight: FontWeight.w300, fontSize: 13),
       ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.borderSubtle,
+        color:     AppColors.border,
         thickness: 0.5,
-        space: 0,
+        space:     0,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.accentPrimary,
+        color: AppColors.textPrimary,
       ),
     );
   }

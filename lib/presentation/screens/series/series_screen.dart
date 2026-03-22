@@ -2,18 +2,19 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/series.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
-import '../../widgets/common/loading_widget.dart';
+import '../../widgets/common/skeleton_widget.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/pin_dialog.dart';
 import '../../../core/utils/parental_control.dart';
 
 class SeriesScreen extends ConsumerStatefulWidget {
   const SeriesScreen({super.key});
-
   @override
   ConsumerState<SeriesScreen> createState() => _SeriesScreenState();
 }
@@ -113,62 +114,248 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
         child: Column(
           children: [
             _TopBar(searchCtrl: _searchCtrl),
-            if (_categories.isNotEmpty) _SeriesCategoryBar(
+            if (_categories.isNotEmpty) _CategoryBar(
               categories: _categories,
               selectedId: _selectedCatId,
               onSelect:   _selectCategory,
             ),
-            Expanded(child: _buildGrid()),
+            Expanded(child: _buildContent()),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGrid() {
-    if (_syncing) return const LoadingWidget(message: 'Syncing series...');
-    if (_loading) return const LoadingWidget();
+  Widget _buildContent() {
+    if (_syncing || _loading) return const SkeletonPosterGrid(columns: 3);
     if (_error != null) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
         GestureDetector(onTap: _load,
-          child: const Text('Retry', style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+          child: Text('Retry', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
     final display = _searching ? _searchResults : _items;
     if (display.isEmpty) {
-      return const Center(
-        child: Text('No series', style: TextStyle(color: AppColors.textMuted, fontSize: 13)));
+      return EmptyStateWidget(
+        type:       _searching ? EmptyStateType.search : EmptyStateType.series,
+        searchTerm: _searchCtrl.text.trim(),
+      );
     }
-    return GridView.builder(
-      padding:      const EdgeInsets.all(AppSpacing.md),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount:   5,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing:  AppSpacing.sm,
-        childAspectRatio: 2 / 3,
-      ),
-      itemCount:   display.length,
-      itemBuilder: (_, i) {  // CRITICAL: use _ not context
-        final s = display[i];
-        return FocusableWidget(
-          autofocus:    i == 0,
-          borderRadius: AppSpacing.radiusCard,
-          onTap: () async {
-            final cat = _categories.firstWhere(
-              (c) => c.id == s.categoryId,
-              orElse: () => const SeriesCategory(id: 0, name: ''),
-            );
-            if (isAdultCategory(cat.name) || isAdultCategory(s.name)) {
-              final ok = await showPinDialog(context);
-              if (!ok || !mounted) return;
-            }
-            if (mounted) context.push('/series/${s.id}', extra: s);
-          },
-          child: _PosterCard(name: s.name, posterUrl: s.posterUrl),
+    return _ContentList(
+      items:      display,
+      categories: _categories,
+      onTap:      (s) async {
+        final cat = _categories.firstWhere(
+          (c) => c.id == s.categoryId,
+          orElse: () => const SeriesCategory(id: 0, name: ''),
         );
+        if (isAdultCategory(cat.name) || isAdultCategory(s.name)) {
+          final ok = await showPinDialog(context);
+          if (!ok || !mounted) return;
+        }
+        if (mounted) context.push('/series/${s.id}', extra: s);
       },
+    );
+  }
+}
+
+class _ContentList extends StatelessWidget {
+  const _ContentList({required this.items, required this.categories, required this.onTap});
+  final List<SeriesItem>     items;
+  final List<SeriesCategory> categories;
+  final void Function(SeriesItem) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hero = items.first;
+    final rest = items.length > 1 ? items.sublist(1) : <SeriesItem>[];
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hero card — first item, full width
+          FocusableWidget(
+            autofocus:    true,
+            borderRadius: 0,
+            onTap:        () => onTap(hero),
+            child: _HeroCard(series: hero),
+          ),
+          if (rest.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            GridView.builder(
+              shrinkWrap:   true,
+              physics:      const NeverScrollableScrollPhysics(),
+              padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount:   3,
+                crossAxisSpacing: AppSpacing.sm,
+                mainAxisSpacing:  AppSpacing.sm,
+                childAspectRatio: 2 / 3,
+              ),
+              itemCount:   rest.length,
+              itemBuilder: (_, i) {
+                final s = rest[i];
+                return FocusableWidget(
+                  autofocus:    false,
+                  borderRadius: AppSpacing.radiusCard,
+                  onTap:        () => onTap(s),
+                  child: _PosterCard(series: s),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xl3),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Hero Card ──────────────────────────────────────────────────────────────────
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.series});
+  final SeriesItem series;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height * 0.32;
+    return SizedBox(
+      height: h,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (series.posterUrl != null)
+            CachedNetworkImage(
+              imageUrl:    series.posterUrl!,
+              fit:         BoxFit.cover,
+              errorWidget: (_, __, ___) => Container(color: AppColors.card),
+            )
+          else
+            Container(color: AppColors.card),
+          // Dark gradient overlay
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin:  Alignment.topCenter,
+                end:    Alignment.bottomCenter,
+                colors: [Colors.transparent, Color(0xCC080808), Color(0xFF080808)],
+                stops:  [0.3, 0.75, 1.0],
+              ),
+            ),
+          ),
+          // Title bottom-left
+          Positioned(
+            left: AppSpacing.lg, right: AppSpacing.lg, bottom: AppSpacing.lg,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize:       MainAxisSize.min,
+              children: [
+                Text(
+                  series.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.dmSans(
+                    color:      AppColors.textPrimary,
+                    fontSize:   18,
+                    fontWeight: FontWeight.w500,
+                    height:     1.2,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (series.genre != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    series.genre!,
+                    style: GoogleFonts.dmSans(
+                      color:    AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // FEATURED badge top left
+          Positioned(
+            top: AppSpacing.md, left: AppSpacing.md,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color:        AppColors.textPrimary,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text(
+                'FEATURED',
+                style: GoogleFonts.dmSans(
+                  color:         AppColors.background,
+                  fontSize:      8,
+                  fontWeight:    FontWeight.w600,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Poster Card ────────────────────────────────────────────────────────────────
+
+class _PosterCard extends StatelessWidget {
+  const _PosterCard({required this.series});
+  final SeriesItem series;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(color: AppColors.card),
+          if (series.posterUrl != null)
+            CachedNetworkImage(
+              imageUrl:    series.posterUrl!,
+              fit:         BoxFit.cover,
+              errorWidget: (_, __, ___) => const Center(
+                child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
+              ),
+            )
+          else
+            const Center(child: Icon(Icons.tv, color: AppColors.textMuted, size: 22)),
+          // Bottom title gradient
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin:  Alignment.topCenter,
+                  end:    Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xF0080808)],
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(6, 20, 6, 6),
+              child: Text(
+                series.name,
+                maxLines:  2,
+                overflow:  TextOverflow.ellipsis,
+                textAlign: TextAlign.left,
+                style: GoogleFonts.dmSans(
+                  color:      AppColors.textPrimary,
+                  fontSize:   10,
+                  fontWeight: FontWeight.w400,
+                  height:     1.35,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -182,47 +369,40 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical:   AppSpacing.sm,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       child: Row(
         children: [
           GestureDetector(
             onTap: () => context.pop(),
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.xs),
-              child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
-            ),
+            child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
           ),
           const SizedBox(width: AppSpacing.md),
-          const Text(
-            'SERIES',
-            style: TextStyle(
-              color:         AppColors.textPrimary,
-              fontSize:      13,
-              fontWeight:    FontWeight.w600,
-              letterSpacing: 2.0,
+          Text(
+            'Series',
+            style: GoogleFonts.dmSans(
+              color:      AppColors.textPrimary,
+              fontSize:   14,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(width: AppSpacing.xl2),
           Expanded(
             child: TextField(
               controller: searchCtrl,
-              style:      const TextStyle(color: AppColors.textPrimary, fontSize: 12),
-              decoration: const InputDecoration(
+              style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
+              decoration: InputDecoration(
                 hintText:       'Search...',
-                hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12),
                 border:         InputBorder.none,
                 enabledBorder:  InputBorder.none,
                 focusedBorder:  InputBorder.none,
                 contentPadding: EdgeInsets.zero,
-                prefixIcon:     Icon(Icons.search_outlined, color: AppColors.textMuted, size: 16),
-                prefixIconConstraints: BoxConstraints(minWidth: 28, minHeight: 0),
+                isDense:        true,
+                filled:         true,
+                fillColor:      Colors.transparent,
               ),
             ),
           ),
@@ -232,10 +412,10 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Category Bar ───────────────────────────────────────────────────────────────
+// ── Category Bar — plain text links ───────────────────────────────────────────
 
-class _SeriesCategoryBar extends StatelessWidget {
-  const _SeriesCategoryBar({
+class _CategoryBar extends StatelessWidget {
+  const _CategoryBar({
     required this.categories,
     required this.selectedId,
     required this.onSelect,
@@ -246,118 +426,46 @@ class _SeriesCategoryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
-      ),
+    return SizedBox(
+      height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding:         const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical:   AppSpacing.sm,
-        ),
-        itemCount:   categories.length,
-        itemBuilder: (_, i) {
+        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        itemCount:       categories.length,
+        itemBuilder:     (_, i) {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
-          return Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: FocusableWidget(
-              autofocus:    i == 0,
-              onTap:        () => onSelect(cat.id),
-              borderRadius: 20,
-              child: AnimatedContainer(
-                duration: AppDurations.fast,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical:   5,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.accentPrimary.withOpacity(0.12)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.accentPrimary.withOpacity(0.40)
-                        : AppColors.borderSubtle,
-                    width: 0.5,
-                  ),
-                ),
-                child: Text(
-                  cat.name,
-                  style: TextStyle(
-                    color:         isSelected ? AppColors.accentPrimary : AppColors.textMuted,
-                    fontSize:      11,
-                    fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
-                    letterSpacing: 0.3,
-                  ),
+          return FocusableWidget(
+            autofocus: i == 0,
+            onTap:     () => onSelect(cat.id),
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.xl2),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cat.name,
+                      style: GoogleFonts.dmSans(
+                        color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                        fontSize:   12,
+                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                      ),
+                    ),
+                    // Active underline
+                    AnimatedContainer(
+                      duration: AppDurations.fast,
+                      margin: const EdgeInsets.only(top: 3),
+                      height: 1,
+                      width:  isSelected ? 20 : 0,
+                      color:  AppColors.textPrimary,
+                    ),
+                  ],
                 ),
               ),
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-// ── Poster Card ────────────────────────────────────────────────────────────────
-
-class _PosterCard extends StatelessWidget {
-  const _PosterCard({required this.name, required this.posterUrl});
-  final String  name;
-  final String? posterUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Container(color: AppColors.card),
-          if (posterUrl != null)
-            CachedNetworkImage(
-              imageUrl:    posterUrl!,
-              fit:         BoxFit.cover,
-              errorWidget: (_, __, ___) => const Center(
-                child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
-              ),
-            )
-          else
-            const Center(
-              child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
-            ),
-          // Bottom gradient with title overlay
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin:  Alignment.topCenter,
-                  end:    Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xEE030308)],
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(6, 18, 6, 6),
-              child: Text(
-                name,
-                maxLines:  2,
-                overflow:  TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color:      Colors.white,
-                  fontSize:   9,
-                  fontWeight: FontWeight.w400,
-                  height:     1.35,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

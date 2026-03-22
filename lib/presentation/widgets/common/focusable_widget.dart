@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Handles D-pad focus (TV remote), touch, and cyan glow focus effects.
-/// Use this for ALL interactive elements — never GestureDetector alone on TV.
+/// Handles D-pad focus (TV remote), touch, and focus effects.
+/// Focus: 1px white border only — no glow, no fill.
+/// Press: scales to 0.97 for 100ms — feels responsive.
 class FocusableWidget extends StatefulWidget {
   const FocusableWidget({
     super.key,
@@ -16,13 +17,13 @@ class FocusableWidget extends StatefulWidget {
     this.focusNode,
   });
 
-  final Widget child;
-  final VoidCallback onTap;
-  final double borderRadius;
-  final bool autofocus;
-  final bool scaleOnFocus;
+  final Widget        child;
+  final VoidCallback  onTap;
+  final double        borderRadius;
+  final bool          autofocus;
+  final bool          scaleOnFocus;
   final VoidCallback? onLongPress;
-  final FocusNode? focusNode;
+  final FocusNode?    focusNode;
 
   @override
   State<FocusableWidget> createState() => _FocusableWidgetState();
@@ -30,6 +31,7 @@ class FocusableWidget extends StatefulWidget {
 
 class _FocusableWidgetState extends State<FocusableWidget> {
   bool _focused = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -49,21 +51,24 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap:      widget.onTap,
-        onLongPress: widget.onLongPress,
-        child: AnimatedContainer(
-          duration: AppDurations.fast,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            color: _focused ? AppColors.accentSoft : Colors.transparent,
-            border: _focused
-                ? Border.all(color: AppColors.focusBorder, width: AppSpacing.focusBorderWidth)
-                : Border.all(color: Colors.transparent, width: AppSpacing.focusBorderWidth),
-            boxShadow: _focused
-                ? [BoxShadow(color: AppColors.focusGlow, blurRadius: 16, spreadRadius: 0)]
-                : null,
+        onTap:        widget.onTap,
+        onLongPress:  widget.onLongPress,
+        onTapDown:    (_) { if (mounted) setState(() => _pressed = true);  },
+        onTapUp:      (_) { if (mounted) setState(() => _pressed = false); },
+        onTapCancel:  ()  { if (mounted) setState(() => _pressed = false); },
+        child: AnimatedScale(
+          scale:    _pressed ? 0.97 : 1.0,
+          duration: AppDurations.press,
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+              border: _focused
+                  ? Border.all(color: AppColors.focusBorder, width: 1.0)
+                  : Border.all(color: Colors.transparent, width: 1.0),
+            ),
+            child: widget.child,
           ),
-          child: widget.child,
         ),
       ),
     );

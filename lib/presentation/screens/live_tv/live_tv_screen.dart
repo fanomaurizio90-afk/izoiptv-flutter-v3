@@ -2,19 +2,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/channel.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
-import '../../widgets/common/loading_widget.dart';
+import '../../widgets/common/skeleton_widget.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/pin_dialog.dart';
 import '../../../core/utils/parental_control.dart';
 
 class LiveTvScreen extends ConsumerStatefulWidget {
   const LiveTvScreen({super.key});
-
   @override
   ConsumerState<LiveTvScreen> createState() => _LiveTvScreenState();
 }
@@ -112,24 +113,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            // Left sidebar — categories
             _CategorySidebar(
               categories: _categories,
               selectedId: _selectedCatId,
               onSelect:   _selectCategory,
             ),
-            // Divider
-            Container(
-              width: 0.5,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin:  Alignment.topCenter,
-                  end:    Alignment.bottomCenter,
-                  colors: [AppColors.borderSubtle, AppColors.border, AppColors.borderSubtle],
-                ),
-              ),
-            ),
-            // Right panel — search + channels
+            Container(width: 0.5, color: AppColors.border),
             Expanded(
               child: Column(
                 children: [
@@ -145,29 +134,18 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   }
 
   Widget _buildChannelList() {
-    if (_syncing) return const LoadingWidget(message: 'Syncing channels...');
-    if (_loading) return const LoadingWidget();
+    if (_syncing || _loading) return const SkeletonChannelList();
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
-            const SizedBox(height: AppSpacing.md),
-            GestureDetector(
-              onTap: _load,
-              child: const Text('Retry', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            ),
-          ],
-        ),
-      );
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+        const SizedBox(height: AppSpacing.md),
+        GestureDetector(onTap: _load,
+          child: Text('Retry', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13))),
+      ]));
     }
     if (_filtered.isEmpty) {
-      return const Center(
-        child: Text('No channels', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-      );
+      return const EmptyStateWidget(type: EmptyStateType.channels);
     }
-
     return ListView.builder(
       itemCount:  _filtered.length,
       itemExtent: kChannelRowHeight,
@@ -196,9 +174,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   }
 }
 
-const double kChannelRowHeight = 68.0;
-
-// ── Search Bar ─────────────────────────────────────────────────────────────────
+const double kChannelRowHeight = 72.0;
 
 class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.controller});
@@ -207,37 +183,36 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
       decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical:   AppSpacing.xs,
-      ),
-      child: TextField(
-        controller: controller,
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-        decoration: const InputDecoration(
-          hintText:  'Search channels...',
-          hintStyle: TextStyle(
-            color:         AppColors.textMuted,
-            fontSize:      13,
-            letterSpacing: 0.3,
+      child: Row(
+        children: [
+          const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 16),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13),
+              decoration: InputDecoration(
+                hintText:        'Search channels',
+                hintStyle:       GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+                border:          InputBorder.none,
+                enabledBorder:   InputBorder.none,
+                focusedBorder:   InputBorder.none,
+                isDense:         true,
+                contentPadding:  EdgeInsets.zero,
+                fillColor:       Colors.transparent,
+                filled:          true,
+              ),
+            ),
           ),
-          prefixIcon:    Icon(Icons.search_outlined, color: AppColors.textMuted, size: 18),
-          border:        InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-        ),
+        ],
       ),
     );
   }
 }
-
-// ── Channel Row ────────────────────────────────────────────────────────────────
 
 class _ChannelRow extends StatelessWidget {
   const _ChannelRow({required this.channel});
@@ -249,67 +224,49 @@ class _ChannelRow extends StatelessWidget {
       height:  kChannelRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
       ),
       child: Row(
         children: [
-          // Logo container
           Container(
-            width:  44,
-            height: 44,
+            width:  48,
+            height: 48,
             decoration: BoxDecoration(
               color:        AppColors.card,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               border:       Border.all(color: AppColors.border, width: 0.5),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(5.5),
+              borderRadius: BorderRadius.circular(7.5),
               child: channel.logoUrl != null
                   ? CachedNetworkImage(
-                      imageUrl: channel.logoUrl!,
-                      fit:      BoxFit.contain,
-                      errorWidget: (_, __, ___) => const Icon(
-                        Icons.live_tv_outlined,
-                        color: AppColors.textMuted,
-                        size:  20,
-                      ),
+                      imageUrl:    channel.logoUrl!,
+                      fit:         BoxFit.contain,
+                      errorWidget: (_, __, ___) => const Icon(Icons.tv, color: AppColors.textMuted, size: 20),
                     )
-                  : const Icon(
-                      Icons.live_tv_outlined,
-                      color: AppColors.textMuted,
-                      size:  20,
-                    ),
+                  : const Icon(Icons.tv, color: AppColors.textMuted, size: 20),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          // Name
           Expanded(
             child: Text(
               channel.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: GoogleFonts.dmSans(
                 color:      AppColors.textPrimary,
                 fontSize:   13,
                 fontWeight: FontWeight.w400,
+                height:     1.4,
               ),
             ),
           ),
-          // Play indicator
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.textMuted,
-            size:  16,
-          ),
+          const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
         ],
       ),
     );
   }
 }
-
-// ── Category Sidebar ───────────────────────────────────────────────────────────
 
 class _CategorySidebar extends StatelessWidget {
   const _CategorySidebar({
@@ -323,9 +280,8 @@ class _CategorySidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 168,
-      color: AppColors.surface,
+    return SizedBox(
+      width: 160,
       child: ListView.builder(
         itemCount:  categories.length,
         itemExtent: 48,
@@ -334,52 +290,33 @@ class _CategorySidebar extends StatelessWidget {
           final isSelected = cat.id == selectedId;
           return FocusableWidget(
             onTap: () => onSelect(cat.id),
-            child: _CategoryItem(category: cat, isSelected: isSelected),
+            child: AnimatedContainer(
+              duration: AppDurations.fast,
+              height:   48,
+              padding:  const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0x0FFFFFFF) : Colors.transparent,
+                border: Border(
+                  left: BorderSide(
+                    color: isSelected ? AppColors.textPrimary : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                cat.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.dmSans(
+                  color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                  fontSize:   12,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                ),
+              ),
+            ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _CategoryItem extends StatelessWidget {
-  const _CategoryItem({required this.category, required this.isSelected});
-  final ChannelCategory category;
-  final bool            isSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: AppDurations.fast,
-      height:   48,
-      decoration: BoxDecoration(
-        gradient: isSelected
-            ? const LinearGradient(
-                begin:  Alignment.centerLeft,
-                end:    Alignment.centerRight,
-                colors: [Color(0x1A00F0FF), Colors.transparent],
-              )
-            : null,
-        border: isSelected
-            ? const Border(
-                left: BorderSide(color: AppColors.accentPrimary, width: 2),
-              )
-            : const Border(
-                left: BorderSide(color: Colors.transparent, width: 2),
-              ),
-      ),
-      padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.md),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        category.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-          fontSize:   12,
-          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-          letterSpacing: isSelected ? 0.3 : 0,
-        ),
       ),
     );
   }

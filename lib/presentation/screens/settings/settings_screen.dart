@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -16,52 +17,64 @@ class SettingsScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              color:   AppColors.surface,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl,
+              ),
               child: Row(
                 children: [
                   GestureDetector(
                     onTap: () => context.pop(),
-                    child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                    child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  const Text('Settings', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+                  Text(
+                    'Settings',
+                    style: GoogleFonts.dmSans(
+                      color:      AppColors.textPrimary,
+                      fontSize:   16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
             Expanded(
               child: ListView(
+                padding: EdgeInsets.zero,
                 children: [
-                  // Device section
                   _SectionHeader('Device'),
                   _DeviceIdRow(),
-                  _Row(
+                  _SettingsRow(
                     label: 'Manage Playlist',
                     value: 'izoiptv.com/authenticate',
+                    showArrow: true,
                     onTap: () async {
                       final uri = Uri.parse('https://izoiptv.com/authenticate');
                       if (await canLaunchUrl(uri)) await launchUrl(uri);
                     },
                   ),
-
-                  // App section
                   _SectionHeader('App'),
-                  _Row(label: 'Version', value: '1.0.0'),
-
-                  // Logout
-                  const SizedBox(height: AppSpacing.xl3),
+                  const _SettingsRow(label: 'Version', value: '1.2.0'),
+                  const SizedBox(height: AppSpacing.xl6),
+                  // Logout — muted red text only, no button shape
                   GestureDetector(
                     onTap: () async {
                       await ref.read(authProvider.notifier).logout();
                     },
-                    child: const Center(
+                    child: Center(
                       child: Padding(
-                        padding: EdgeInsets.all(AppSpacing.md),
+                        padding: const EdgeInsets.all(AppSpacing.xl2),
                         child: Text(
                           'Sign Out',
-                          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                          style: GoogleFonts.dmSans(
+                            color:    const Color(0xFFE57373),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                       ),
                     ),
@@ -83,43 +96,69 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xs),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl2, AppSpacing.sm,
+      ),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: GoogleFonts.dmSans(
           color:         AppColors.textMuted,
-          fontSize:      11,
-          fontWeight:    FontWeight.w400,
-          letterSpacing: 1.2,
+          fontSize:      10,
+          fontWeight:    FontWeight.w500,
+          letterSpacing: 1.5,
         ),
       ),
     );
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.label, this.value, this.onTap});
-  final String   label;
-  final String?  value;
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.label,
+    this.value,
+    this.onTap,
+    this.showArrow = false,
+  });
+  final String        label;
+  final String?       value;
   final VoidCallback? onTap;
+  final bool          showArrow;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl2,
+          vertical:   AppSpacing.lg,
+        ),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
         ),
         child: Row(
           children: [
-            Text(label, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+            Text(
+              label,
+              style: GoogleFonts.dmSans(
+                color:      AppColors.textPrimary,
+                fontSize:   13,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
             const Spacer(),
             if (value != null)
-              Text(value!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            if (onTap != null)
-              const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 12),
+              Text(
+                value!,
+                style: GoogleFonts.dmSans(
+                  color:    AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            if (showArrow) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 10),
+            ],
           ],
         ),
       ),
@@ -134,6 +173,7 @@ class _DeviceIdRow extends StatefulWidget {
 
 class _DeviceIdRowState extends State<_DeviceIdRow> {
   String? _id;
+  bool    _copied = false;
 
   @override
   void initState() {
@@ -146,28 +186,52 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl2,
+        vertical:   AppSpacing.lg,
+      ),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       child: Row(
         children: [
-          const Text('Device ID', style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+          Text(
+            'Device ID',
+            style: GoogleFonts.dmSans(
+              color:      AppColors.textPrimary,
+              fontSize:   13,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
           const Spacer(),
           if (_id != null) ...[
             Text(
-              _id!.length > 12 ? '${_id!.substring(0, 12)}...' : _id!,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontFamily: 'monospace'),
+              _id!.length > 14 ? '${_id!.substring(0, 14)}...' : _id!,
+              style: const TextStyle(
+                color:      AppColors.textMuted,
+                fontSize:   11,
+                fontFamily: 'monospace',
+                letterSpacing: 0.5,
+              ),
             ),
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: AppSpacing.md),
             GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: _id!));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied'), duration: Duration(seconds: 1)),
-                );
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: _id!));
+                if (!mounted) return;
+                setState(() => _copied = true);
+                await Future.delayed(const Duration(seconds: 2));
+                if (mounted) setState(() => _copied = false);
               },
-              child: const Icon(Icons.copy_outlined, color: AppColors.textMuted, size: 14),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                child: Icon(
+                  _copied ? Icons.check : Icons.copy_outlined,
+                  key:   ValueKey(_copied),
+                  color: _copied ? AppColors.success : AppColors.textMuted,
+                  size:  14,
+                ),
+              ),
             ),
           ],
         ],
