@@ -9,25 +9,42 @@ import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
 
-final _vodDetailProvider = FutureProvider.autoDispose.family<VodItem?, int>((ref, id) async {
-  final repo = ref.read(vodRepositoryProvider);
-  var vod = await repo.getVodById(id);
-  // Most providers omit metadata in get_vod_streams — fetch from get_vod_info
-  // on first open when there's nothing to show. Result is cached in DB.
-  if (vod != null && vod.posterUrl == null && vod.plot == null) {
-    await repo.fetchVodInfo(id);
-    vod = await repo.getVodById(id);
-  }
-  return vod;
+// Simple provider — loads from DB only, never blocks on network.
+final _vodDetailProvider = FutureProvider.family<VodItem?, int>((ref, id) async {
+  return ref.read(vodRepositoryProvider).getVodById(id);
 });
 
-class MovieDetailScreen extends ConsumerWidget {
+class MovieDetailScreen extends ConsumerStatefulWidget {
   const MovieDetailScreen({super.key, required this.vodId});
   final int vodId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final vodAsync = ref.watch(_vodDetailProvider(vodId));
+  ConsumerState<MovieDetailScreen> createState() => _MovieDetailScreenState();
+}
+
+class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Enrich metadata in background — never blocks the screen from showing.
+    // When done, invalidates the provider so the screen rebuilds with poster/plot.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enrichIfNeeded());
+  }
+
+  Future<void> _enrichIfNeeded() async {
+    if (!mounted) return;
+    final repo = ref.read(vodRepositoryProvider);
+    final vod  = await repo.getVodById(widget.vodId);
+    if (!mounted || vod == null || vod.posterUrl != null || vod.plot != null) return;
+    try {
+      await repo.fetchVodInfo(widget.vodId);
+      if (mounted) ref.invalidate(_vodDetailProvider(widget.vodId));
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vodAsync = ref.watch(_vodDetailProvider(widget.vodId));
     return Scaffold(
       backgroundColor: const Color(0xFF080808),
       body: vodAsync.when(

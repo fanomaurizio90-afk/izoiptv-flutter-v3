@@ -181,11 +181,11 @@ class XtreamApi {
         id:          int.parse(m['series_id'].toString()),
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:   _nullIfEmpty(m['cover'] as String?),
+        posterUrl:   _nullIfEmpty(m['cover']?.toString()),
         backdropUrl: _firstString(info['backdrop_path']),
-        plot:        _nullIfEmpty(info['plot'] as String?),
-        genre:       _nullIfEmpty(info['genre'] as String?),
-        releaseDate: _nullIfEmpty(info['releaseDate'] as String?),
+        plot:        _nullIfEmpty(info['plot']?.toString()),
+        genre:       _nullIfEmpty(info['genre']?.toString()),
+        releaseDate: _nullIfEmpty(info['releaseDate']?.toString()),
         rating:      double.tryParse(info['rating']?.toString() ?? ''),
       );
     }).toList();
@@ -201,20 +201,25 @@ class XtreamApi {
     final data = response.data ?? {};
 
     // Extract series-level metadata from 'info'
+    // Wrapped in try/catch — a bad field type must never break episode loading.
     SeriesItem? meta;
-    final seriesInfo = _infoMap(data['info']);
-    if (seriesInfo.isNotEmpty) {
-      meta = SeriesItem(
-        id:          seriesId,
-        name:        _nullIfEmpty(seriesInfo['name'] as String?) ?? '',
-        categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:   _nullIfEmpty(seriesInfo['cover'] as String?),
-        backdropUrl: _firstString(seriesInfo['backdrop_path']),
-        plot:        _nullIfEmpty(seriesInfo['plot'] as String?),
-        genre:       _nullIfEmpty(seriesInfo['genre'] as String?),
-        releaseDate: _nullIfEmpty(seriesInfo['releaseDate'] as String?),
-        rating:      double.tryParse(seriesInfo['rating']?.toString() ?? ''),
-      );
+    try {
+      final seriesInfo = _infoMap(data['info']);
+      if (seriesInfo.isNotEmpty) {
+        meta = SeriesItem(
+          id:          seriesId,
+          name:        seriesInfo['name']?.toString() ?? '',
+          categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
+          posterUrl:   _nullIfEmpty(seriesInfo['cover']?.toString()),
+          backdropUrl: _firstString(seriesInfo['backdrop_path']),
+          plot:        _nullIfEmpty(seriesInfo['plot']?.toString()),
+          genre:       _nullIfEmpty(seriesInfo['genre']?.toString()),
+          releaseDate: _nullIfEmpty(seriesInfo['releaseDate']?.toString()),
+          rating:      double.tryParse(seriesInfo['rating']?.toString() ?? ''),
+        );
+      }
+    } catch (_) {
+      meta = null;
     }
 
     // Extract episodes

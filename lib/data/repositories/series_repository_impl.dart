@@ -26,9 +26,10 @@ class SeriesRepositoryImpl implements SeriesRepository {
     var episodes = await _dao.getEpisodesBySeries(seriesId);
     if (episodes.isEmpty) {
       final (meta, apiEpisodes) = await _api.getSeriesInfo(seriesId);
-      // Enrich the series record with metadata from get_series_info
-      // (cover, plot, genre — often missing from the bulk get_series response)
-      if (meta != null) await _dao.updateSeriesMeta(seriesId, meta);
+      // Best-effort metadata enrichment — must never block episode insertion
+      if (meta != null) {
+        try { await _dao.updateSeriesMeta(seriesId, meta); } catch (_) {}
+      }
       episodes = apiEpisodes;
       await _dao.insertEpisodes(seriesId, episodes);
     }
