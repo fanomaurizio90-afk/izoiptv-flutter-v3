@@ -112,34 +112,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color:   AppColors.surface,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  const Text('Series', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
-                  const SizedBox(width: AppSpacing.xl2),
-                  Expanded(
-                    child: TextField(
-                      controller:   _searchCtrl,
-                      style:        const TextStyle(color: AppColors.textPrimary, fontSize: 12),
-                      decoration:   const InputDecoration(
-                        hintText:      'Search...',
-                        border:        InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _TopBar(searchCtrl: _searchCtrl),
             if (_categories.isNotEmpty) _SeriesCategoryBar(
               categories: _categories,
               selectedId: _selectedCatId,
@@ -165,10 +138,11 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     }
     final display = _searching ? _searchResults : _items;
     if (display.isEmpty) {
-      return const Center(child: Text('No series', style: TextStyle(color: AppColors.textMuted, fontSize: 13)));
+      return const Center(
+        child: Text('No series', style: TextStyle(color: AppColors.textMuted, fontSize: 13)));
     }
     return GridView.builder(
-      padding:     const EdgeInsets.all(AppSpacing.md),
+      padding:      const EdgeInsets.all(AppSpacing.md),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount:   5,
         crossAxisSpacing: AppSpacing.sm,
@@ -192,61 +166,198 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
             }
             if (mounted) context.push('/series/${s.id}', extra: s);
           },
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-            child: Container(
-              color: AppColors.card,
-              child: s.posterUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl:   s.posterUrl!,
-                      fit:        BoxFit.cover,
-                      errorWidget: (_, __, ___) => Center(
-                        child: Text(s.name, maxLines: 3, textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
-                      ),
-                    )
-                  : Center(child: Text(s.name, maxLines: 3, textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 10))),
-            ),
-          ),
+          child: _PosterCard(name: s.name, posterUrl: s.posterUrl),
         );
       },
     );
   }
 }
 
+// ── Top Bar ────────────────────────────────────────────────────────────────────
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.searchCtrl});
+  final TextEditingController searchCtrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical:   AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => context.pop(),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.xs),
+              child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Text(
+            'SERIES',
+            style: TextStyle(
+              color:         AppColors.textPrimary,
+              fontSize:      13,
+              fontWeight:    FontWeight.w600,
+              letterSpacing: 2.0,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xl2),
+          Expanded(
+            child: TextField(
+              controller: searchCtrl,
+              style:      const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+              decoration: const InputDecoration(
+                hintText:       'Search...',
+                hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                border:         InputBorder.none,
+                enabledBorder:  InputBorder.none,
+                focusedBorder:  InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                prefixIcon:     Icon(Icons.search_outlined, color: AppColors.textMuted, size: 16),
+                prefixIconConstraints: BoxConstraints(minWidth: 28, minHeight: 0),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Category Bar ───────────────────────────────────────────────────────────────
+
 class _SeriesCategoryBar extends StatelessWidget {
-  const _SeriesCategoryBar({required this.categories, required this.selectedId, required this.onSelect});
+  const _SeriesCategoryBar({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelect,
+  });
   final List<SeriesCategory> categories;
   final int?                 selectedId;
   final void Function(int)   onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
+    return Container(
+      height: 48,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+      ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        itemCount:       categories.length,
-        itemBuilder:     (_, i) {
+        padding:         const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical:   AppSpacing.sm,
+        ),
+        itemCount:   categories.length,
+        itemBuilder: (_, i) {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
-          return FocusableWidget(
-            autofocus: i == 0,
-            onTap: () => onSelect(cat.id),
-            child: Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: Center(
-                child: Text(cat.name, style: TextStyle(
-                  color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                  fontSize:   12,
-                  fontWeight: isSelected ? FontWeight.w400 : FontWeight.w300,
-                )),
+          return Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: FocusableWidget(
+              autofocus:    i == 0,
+              onTap:        () => onSelect(cat.id),
+              borderRadius: 20,
+              child: AnimatedContainer(
+                duration: AppDurations.fast,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical:   5,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.accentPrimary.withOpacity(0.12)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.accentPrimary.withOpacity(0.40)
+                        : AppColors.borderSubtle,
+                    width: 0.5,
+                  ),
+                ),
+                child: Text(
+                  cat.name,
+                  style: TextStyle(
+                    color:         isSelected ? AppColors.accentPrimary : AppColors.textMuted,
+                    fontSize:      11,
+                    fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
+                    letterSpacing: 0.3,
+                  ),
+                ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Poster Card ────────────────────────────────────────────────────────────────
+
+class _PosterCard extends StatelessWidget {
+  const _PosterCard({required this.name, required this.posterUrl});
+  final String  name;
+  final String? posterUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(color: AppColors.card),
+          if (posterUrl != null)
+            CachedNetworkImage(
+              imageUrl:    posterUrl!,
+              fit:         BoxFit.cover,
+              errorWidget: (_, __, ___) => const Center(
+                child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
+              ),
+            )
+          else
+            const Center(
+              child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
+            ),
+          // Bottom gradient with title overlay
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin:  Alignment.topCenter,
+                  end:    Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xEE030308)],
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(6, 18, 6, 6),
+              child: Text(
+                name,
+                maxLines:  2,
+                overflow:  TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color:      Colors.white,
+                  fontSize:   9,
+                  fontWeight: FontWeight.w400,
+                  height:     1.35,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
