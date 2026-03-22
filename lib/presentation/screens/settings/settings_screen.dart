@@ -6,13 +6,32 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/providers.dart';
 import '../../../services/device_id_service.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _syncing = false;
+
+  Future<void> _forceSync() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    try {
+      await ref.read(vodRepositoryProvider).syncVod();
+      await ref.read(seriesRepositoryProvider).syncSeries();
+      await ref.read(channelRepositoryProvider).syncChannels();
+    } catch (_) {}
+    if (mounted) setState(() => _syncing = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -58,7 +77,13 @@ class SettingsScreen extends ConsumerWidget {
                     },
                   ),
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '1.2.0'),
+                  _SettingsRow(
+                    label: 'Refresh Library',
+                    value: _syncing ? 'Syncing…' : 'Fetch latest content',
+                    showArrow: !_syncing,
+                    onTap: _syncing ? null : _forceSync,
+                  ),
+                  const _SettingsRow(label: 'Version', value: '1.4.0'),
                   const SizedBox(height: AppSpacing.xl6),
                   // Logout — muted red text only, no button shape
                   GestureDetector(

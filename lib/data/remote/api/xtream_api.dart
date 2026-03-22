@@ -81,7 +81,7 @@ class XtreamApi {
         name:       m['name'] as String? ?? '',
         streamUrl:  '$_serverUrl/live/$_username/$_password/$id.$ext',
         categoryId: int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        logoUrl:    m['stream_icon'] as String?,
+        logoUrl:    _nullIfEmpty(m['stream_icon'] as String?),
         sortOrder:  int.tryParse(m['num']?.toString() ?? '0') ?? 0,
       );
     }).toList();
@@ -112,8 +112,8 @@ class XtreamApi {
         name:               m['name'] as String? ?? '',
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:          m['stream_icon'] as String?,
-        backdropUrl:        info['backdrop_path'] as String?,
+        posterUrl:          _nullIfEmpty(m['stream_icon'] as String?),
+        backdropUrl:        _nullIfEmpty(info['backdrop_path'] as String?),
         plot:               info['plot'] as String?,
         genre:              info['genre'] as String?,
         releaseDate:        info['releasedate'] as String?,
@@ -146,8 +146,8 @@ class XtreamApi {
         id:          int.parse(m['series_id'].toString()),
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:   m['cover'] as String?,
-        backdropUrl: info['backdrop_path'] as String?,
+        posterUrl:   _nullIfEmpty(m['cover'] as String?),
+        backdropUrl: _nullIfEmpty(info['backdrop_path'] as String?),
         plot:        info['plot'] as String?,
         genre:       info['genre'] as String?,
         releaseDate: info['releaseDate'] as String?,
@@ -160,8 +160,11 @@ class XtreamApi {
     final response = await _dio.get<Map<String, dynamic>>(
       '$_base&action=get_series_info&series_id=$seriesId',
     );
-    final data     = response.data ?? {};
-    final episodes = data['episodes'] as Map<String, dynamic>?;
+    final data = response.data ?? {};
+    // Some providers return [] (empty list) instead of {} when a series has
+    // no episodes — guard against the cast crash.
+    final rawEpisodes = data['episodes'];
+    final episodes = rawEpisodes is Map<String, dynamic> ? rawEpisodes : null;
     if (episodes == null) return [];
 
     final result = <Episode>[];
@@ -179,7 +182,7 @@ class XtreamApi {
           episodeNumber:      int.tryParse(e['episode_num']?.toString() ?? '0') ?? 0,
           title:              e['title'] as String? ?? 'Episode $id',
           streamUrl:          '$_serverUrl/series/$_username/$_password/$id.$ext',
-          thumbnailUrl:       (e['info'] as Map<String, dynamic>?)?['movie_image'] as String?,
+          thumbnailUrl:       _nullIfEmpty((e['info'] as Map<String, dynamic>?)?['movie_image'] as String?),
           plot:               (e['info'] as Map<String, dynamic>?)?['plot'] as String?,
           durationSecs:       _parseDurationSecs((e['info'] as Map<String, dynamic>?)?['duration'] as String?),
           containerExtension: ext,
@@ -201,6 +204,10 @@ class XtreamApi {
       '$_serverUrl/series/$_username/$_password/$episodeId.$extension';
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  /// Returns null for null or empty strings — prevents CachedNetworkImage from
+  /// trying to load an empty URL and silently failing.
+  String? _nullIfEmpty(String? s) => (s == null || s.isEmpty) ? null : s;
 
   int? _parseDurationSecs(String? raw) {
     if (raw == null || raw.isEmpty) return null;
