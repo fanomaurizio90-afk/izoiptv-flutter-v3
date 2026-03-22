@@ -81,6 +81,22 @@ class VodDao {
     await batch.commit(noResult: true);
   }
 
+  /// Update only metadata fields — preserves stream_url, category_id, favourites.
+  /// Only writes non-null values so a partial API response doesn't overwrite good data.
+  Future<void> updateVodMeta(int id, VodItem meta) async {
+    final db  = await _db;
+    final map = <String, Object?>{};
+    if (meta.posterUrl   != null) map['poster_url']    = meta.posterUrl;
+    if (meta.backdropUrl != null) map['backdrop_url']  = meta.backdropUrl;
+    if (meta.plot        != null) map['plot']          = meta.plot;
+    if (meta.genre       != null) map['genre']         = meta.genre;
+    if (meta.releaseDate != null) map['release_date']  = meta.releaseDate;
+    if (meta.rating      != null) map['rating']        = meta.rating;
+    if (meta.durationSecs!= null) map['duration_secs'] = meta.durationSecs;
+    if (map.isEmpty) return;
+    await db.update('vod', map, where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<void> setVodFavourite(int id, bool isFav) async {
     final db = await _db;
     await db.update('vod', {'is_favourite': isFav ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
@@ -159,6 +175,20 @@ class VodDao {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  /// Update only metadata fields for a series record.
+  Future<void> updateSeriesMeta(int id, SeriesItem meta) async {
+    final db  = await _db;
+    final map = <String, Object?>{};
+    if (meta.posterUrl   != null) map['poster_url']   = meta.posterUrl;
+    if (meta.backdropUrl != null) map['backdrop_url'] = meta.backdropUrl;
+    if (meta.plot        != null) map['plot']         = meta.plot;
+    if (meta.genre       != null) map['genre']        = meta.genre;
+    if (meta.releaseDate != null) map['release_date'] = meta.releaseDate;
+    if (meta.rating      != null) map['rating']       = meta.rating;
+    if (map.isEmpty) return;
+    await db.update('series', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> setSeriesFavourite(int id, bool isFav) async {

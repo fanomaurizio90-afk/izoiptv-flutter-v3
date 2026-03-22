@@ -30,6 +30,12 @@ class VodRepositoryImpl implements VodRepository {
   }
 
   @override
+  Future<void> fetchVodInfo(int vodId) async {
+    final meta = await _api.getVodInfo(vodId);
+    if (meta != null) await _dao.updateVodMeta(vodId, meta);
+  }
+
+  @override
   Future<void> toggleFavourite(int vodId, bool isFav) =>
       _dao.setVodFavourite(vodId, isFav);
 

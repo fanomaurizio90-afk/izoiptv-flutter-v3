@@ -77,11 +77,20 @@ class _SeriesDetailBody extends ConsumerStatefulWidget {
 }
 
 class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
+  late SeriesItem _displaySeries;
+
   @override
   void initState() {
     super.initState();
-    // CRITICAL: reset every time
+    _displaySeries = widget.series;
     ref.read(selectedSeasonProvider.notifier).state = 1;
+  }
+
+  /// Called after seasonsProvider completes — getSeasons() may have enriched
+  /// the series record in the DB with cover/plot from get_series_info.
+  Future<void> _refreshMetadataFromDb() async {
+    final fresh = await ref.read(seriesRepositoryProvider).getSeriesById(widget.series.id);
+    if (fresh != null && mounted) setState(() => _displaySeries = fresh);
   }
 
   @override
@@ -91,15 +100,22 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     final selectedSeason = ref.watch(selectedSeasonProvider);
     final seasonsAsync   = ref.watch(seasonsProvider(widget.series.id));
 
+    // When seasons finish loading, DB may have been updated with richer metadata
+    ref.listen(seasonsProvider(widget.series.id), (_, next) {
+      if (next.hasValue && _displaySeries.posterUrl == null) {
+        _refreshMetadataFromDb();
+      }
+    });
+
     return Stack(
       children: [
         // Full bleed backdrop
         Positioned(
           top: 0, left: 0, right: 0,
           height: screenH * 0.42,
-          child: widget.series.posterUrl != null
+          child: _displaySeries.posterUrl != null
               ? CachedNetworkImage(
-                  imageUrl:    widget.series.posterUrl!,
+                  imageUrl:    _displaySeries.posterUrl!,
                   fit:         BoxFit.cover,
                   errorWidget: (_, __, ___) => Container(color: AppColors.card),
                 )
@@ -150,7 +166,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.series.name,
+                        _displaySeries.name,
                         style: GoogleFonts.dmSans(
                           color:         AppColors.textPrimary,
                           fontSize:      22,
@@ -159,10 +175,10 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           height:        1.2,
                         ),
                       ),
-                      if (widget.series.genre != null) ...[
+                      if (_displaySeries.genre != null) ...[
                         const SizedBox(height: 6),
                         Text(
-                          widget.series.genre!,
+                          _displaySeries.genre!,
                           style: GoogleFonts.dmSans(
                             color:    AppColors.textMuted,
                             fontSize: 12,
@@ -170,10 +186,10 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           ),
                         ),
                       ],
-                      if (widget.series.plot != null) ...[
+                      if (_displaySeries.plot != null) ...[
                         const SizedBox(height: AppSpacing.md),
                         Text(
-                          widget.series.plot!,
+                          _displaySeries.plot!,
                           style: GoogleFonts.dmSans(
                             color:      AppColors.textSecondary,
                             fontSize:   13,

@@ -9,8 +9,16 @@ import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
 
-final _vodDetailProvider = FutureProvider.family<VodItem?, int>((ref, id) async {
-  return ref.watch(vodRepositoryProvider).getVodById(id);
+final _vodDetailProvider = FutureProvider.autoDispose.family<VodItem?, int>((ref, id) async {
+  final repo = ref.read(vodRepositoryProvider);
+  var vod = await repo.getVodById(id);
+  // Most providers omit metadata in get_vod_streams — fetch from get_vod_info
+  // on first open when there's nothing to show. Result is cached in DB.
+  if (vod != null && vod.posterUrl == null && vod.plot == null) {
+    await repo.fetchVodInfo(id);
+    vod = await repo.getVodById(id);
+  }
+  return vod;
 });
 
 class MovieDetailScreen extends ConsumerWidget {

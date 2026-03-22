@@ -113,7 +113,7 @@ class XtreamApi {
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:          _nullIfEmpty(m['stream_icon'] as String?),
-        backdropUrl:        _nullIfEmpty(info['backdrop_path'] as String?),
+        backdropUrl:        _firstString(info['backdrop_path']),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
         releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
@@ -122,6 +122,41 @@ class XtreamApi {
         containerExtension: ext,
       );
     }).toList();
+  }
+
+  /// Fetch full metadata for a single VOD item.
+  /// Many providers don't include info in get_vod_streams — this fills the gap.
+  Future<VodItem?> getVodInfo(int vodId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '$_base&action=get_vod_info&vod_id=$vodId',
+        options: Options(receiveTimeout: const Duration(seconds: 15)),
+      );
+      final data      = response.data ?? {};
+      final info      = _infoMap(data['info']);
+      final movieData = _infoMap(data['movie_data']);
+      if (info.isEmpty) return null;
+
+      final id  = int.tryParse(movieData['stream_id']?.toString() ?? vodId.toString()) ?? vodId;
+      final ext = movieData['container_extension'] as String? ?? 'mp4';
+      return VodItem(
+        id:                 id,
+        name:               _nullIfEmpty(info['name'] as String?) ?? '',
+        streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
+        categoryId:         int.tryParse(movieData['category_id']?.toString() ?? '0') ?? 0,
+        posterUrl:          _nullIfEmpty(info['movie_image'] as String?)
+                            ?? _nullIfEmpty(info['cover_big'] as String?),
+        backdropUrl:        _firstString(info['backdrop_path']),
+        plot:               _nullIfEmpty(info['plot'] as String?),
+        genre:              _nullIfEmpty(info['genre'] as String?),
+        releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
+        rating:             double.tryParse(info['rating']?.toString() ?? ''),
+        durationSecs:       _parseDurationSecs(info['duration'] as String?),
+        containerExtension: ext,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   // ─── Series ───────────────────────────────────────────────────────────────────
@@ -147,7 +182,7 @@ class XtreamApi {
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:   _nullIfEmpty(m['cover'] as String?),
-        backdropUrl: _nullIfEmpty(info['backdrop_path'] as String?),
+        backdropUrl: _firstString(info['backdrop_path']),
         plot:        _nullIfEmpty(info['plot'] as String?),
         genre:       _nullIfEmpty(info['genre'] as String?),
         releaseDate: _nullIfEmpty(info['releaseDate'] as String?),
@@ -156,40 +191,61 @@ class XtreamApi {
     }).toList();
   }
 
-  Future<List<Episode>> getSeriesInfo(int seriesId) async {
+  /// Returns (series metadata, episodes).
+  /// The info object on get_series_info contains richer cover/plot/genre data
+  /// than the bulk get_series response — use it to enrich the DB record.
+  Future<(SeriesItem?, List<Episode>)> getSeriesInfo(int seriesId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '$_base&action=get_series_info&series_id=$seriesId',
     );
     final data = response.data ?? {};
-    // Some providers return [] (empty list) instead of {} when a series has
-    // no episodes — guard against the cast crash.
+
+    // Extract series-level metadata from 'info'
+    SeriesItem? meta;
+    final seriesInfo = _infoMap(data['info']);
+    if (seriesInfo.isNotEmpty) {
+      meta = SeriesItem(
+        id:          seriesId,
+        name:        _nullIfEmpty(seriesInfo['name'] as String?) ?? '',
+        categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
+        posterUrl:   _nullIfEmpty(seriesInfo['cover'] as String?),
+        backdropUrl: _firstString(seriesInfo['backdrop_path']),
+        plot:        _nullIfEmpty(seriesInfo['plot'] as String?),
+        genre:       _nullIfEmpty(seriesInfo['genre'] as String?),
+        releaseDate: _nullIfEmpty(seriesInfo['releaseDate'] as String?),
+        rating:      double.tryParse(seriesInfo['rating']?.toString() ?? ''),
+      );
+    }
+
+    // Extract episodes
     final rawEpisodes = data['episodes'];
     final episodes = rawEpisodes is Map<String, dynamic> ? rawEpisodes : null;
-    if (episodes == null) return [];
+    if (episodes == null) return (meta, <Episode>[]);
 
     final result = <Episode>[];
     for (final seasonKey in episodes.keys) {
       final seasonNum = int.tryParse(seasonKey) ?? 0;
       final epList    = episodes[seasonKey] as List;
       for (final ep in epList) {
-        final e   = ep as Map<String, dynamic>;
-        final id  = int.parse(e['id'].toString());
-        final ext = e['container_extension'] as String? ?? 'mp4';
+        final e      = ep as Map<String, dynamic>;
+        final id     = int.parse(e['id'].toString());
+        final ext    = e['container_extension'] as String? ?? 'mp4';
+        final epInfo = _infoMap(e['info']);
         result.add(Episode(
           id:                 id,
-          seriesId:           seriesId,   // use the PARAMETER — not from API response
+          seriesId:           seriesId,
           seasonNumber:       seasonNum,
           episodeNumber:      int.tryParse(e['episode_num']?.toString() ?? '0') ?? 0,
           title:              e['title'] as String? ?? 'Episode $id',
           streamUrl:          '$_serverUrl/series/$_username/$_password/$id.$ext',
-          thumbnailUrl:       _nullIfEmpty((e['info'] as Map<String, dynamic>?)?['movie_image'] as String?),
-          plot:               (e['info'] as Map<String, dynamic>?)?['plot'] as String?,
-          durationSecs:       _parseDurationSecs((e['info'] as Map<String, dynamic>?)?['duration'] as String?),
+          thumbnailUrl:       _nullIfEmpty(epInfo['movie_image'] as String?),
+          plot:               _nullIfEmpty(epInfo['plot'] as String?),
+          durationSecs:       _parseDurationSecs(epInfo['duration'] as String?),
           containerExtension: ext,
         ));
       }
     }
-    return result;
+    return (meta, result);
   }
 
   // ─── Stream URL builders ──────────────────────────────────────────────────────
@@ -213,6 +269,18 @@ class XtreamApi {
   /// instead of a Map — treat anything that isn't a Map as empty.
   Map<String, dynamic> _infoMap(dynamic raw) =>
       raw is Map<String, dynamic> ? raw : const {};
+
+  /// backdrop_path is a JSON array in the Xtream API, not a string.
+  /// Returns the first non-empty URL from either a List or a plain String.
+  String? _firstString(dynamic raw) {
+    if (raw is String) return raw.isEmpty ? null : raw;
+    if (raw is List) {
+      for (final v in raw) {
+        if (v is String && v.isNotEmpty) return v;
+      }
+    }
+    return null;
+  }
 
   int? _parseDurationSecs(String? raw) {
     if (raw == null || raw.isEmpty) return null;
