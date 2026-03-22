@@ -103,10 +103,10 @@ class XtreamApi {
   Future<List<VodItem>> getVodStreams() async {
     final response = await _dio.get<List<dynamic>>('$_base&action=get_vod_streams');
     return (response.data ?? []).map((e) {
-      final m   = e as Map<String, dynamic>;
-      final id  = int.parse(m['stream_id'].toString());
-      final ext = m['container_extension'] as String? ?? 'mp4';
-      final info = m['info'] as Map<String, dynamic>? ?? {};
+      final m    = e as Map<String, dynamic>;
+      final id   = int.parse(m['stream_id'].toString());
+      final ext  = m['container_extension'] as String? ?? 'mp4';
+      final info = _infoMap(m['info']);
       return VodItem(
         id:                 id,
         name:               m['name'] as String? ?? '',
@@ -114,9 +114,9 @@ class XtreamApi {
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:          _nullIfEmpty(m['stream_icon'] as String?),
         backdropUrl:        _nullIfEmpty(info['backdrop_path'] as String?),
-        plot:               info['plot'] as String?,
-        genre:              info['genre'] as String?,
-        releaseDate:        info['releasedate'] as String?,
+        plot:               _nullIfEmpty(info['plot'] as String?),
+        genre:              _nullIfEmpty(info['genre'] as String?),
+        releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
         rating:             double.tryParse(info['rating']?.toString() ?? ''),
         durationSecs:       _parseDurationSecs(info['duration'] as String?),
         containerExtension: ext,
@@ -141,16 +141,16 @@ class XtreamApi {
     final response = await _dio.get<List<dynamic>>('$_base&action=get_series');
     return (response.data ?? []).map((e) {
       final m    = e as Map<String, dynamic>;
-      final info = m['info'] as Map<String, dynamic>? ?? {};
+      final info = _infoMap(m['info']);
       return SeriesItem(
         id:          int.parse(m['series_id'].toString()),
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:   _nullIfEmpty(m['cover'] as String?),
         backdropUrl: _nullIfEmpty(info['backdrop_path'] as String?),
-        plot:        info['plot'] as String?,
-        genre:       info['genre'] as String?,
-        releaseDate: info['releaseDate'] as String?,
+        plot:        _nullIfEmpty(info['plot'] as String?),
+        genre:       _nullIfEmpty(info['genre'] as String?),
+        releaseDate: _nullIfEmpty(info['releaseDate'] as String?),
         rating:      double.tryParse(info['rating']?.toString() ?? ''),
       );
     }).toList();
@@ -208,6 +208,11 @@ class XtreamApi {
   /// Returns null for null or empty strings — prevents CachedNetworkImage from
   /// trying to load an empty URL and silently failing.
   String? _nullIfEmpty(String? s) => (s == null || s.isEmpty) ? null : s;
+
+  /// Safely extract the 'info' sub-object. Some providers return false/[]/""
+  /// instead of a Map — treat anything that isn't a Map as empty.
+  Map<String, dynamic> _infoMap(dynamic raw) =>
+      raw is Map<String, dynamic> ? raw : const {};
 
   int? _parseDurationSecs(String? raw) {
     if (raw == null || raw.isEmpty) return null;

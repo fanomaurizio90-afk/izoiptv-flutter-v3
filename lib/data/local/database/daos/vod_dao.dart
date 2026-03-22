@@ -212,17 +212,27 @@ class VodDao {
 
   // ─── Mappers ─────────────────────────────────────────────────────────────────
 
+  /// Treat empty strings as null — providers often store "" instead of NULL.
+  String? _s(Map<String, dynamic> r, String key) {
+    final v = r[key] as String?;
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  /// sqflite returns REAL columns as int when the value has no fractional part.
+  double? _d(Map<String, dynamic> r, String key) =>
+      (r[key] as num?)?.toDouble();
+
   VodItem _rowToVod(Map<String, dynamic> r) => VodItem(
     id:                 r['id'] as int,
     name:               r['name'] as String,
     streamUrl:          r['stream_url'] as String,
     categoryId:         r['category_id'] as int,
-    posterUrl:          r['poster_url'] as String?,
-    backdropUrl:        r['backdrop_url'] as String?,
-    plot:               r['plot'] as String?,
-    genre:              r['genre'] as String?,
-    releaseDate:        r['release_date'] as String?,
-    rating:             r['rating'] as double?,
+    posterUrl:          _s(r, 'poster_url'),
+    backdropUrl:        _s(r, 'backdrop_url'),
+    plot:               _s(r, 'plot'),
+    genre:              _s(r, 'genre'),
+    releaseDate:        _s(r, 'release_date'),
+    rating:             _d(r, 'rating'),
     durationSecs:       r['duration_secs'] as int?,
     containerExtension: r['container_extension'] as String?,
     isFavourite:        (r['is_favourite'] as int? ?? 0) == 1,
@@ -232,12 +242,12 @@ class VodDao {
     id:          r['id'] as int,
     name:        r['name'] as String,
     categoryId:  r['category_id'] as int,
-    posterUrl:   r['poster_url'] as String?,
-    backdropUrl: r['backdrop_url'] as String?,
-    plot:        r['plot'] as String?,
-    genre:       r['genre'] as String?,
-    releaseDate: r['release_date'] as String?,
-    rating:      r['rating'] as double?,
+    posterUrl:   _s(r, 'poster_url'),
+    backdropUrl: _s(r, 'backdrop_url'),
+    plot:        _s(r, 'plot'),
+    genre:       _s(r, 'genre'),
+    releaseDate: _s(r, 'release_date'),
+    rating:      _d(r, 'rating'),
     isFavourite: (r['is_favourite'] as int? ?? 0) == 1,
   );
 
