@@ -44,6 +44,9 @@ abstract final class AppSpacing {
   static const double xl4 = 40.0;
   static const double xl5 = 48.0;
   static const double xl6 = 64.0;
+  // TV-safe insets: compensate for Fire Stick overscan (≈5% of 1080p screen)
+  static const double tvH = 48.0;  // horizontal edge padding on TV screens
+  static const double tvV = 24.0;  // extra vertical inset for TV overscan
   static const double radiusCard       = 8.0;
   static const double radiusInput      = 6.0;
   static const double radiusPill       = 20.0;

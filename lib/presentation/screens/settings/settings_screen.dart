@@ -22,7 +22,7 @@ class SettingsScreen extends ConsumerWidget {
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl,
+                AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, AppSpacing.xl,
               ),
               child: Row(
                 children: [
@@ -97,7 +97,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl2, AppSpacing.xl2, AppSpacing.xl2, AppSpacing.sm,
+        AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, AppSpacing.sm,
       ),
       child: Text(
         title.toUpperCase(),
@@ -130,7 +130,7 @@ class _SettingsRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl2,
+          horizontal: AppSpacing.tvH,
           vertical:   AppSpacing.lg,
         ),
         decoration: const BoxDecoration(

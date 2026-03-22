@@ -85,7 +85,7 @@ class _MovieDetailBody extends StatelessWidget {
         // Back button
         Positioned(
           top:  topPad + AppSpacing.sm,
-          left: AppSpacing.sm,
+          left: AppSpacing.tvH,
           child: FocusableWidget(
             onTap: () => context.pop(),
             child: Container(
@@ -104,7 +104,7 @@ class _MovieDetailBody extends StatelessWidget {
                 SizedBox(height: screenH * 0.32),
                 // Title + meta on top of the fade
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl2),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

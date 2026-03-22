@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,8 +21,9 @@ class SeriesScreen extends ConsumerStatefulWidget {
 }
 
 class _SeriesScreenState extends ConsumerState<SeriesScreen> {
-  final _searchCtrl = TextEditingController();
-  final _debounce   = Debounce(duration: const Duration(milliseconds: 300));
+  final _searchCtrl             = TextEditingController();
+  final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
+  final _firstCategoryFocusNode = FocusNode();
 
   List<SeriesCategory> _categories    = [];
   int?                 _selectedCatId;
@@ -44,6 +46,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     _searchCtrl.removeListener(_onSearch);
     _searchCtrl.dispose();
     _debounce.dispose();
+    _firstCategoryFocusNode.dispose();
     super.dispose();
   }
 
@@ -115,9 +118,10 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
           children: [
             _TopBar(searchCtrl: _searchCtrl),
             if (_categories.isNotEmpty) _CategoryBar(
-              categories: _categories,
-              selectedId: _selectedCatId,
-              onSelect:   _selectCategory,
+              categories:         _categories,
+              selectedId:         _selectedCatId,
+              onSelect:           _selectCategory,
+              firstItemFocusNode: _firstCategoryFocusNode,
             ),
             Expanded(child: _buildContent()),
           ],
@@ -127,7 +131,8 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
   }
 
   Widget _buildContent() {
-    if (_syncing || _loading) return const SkeletonPosterGrid(columns: 3);
+    final cols = MediaQuery.of(context).size.width >= 900 ? 5 : 3;
+    if (_syncing || _loading) return SkeletonPosterGrid(columns: cols);
     if (_error != null) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
@@ -144,9 +149,11 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       );
     }
     return _ContentList(
-      items:      display,
-      categories: _categories,
-      onTap:      (s) async {
+      items:             display,
+      columns:           cols,
+      categories:        _categories,
+      categoryFocusNode: _firstCategoryFocusNode,
+      onTap:             (s) async {
         final cat = _categories.firstWhere(
           (c) => c.id == s.categoryId,
           orElse: () => const SeriesCategory(id: 0, name: ''),
@@ -161,49 +168,129 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
   }
 }
 
-class _ContentList extends StatelessWidget {
-  const _ContentList({required this.items, required this.categories, required this.onTap});
-  final List<SeriesItem>     items;
-  final List<SeriesCategory> categories;
+class _ContentList extends StatefulWidget {
+  const _ContentList({
+    required this.items,
+    required this.columns,
+    required this.categories,
+    required this.onTap,
+    this.categoryFocusNode,
+  });
+  final List<SeriesItem>      items;
+  final int                   columns;
+  final List<SeriesCategory>  categories;
   final void Function(SeriesItem) onTap;
+  final FocusNode?            categoryFocusNode;
+
+  @override
+  State<_ContentList> createState() => _ContentListState();
+}
+
+class _ContentListState extends State<_ContentList> {
+  List<FocusNode> _nodes = [];
+
+  List<SeriesItem> get _rest =>
+      widget.items.length > 1 ? widget.items.sublist(1) : <SeriesItem>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _nodes = List.generate(_rest.length, (_) => FocusNode());
+  }
+
+  @override
+  void didUpdateWidget(_ContentList old) {
+    super.didUpdateWidget(old);
+    if (_rest.length != _nodes.length) {
+      for (final n in _nodes) n.dispose();
+      _nodes = List.generate(_rest.length, (_) => FocusNode());
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  int get _focusedIndex {
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i;
+    }
+    return -1;
+  }
+
+  void _move(int to) {
+    if (to >= 0 && to < _nodes.length) _nodes[to].requestFocus();
+  }
+
+  KeyEventResult _handleGridKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final idx = _focusedIndex;
+    if (idx < 0) return KeyEventResult.ignored;
+    final col = idx % widget.columns;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _move(idx + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (col > 0) {
+        _move(idx - 1);
+      } else {
+        widget.categoryFocusNode?.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _move(idx + widget.columns);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (idx - widget.columns >= 0) _move(idx - widget.columns);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hero = items.first;
-    final rest = items.length > 1 ? items.sublist(1) : <SeriesItem>[];
+    final hero = widget.items.first;
+    final rest = _rest;
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Hero card — first item, full width
           FocusableWidget(
             autofocus:    true,
             borderRadius: 0,
-            onTap:        () => onTap(hero),
+            onTap:        () => widget.onTap(hero),
             child: _HeroCard(series: hero),
           ),
           if (rest.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
-            GridView.builder(
-              shrinkWrap:   true,
-              physics:      const NeverScrollableScrollPhysics(),
-              padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount:   3,
-                crossAxisSpacing: AppSpacing.sm,
-                mainAxisSpacing:  AppSpacing.sm,
-                childAspectRatio: 2 / 3,
-              ),
-              itemCount:   rest.length,
-              itemBuilder: (_, i) {
-                final s = rest[i];
-                return FocusableWidget(
+            Focus(
+              onKeyEvent:    _handleGridKey,
+              skipTraversal: true,
+              child: GridView.builder(
+                shrinkWrap:   true,
+                physics:      const NeverScrollableScrollPhysics(),
+                padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount:   widget.columns,
+                  crossAxisSpacing: AppSpacing.sm,
+                  mainAxisSpacing:  AppSpacing.sm,
+                  childAspectRatio: 2 / 3,
+                ),
+                itemCount:   rest.length,
+                itemBuilder: (_, i) => FocusableWidget(
+                  focusNode:    _nodes[i],
                   autofocus:    false,
                   borderRadius: AppSpacing.radiusCard,
-                  onTap:        () => onTap(s),
-                  child: _PosterCard(series: s),
-                );
-              },
+                  onTap:        () => widget.onTap(rest[i]),
+                  child:        _PosterCard(series: rest[i]),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpacing.xl3),
           ],
@@ -248,7 +335,7 @@ class _HeroCard extends StatelessWidget {
           ),
           // Title bottom-left
           Positioned(
-            left: AppSpacing.lg, right: AppSpacing.lg, bottom: AppSpacing.lg,
+            left: AppSpacing.tvH, right: AppSpacing.tvH, bottom: AppSpacing.lg,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize:       MainAxisSize.min,
@@ -369,7 +456,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH, vertical: AppSpacing.md),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
@@ -419,10 +506,12 @@ class _CategoryBar extends StatelessWidget {
     required this.categories,
     required this.selectedId,
     required this.onSelect,
+    this.firstItemFocusNode,
   });
   final List<SeriesCategory> categories;
   final int?                 selectedId;
   final void Function(int)   onSelect;
+  final FocusNode?           firstItemFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -430,13 +519,14 @@ class _CategoryBar extends StatelessWidget {
       height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
         itemCount:       categories.length,
         itemBuilder:     (_, i) {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
           return FocusableWidget(
             autofocus: i == 0,
+            focusNode: i == 0 ? firstItemFocusNode : null,
             onTap:     () => onSelect(cat.id),
             child: Padding(
               padding: const EdgeInsets.only(right: AppSpacing.xl2),

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -127,7 +128,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
         // Back button
         Positioned(
           top:  topPad + AppSpacing.sm,
-          left: AppSpacing.sm,
+          left: AppSpacing.tvH,
           child: FocusableWidget(
             onTap: () => context.pop(),
             child: Container(
@@ -144,7 +145,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
               children: [
                 SizedBox(height: screenH * 0.30),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl2),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -207,7 +208,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           height: 40,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.xl2),
+                            padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
                             itemCount:       seasons.length,
                             itemBuilder:     (_, i) {
                               final s          = seasons[i];
@@ -263,7 +264,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   }
 }
 
-class _EpisodeRow extends StatelessWidget {
+class _EpisodeRow extends StatefulWidget {
   const _EpisodeRow({
     required this.episode,
     required this.episodes,
@@ -276,77 +277,105 @@ class _EpisodeRow extends StatelessWidget {
   final bool          autofocus;
 
   @override
+  State<_EpisodeRow> createState() => _EpisodeRowState();
+}
+
+class _EpisodeRowState extends State<_EpisodeRow> {
+  bool _focused = false;
+
+  void _play(BuildContext context) => context.push('/series/player', extra: {
+    'episode':  widget.episode,
+    'episodes': widget.episodes,
+    'index':    widget.index,
+  });
+
+  @override
   Widget build(BuildContext context) {
-    return FocusableWidget(
-      autofocus: autofocus,
-      onTap: () => context.push('/series/player', extra: {
-        'episode':  episode,
-        'episodes': episodes,
-        'index':    index,
-      }),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl2,
-          vertical:   AppSpacing.md,
-        ),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5),
+    return Focus(
+      autofocus: widget.autofocus,
+      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+             event.logicalKey == LogicalKeyboardKey.enter)) {
+          _play(context);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: () => _play(context),
+        child: AnimatedContainer(
+          duration: AppDurations.medium,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.tvH,
+            vertical:   AppSpacing.md,
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Thumbnail
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                width:  96,
-                height: 54,
-                child: episode.thumbnailUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl:    episode.thumbnailUrl!,
-                        fit:         BoxFit.cover,
-                        errorWidget: (_, __, ___) => _ThumbnailPlaceholder(number: episode.episodeNumber),
-                      )
-                    : _ThumbnailPlaceholder(number: episode.episodeNumber),
+          decoration: BoxDecoration(
+            color: _focused ? const Color(0x12FFFFFF) : Colors.transparent,
+            border: Border(
+              left:   BorderSide(
+                color: _focused ? AppColors.textPrimary : Colors.transparent,
+                width: 2.5,
               ),
+              bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
             ),
-            const SizedBox(width: AppSpacing.md),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${episode.episodeNumber}. ${episode.title}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.dmSans(
-                      color:      AppColors.textPrimary,
-                      fontSize:   13,
-                      fontWeight: FontWeight.w400,
-                      height:     1.4,
-                    ),
-                  ),
-                  if (episode.plot != null) ...[
-                    const SizedBox(height: 3),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Thumbnail
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width:  96,
+                  height: 54,
+                  child: widget.episode.thumbnailUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl:    widget.episode.thumbnailUrl!,
+                          fit:         BoxFit.cover,
+                          errorWidget: (_, __, ___) =>
+                              _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                        )
+                      : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      episode.plot!,
-                      maxLines: 2,
+                      '${widget.episode.episodeNumber}. ${widget.episode.title}',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.dmSans(
-                        color:      AppColors.textMuted,
-                        fontSize:   11,
-                        fontWeight: FontWeight.w300,
+                        color:      AppColors.textPrimary,
+                        fontSize:   13,
+                        fontWeight: FontWeight.w400,
                         height:     1.4,
                       ),
                     ),
+                    if (widget.episode.plot != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.episode.plot!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(
+                          color:      AppColors.textMuted,
+                          fontSize:   11,
+                          fontWeight: FontWeight.w300,
+                          height:     1.4,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
