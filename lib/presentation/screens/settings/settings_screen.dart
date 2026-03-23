@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/providers.dart';
+import '../../widgets/common/focusable_widget.dart';
 import '../../../services/device_id_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -18,6 +19,21 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _syncing = false;
+
+  // Focus nodes for D-pad navigation
+  final _backNode      = FocusNode();
+  final _managePlNode  = FocusNode();
+  final _refreshNode   = FocusNode();
+  final _signOutNode   = FocusNode();
+
+  @override
+  void dispose() {
+    _backNode.dispose();
+    _managePlNode.dispose();
+    _refreshNode.dispose();
+    _signOutNode.dispose();
+    super.dispose();
+  }
 
   Future<void> _forceSync() async {
     if (_syncing) return;
@@ -43,9 +59,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+                  FocusableWidget(
+                    focusNode: _backNode,
+                    onTap:     () => context.pop(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Text(
@@ -66,9 +86,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SectionHeader('Device'),
                   _DeviceIdRow(),
                   _SettingsRow(
-                    label: 'Manage Playlist',
-                    value: 'izoiptv.com/authenticate',
+                    label:     'Manage Playlist',
+                    value:     'izoiptv.com/authenticate',
                     showArrow: true,
+                    focusNode: _managePlNode,
+                    autofocus: true,
                     onTap: () async {
                       final uri = Uri.parse('https://izoiptv.com/authenticate');
                       if (await canLaunchUrl(uri)) await launchUrl(uri);
@@ -77,27 +99,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SectionHeader('Library'),
                   _LibraryStatusRow(),
                   _SettingsRow(
-                    label: 'Refresh Library',
-                    value: _syncing ? 'Syncing…' : 'Refresh now',
+                    label:     'Refresh Library',
+                    value:     _syncing ? 'Syncing…' : 'Refresh now',
                     showArrow: !_syncing,
-                    onTap: _syncing ? null : _forceSync,
+                    focusNode: _refreshNode,
+                    onTap:     _syncing ? null : _forceSync,
                   ),
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '1.8.0'),
+                  const _SettingsRow(label: 'Version', value: '1.8.1'),
                   const SizedBox(height: AppSpacing.xl6),
-                  // Logout — muted red text only, no button shape
-                  GestureDetector(
-                    onTap: () async {
-                      await ref.read(authProvider.notifier).logout();
-                    },
-                    child: Center(
+                  // Sign Out — muted red text, centred
+                  Center(
+                    child: FocusableWidget(
+                      focusNode:    _signOutNode,
+                      borderRadius: AppSpacing.radiusCard,
+                      onTap: () async {
+                        await ref.read(authProvider.notifier).logout();
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(AppSpacing.xl2),
                         child: Text(
                           'Sign Out',
                           style: GoogleFonts.dmSans(
-                            color:    const Color(0xFFE57373),
-                            fontSize: 13,
+                            color:      const Color(0xFFE57373),
+                            fontSize:   13,
                             fontWeight: FontWeight.w400,
                           ),
                         ),
@@ -237,50 +262,60 @@ class _SettingsRow extends StatelessWidget {
     this.value,
     this.onTap,
     this.showArrow = false,
+    this.focusNode,
+    this.autofocus = false,
   });
   final String        label;
   final String?       value;
   final VoidCallback? onTap;
   final bool          showArrow;
+  final FocusNode?    focusNode;
+  final bool          autofocus;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.tvH,
-          vertical:   AppSpacing.lg,
-        ),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-        ),
-        child: Row(
-          children: [
+    final content = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.tvH,
+        vertical:   AppSpacing.lg,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.dmSans(
+              color:      AppColors.textPrimary,
+              fontSize:   13,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const Spacer(),
+          if (value != null)
             Text(
-              label,
+              value!,
               style: GoogleFonts.dmSans(
-                color:      AppColors.textPrimary,
-                fontSize:   13,
-                fontWeight: FontWeight.w400,
+                color:    AppColors.textMuted,
+                fontSize: 13,
               ),
             ),
-            const Spacer(),
-            if (value != null)
-              Text(
-                value!,
-                style: GoogleFonts.dmSans(
-                  color:    AppColors.textMuted,
-                  fontSize: 13,
-                ),
-              ),
-            if (showArrow) ...[
-              const SizedBox(width: 6),
-              const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 10),
-            ],
+          if (showArrow) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 10),
           ],
-        ),
+        ],
       ),
+    );
+
+    if (onTap == null) return content;
+
+    return FocusableWidget(
+      focusNode: focusNode,
+      autofocus: autofocus,
+      onTap:     onTap!,
+      child:     content,
     );
   }
 }
@@ -327,14 +362,14 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
             Text(
               _id!.length > 14 ? '${_id!.substring(0, 14)}...' : _id!,
               style: const TextStyle(
-                color:      AppColors.textMuted,
-                fontSize:   11,
-                fontFamily: 'monospace',
+                color:         AppColors.textMuted,
+                fontSize:      11,
+                fontFamily:    'monospace',
                 letterSpacing: 0.5,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            GestureDetector(
+            FocusableWidget(
               onTap: () async {
                 await Clipboard.setData(ClipboardData(text: _id!));
                 if (!mounted) return;

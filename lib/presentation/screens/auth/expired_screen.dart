@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/app_logo.dart';
+import '../../widgets/common/focusable_widget.dart';
 
 class ExpiredScreen extends ConsumerWidget {
   const ExpiredScreen({super.key});
@@ -35,11 +36,15 @@ class ExpiredScreen extends ConsumerWidget {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: AppSpacing.xl3),
-                GestureDetector(
+                FocusableWidget(
+                  autofocus: true,
                   onTap: () => ref.read(authProvider.notifier).logout(),
-                  child: const Text(
-                    'Sign out',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: const Text(
+                      'Sign out',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    ),
                   ),
                 ),
               ],

@@ -79,6 +79,12 @@ class _SeriesDetailBody extends ConsumerStatefulWidget {
 class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   late SeriesItem _displaySeries;
 
+  // Focus nodes
+  final _backNode = FocusNode();
+  List<FocusNode> _seasonNodes = [];
+  // Link: season tabs → first episode (set by _EpisodeList callback)
+  FocusNode? _firstEpisodeNode;
+
   @override
   void initState() {
     super.initState();
@@ -86,8 +92,46 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     ref.read(selectedSeasonProvider.notifier).state = 1;
   }
 
-  /// Called after seasonsProvider completes — getSeasons() may have enriched
-  /// the series record in the DB with cover/plot from get_series_info.
+  @override
+  void dispose() {
+    _backNode.dispose();
+    for (final n in _seasonNodes) n.dispose();
+    super.dispose();
+  }
+
+  void _rebuildSeasonNodes(int count) {
+    if (_seasonNodes.length != count) {
+      for (final n in _seasonNodes) n.dispose();
+      _seasonNodes = List.generate(count, (_) => FocusNode());
+    }
+  }
+
+  KeyEventResult _handleSeasonKey(int i, int total, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (i > 0) {
+        _seasonNodes[i - 1].requestFocus();
+      } else {
+        _backNode.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      if (i < total - 1) {
+        _seasonNodes[i + 1].requestFocus();
+      } else {
+        _firstEpisodeNode?.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _firstEpisodeNode?.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Called after seasons finish loading — DB may have richer metadata
   Future<void> _refreshMetadataFromDb() async {
     final fresh = await ref.read(seriesRepositoryProvider).getSeriesById(widget.series.id);
     if (fresh != null && mounted) setState(() => _displaySeries = fresh);
@@ -100,7 +144,6 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     final selectedSeason = ref.watch(selectedSeasonProvider);
     final seasonsAsync   = ref.watch(seasonsProvider(widget.series.id));
 
-    // When seasons finish loading, DB may have been updated with richer metadata
     ref.listen(seasonsProvider(widget.series.id), (_, next) {
       if (next.hasValue && _displaySeries.posterUrl == null) {
         _refreshMetadataFromDb();
@@ -146,6 +189,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
           child: FocusableWidget(
+            focusNode: _backNode,
+            autofocus: true,
             onTap: () => context.pop(),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
@@ -212,6 +257,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13)),
                       );
                     }
+                    _rebuildSeasonNodes(seasons.length);
                     final season = seasons.firstWhere(
                       (s) => s.number == selectedSeason,
                       orElse: () => seasons.first,
@@ -219,7 +265,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Season tabs — plain text, no pills
+                        // Season tabs
                         SizedBox(
                           height: 40,
                           child: ListView.builder(
@@ -229,18 +275,21 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                             itemBuilder:     (_, i) {
                               final s          = seasons[i];
                               final isSelected = s.number == selectedSeason;
-                              return FocusableWidget(
-                                autofocus: i == 0,
-                                onTap:     () => ref.read(selectedSeasonProvider.notifier).state = s.number,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: AppSpacing.xl2),
-                                  child: Center(
-                                    child: Text(
-                                      'Season ${s.number}',
-                                      style: GoogleFonts.dmSans(
-                                        color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                                        fontSize:   13,
-                                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                              return Focus(
+                                onKeyEvent: (_, e) => _handleSeasonKey(i, seasons.length, e),
+                                child: FocusableWidget(
+                                  focusNode: _seasonNodes[i],
+                                  onTap: () => ref.read(selectedSeasonProvider.notifier).state = s.number,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: AppSpacing.xl2),
+                                    child: Center(
+                                      child: Text(
+                                        'Season ${s.number}',
+                                        style: GoogleFonts.dmSans(
+                                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                                          fontSize:   13,
+                                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -250,13 +299,15 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
-                        // Episodes
-                        ...season.episodes.asMap().entries.map((e) => _EpisodeRow(
-                          episode:   e.value,
-                          episodes:  season.episodes,
-                          index:     e.key,
-                          autofocus: e.key == 0,
-                        )),
+                        // Episode list with explicit up/down navigation
+                        _EpisodeList(
+                          key:            ValueKey('${widget.series.id}_$selectedSeason'),
+                          episodes:       season.episodes,
+                          firstSeasonNode: _seasonNodes.isNotEmpty ? _seasonNodes[0] : null,
+                          onFirstNodeReady: (node) {
+                            _firstEpisodeNode = node;
+                          },
+                        ),
                         const SizedBox(height: AppSpacing.xl3),
                       ],
                     );
@@ -280,17 +331,103 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   }
 }
 
+// ── Episode List ───────────────────────────────────────────────────────────────
+
+class _EpisodeList extends StatefulWidget {
+  const _EpisodeList({
+    super.key,
+    required this.episodes,
+    required this.onFirstNodeReady,
+    this.firstSeasonNode,
+  });
+  final List<Episode>            episodes;
+  final void Function(FocusNode) onFirstNodeReady;
+  final FocusNode?               firstSeasonNode;
+
+  @override
+  State<_EpisodeList> createState() => _EpisodeListState();
+}
+
+class _EpisodeListState extends State<_EpisodeList> {
+  List<FocusNode> _nodes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _nodes = List.generate(widget.episodes.length, (_) => FocusNode());
+    _notifyFirst();
+  }
+
+  @override
+  void dispose() {
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  void _notifyFirst() {
+    if (_nodes.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onFirstNodeReady(_nodes[0]);
+      });
+    }
+  }
+
+  int get _focusedIndex {
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i;
+    }
+    return -1;
+  }
+
+  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final idx = _focusedIndex;
+    if (idx < 0) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
+      _nodes[idx + 1].requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (idx > 0) {
+        _nodes[idx - 1].requestFocus();
+      } else {
+        widget.firstSeasonNode?.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onKeyEvent:    _handleKey,
+      skipTraversal: true,
+      child: Column(
+        children: widget.episodes.asMap().entries.map((e) => _EpisodeRow(
+          episode:   e.value,
+          episodes:  widget.episodes,
+          index:     e.key,
+          focusNode: _nodes[e.key],
+        )).toList(),
+      ),
+    );
+  }
+}
+
+// ── Episode Row ────────────────────────────────────────────────────────────────
+
 class _EpisodeRow extends StatefulWidget {
   const _EpisodeRow({
     required this.episode,
     required this.episodes,
     required this.index,
-    this.autofocus = false,
+    required this.focusNode,
   });
   final Episode       episode;
   final List<Episode> episodes;
   final int           index;
-  final bool          autofocus;
+  final FocusNode     focusNode;
 
   @override
   State<_EpisodeRow> createState() => _EpisodeRowState();
@@ -308,7 +445,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
   @override
   Widget build(BuildContext context) {
     return Focus(
-      autofocus: widget.autofocus,
+      focusNode: widget.focusNode,
       onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
@@ -330,7 +467,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
           decoration: BoxDecoration(
             color: _focused ? const Color(0x12FFFFFF) : Colors.transparent,
             border: Border(
-              left:   BorderSide(
+              left: BorderSide(
                 color: _focused ? AppColors.textPrimary : Colors.transparent,
                 width: 2.5,
               ),
@@ -410,8 +547,8 @@ class _ThumbnailPlaceholder extends StatelessWidget {
       child: Text(
         '$number',
         style: GoogleFonts.dmSans(
-          color:    AppColors.textMuted,
-          fontSize: 18,
+          color:      AppColors.textMuted,
+          fontSize:   18,
           fontWeight: FontWeight.w300,
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -38,20 +39,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.xl3,
                 ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HeroTiles(),
-                  const SizedBox(height: AppSpacing.xl3),
-                  _ContinueWatchingRow(),
-                  const SizedBox(height: AppSpacing.xl3),
-                  _FavouritesRow(),
-                ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HeroTiles(),
+                    const SizedBox(height: AppSpacing.xl3),
+                    _ContinueWatchingRow(),
+                    const SizedBox(height: AppSpacing.xl3),
+                    _FavouritesRow(),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -73,7 +74,7 @@ class _TopBar extends StatelessWidget {
           const IzoLogo(size: 28),
           const Spacer(),
           FocusableWidget(
-            onTap: () => context.push('/settings'),
+            onTap:        () => context.push('/settings'),
             borderRadius: AppSpacing.radiusCard,
             child: const Padding(
               padding: EdgeInsets.all(AppSpacing.sm),
@@ -109,11 +110,14 @@ class _SectionLabel extends StatelessWidget {
         ),
         if (trailing != null) ...[
           const Spacer(),
-          GestureDetector(
-            onTap: onTrailingTap,
-            child: Text(
-              trailing!,
-              style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 11),
+          FocusableWidget(
+            onTap: onTrailingTap ?? () {},
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text(
+                trailing!,
+                style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 11),
+              ),
             ),
           ),
         ],
@@ -132,41 +136,40 @@ class _TileData {
     required this.textureColor,
     required this.tag,
   });
-  final String          label;
-  final String          route;
-  final List<Color>     gradient;
-  final Color           textureColor;
-  final String          tag;
+  final String      label;
+  final String      route;
+  final List<Color> gradient;
+  final Color       textureColor;
+  final String      tag;
 }
 
 class _HeroTiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Compute available height for tiles
     final screenH   = MediaQuery.of(context).size.height;
     final tileHeight = (screenH - 56 - 32).clamp(200.0, 500.0) * 0.60;
 
     final tiles = const [
       _TileData(
-        label:       'Live TV',
-        route:       '/live',
-        gradient:    [Color(0xFF0A1628), Color(0xFF080808)],
+        label:        'Live TV',
+        route:        '/live',
+        gradient:     [Color(0xFF0A1628), Color(0xFF080808)],
         textureColor: Color(0x0800F0FF),
-        tag:         'LIVE',
+        tag:          'LIVE',
       ),
       _TileData(
-        label:       'Movies',
-        route:       '/movies',
-        gradient:    [Color(0xFF140A1E), Color(0xFF080808)],
+        label:        'Movies',
+        route:        '/movies',
+        gradient:     [Color(0xFF140A1E), Color(0xFF080808)],
         textureColor: Color(0x08A855F7),
-        tag:         'VOD',
+        tag:          'VOD',
       ),
       _TileData(
-        label:       'Series',
-        route:       '/series',
-        gradient:    [Color(0xFF0A1420), Color(0xFF080808)],
+        label:        'Series',
+        route:        '/series',
+        gradient:     [Color(0xFF0A1420), Color(0xFF080808)],
         textureColor: Color(0x087DD3FC),
-        tag:         'TV',
+        tag:          'TV',
       ),
     ];
 
@@ -214,13 +217,11 @@ class _HeroTile extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            // Subtle diagonal line texture
             Positioned.fill(
               child: CustomPaint(
                 painter: _DiagonalLinePainter(color: tile.textureColor),
               ),
             ),
-            // Tag — top right
             Positioned(
               top: AppSpacing.md,
               right: AppSpacing.md,
@@ -241,7 +242,6 @@ class _HeroTile extends StatelessWidget {
                 ),
               ),
             ),
-            // Label — bottom left
             Positioned(
               left:   AppSpacing.lg,
               right:  AppSpacing.lg,
@@ -249,9 +249,9 @@ class _HeroTile extends StatelessWidget {
               child: Text(
                 tile.label,
                 style: GoogleFonts.dmSans(
-                  color:      AppColors.textPrimary,
-                  fontSize:   22,
-                  fontWeight: FontWeight.w500,
+                  color:         AppColors.textPrimary,
+                  fontSize:      22,
+                  fontWeight:    FontWeight.w500,
                   letterSpacing: -0.3,
                   height: 1.0,
                 ),
@@ -275,27 +275,81 @@ class _DiagonalLinePainter extends CustomPainter {
       ..strokeWidth = 1;
     const spacing = 24.0;
     for (double x = -size.height; x < size.width + size.height; x += spacing) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x + size.height, size.height),
-        paint,
-      );
+      canvas.drawLine(Offset(x, 0), Offset(x + size.height, size.height), paint);
     }
   }
 
   @override
-  bool shouldRepaint(_DiagonalLinePainter old) => old.color != old.color;
+  bool shouldRepaint(_DiagonalLinePainter old) => old.color != color;
 }
 
 // ── Continue Watching ──────────────────────────────────────────────────────────
 
-class _ContinueWatchingRow extends ConsumerWidget {
+class _ContinueWatchingRow extends ConsumerStatefulWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ContinueWatchingRow> createState() => _ContinueWatchingRowState();
+}
+
+class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
+  List<FocusNode> _nodes = [];
+
+  @override
+  void dispose() {
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  void _ensureNodes(int count) {
+    if (_nodes.length != count) {
+      for (final n in _nodes) n.dispose();
+      _nodes = List.generate(count, (_) => FocusNode());
+    }
+  }
+
+  void _move(int to) {
+    if (to >= 0 && to < _nodes.length) _nodes[to].requestFocus();
+  }
+
+  int get _focusedIndex {
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i;
+    }
+    return -1;
+  }
+
+  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final idx = _focusedIndex;
+    if (idx < 0) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _move(idx + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft && idx > 0) {
+      _move(idx - 1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Future<void> _resumeItem(Map<String, dynamic> item) async {
+    final contentId   = item['content_id']   as int?;
+    final contentType = item['content_type'] as String?;
+    if (contentId == null || contentType == null) return;
+
+    if (contentType == 'vod') {
+      final vod = await ref.read(vodRepositoryProvider).getVodById(contentId);
+      if (vod != null && mounted) context.push('/movies/player', extra: vod);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final history = ref.watch(recentHistoryProvider);
     return history.when(
       data: (items) {
         if (items.isEmpty) return const SizedBox.shrink();
+        _ensureNodes(items.length);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -303,57 +357,66 @@ class _ContinueWatchingRow extends ConsumerWidget {
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               height: 96,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount:       items.length,
-                itemBuilder:     (_, i) {
-                  final item     = items[i];
-                  final pos      = (item['position_secs']  as int? ?? 0).toDouble();
-                  final dur      = (item['duration_secs']  as int? ?? 1).toDouble();
-                  final progress = dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0;
-                  return Container(
-                    width:  180,
-                    margin: const EdgeInsets.only(right: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color:        AppColors.card,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                      border:       Border.all(color: AppColors.border, width: 0.5),
-                    ),
-                    child: Stack(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                          child: Text(
-                            item['content_name'] as String? ?? '',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.dmSans(
-                              color:      AppColors.textPrimary,
-                              fontSize:   12,
-                              fontWeight: FontWeight.w400,
-                              height:     1.4,
-                            ),
-                          ),
+              child: Focus(
+                onKeyEvent:    _handleKey,
+                skipTraversal: true,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount:       items.length,
+                  itemBuilder:     (_, i) {
+                    final item     = items[i];
+                    final pos      = (item['position_secs'] as int? ?? 0).toDouble();
+                    final dur      = (item['duration_secs'] as int? ?? 1).toDouble();
+                    final progress = dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0;
+                    return FocusableWidget(
+                      focusNode:    _nodes[i],
+                      autofocus:    i == 0,
+                      borderRadius: AppSpacing.radiusCard,
+                      onTap:        () => _resumeItem(item),
+                      child: Container(
+                        width:  180,
+                        margin: const EdgeInsets.only(right: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color:        AppColors.card,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+                          border:       Border.all(color: AppColors.border, width: 0.5),
                         ),
-                        // Progress bar at very bottom
-                        Positioned(
-                          left: 0, right: 0, bottom: 0,
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(AppSpacing.radiusCard),
+                        child: Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                              child: Text(
+                                item['content_name'] as String? ?? '',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.dmSans(
+                                  color:      AppColors.textPrimary,
+                                  fontSize:   12,
+                                  fontWeight: FontWeight.w400,
+                                  height:     1.4,
+                                ),
+                              ),
                             ),
-                            child: LinearProgressIndicator(
-                              value:           progress,
-                              backgroundColor: AppColors.borderSubtle,
-                              valueColor:      const AlwaysStoppedAnimation(AppColors.textPrimary),
-                              minHeight:       2,
+                            Positioned(
+                              left: 0, right: 0, bottom: 0,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  bottom: Radius.circular(AppSpacing.radiusCard),
+                                ),
+                                child: LinearProgressIndicator(
+                                  value:           progress,
+                                  backgroundColor: AppColors.borderSubtle,
+                                  valueColor:      const AlwaysStoppedAnimation(AppColors.textPrimary),
+                                  minHeight:       2,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ],

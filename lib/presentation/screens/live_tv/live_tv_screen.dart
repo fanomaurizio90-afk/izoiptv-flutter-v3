@@ -33,6 +33,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   bool                  _syncing       = false;
   String?               _error;
 
+  // Focus nodes for cross-panel navigation
+  final _searchFocusNode   = FocusNode();
+  final _firstSidebarNode  = FocusNode();
+  // First channel row focus — set via callback from _ChannelList
+  FocusNode? _firstChannelNode;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +51,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     _searchCtrl.removeListener(_onSearch);
     _searchCtrl.dispose();
     _debounce.dispose();
+    _searchFocusNode.dispose();
+    _firstSidebarNode.dispose();
     super.dispose();
   }
 
@@ -121,15 +129,23 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         child: Row(
           children: [
             _CategorySidebar(
-              categories: _categories,
-              selectedId: _selectedCatId,
-              onSelect:   _selectCategory,
+              categories:     _categories,
+              selectedId:     _selectedCatId,
+              onSelect:       _selectCategory,
+              firstItemNode:  _firstSidebarNode,
+              // Right arrow on sidebar → search bar or first channel
+              onRightArrow:   () => (_firstChannelNode ?? _searchFocusNode).requestFocus(),
             ),
             Container(width: 0.5, color: AppColors.border),
             Expanded(
               child: Column(
                 children: [
-                  _SearchBar(controller: _searchCtrl),
+                  _SearchBar(
+                    controller:     _searchCtrl,
+                    focusNode:      _searchFocusNode,
+                    onLeftArrow:    () => _firstSidebarNode.requestFocus(),
+                    onDownArrow:    () => _firstChannelNode?.requestFocus(),
+                  ),
                   Expanded(child: _buildChannelList()),
                 ],
               ),
@@ -153,47 +169,52 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     if (_filtered.isEmpty) {
       return const EmptyStateWidget(type: EmptyStateType.channels);
     }
-    return ScrollConfiguration(
-      behavior: const ScrollBehavior().copyWith(scrollbars: false),
-      child: ListView.builder(
-        itemCount:  _filtered.length,
-        itemExtent: kChannelRowHeight,
-        itemBuilder: (_, i) {
-          final ch = _filtered[i];
-          return _ChannelRow(
-            channel:   ch,
-            autofocus: i == 0,
-            onTap: () async {
-              final cat = _categories.firstWhere(
-                (c) => c.id == ch.categoryId,
-                orElse: () => const ChannelCategory(id: 0, name: ''),
-              );
-              if (isAdultCategory(cat.name) || isAdultCategory(ch.name)) {
-                final ok = await showPinDialog(context);
-                if (!ok || !mounted) return;
-              }
-              ref.read(selectedChannelProvider.notifier).state     = ch;
-              ref.read(currentChannelListProvider.notifier).state  = _filtered;
-              ref.read(currentChannelIndexProvider.notifier).state = i;
-              if (mounted) context.push('/live/player');
-            },
-          );
-        },
-      ),
+    return _ChannelList(
+      channels:        _filtered,
+      categories:      _categories,
+      sidebarNode:     _firstSidebarNode,
+      onFirstNodeReady: (node) { _firstChannelNode = node; },
+      onChannelTap:    (ch, i) async {
+        final cat = _categories.firstWhere(
+          (c) => c.id == ch.categoryId,
+          orElse: () => const ChannelCategory(id: 0, name: ''),
+        );
+        if (isAdultCategory(cat.name) || isAdultCategory(ch.name)) {
+          final ok = await showPinDialog(context);
+          if (!ok || !mounted) return;
+        }
+        ref.read(selectedChannelProvider.notifier).state     = ch;
+        ref.read(currentChannelListProvider.notifier).state  = _filtered;
+        ref.read(currentChannelIndexProvider.notifier).state = i;
+        if (mounted) context.push('/live/player');
+      },
     );
   }
 }
 
 const double kChannelRowHeight = 72.0;
 
+// ── Search Bar ────────────────────────────────────────────────────────────────
+
 class _SearchBar extends StatelessWidget {
-  const _SearchBar({required this.controller});
+  const _SearchBar({
+    required this.controller,
+    required this.focusNode,
+    required this.onLeftArrow,
+    required this.onDownArrow,
+  });
   final TextEditingController controller;
+  final FocusNode             focusNode;
+  final VoidCallback          onLeftArrow;
+  final VoidCallback          onDownArrow;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH, top: AppSpacing.sm, bottom: AppSpacing.sm),
+      padding: const EdgeInsets.only(
+        left: AppSpacing.md, right: AppSpacing.tvH,
+        top: AppSpacing.sm,  bottom: AppSpacing.sm,
+      ),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
@@ -202,19 +223,34 @@ class _SearchBar extends StatelessWidget {
           const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 16),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: TextField(
-              controller: controller,
-              style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13),
-              decoration: InputDecoration(
-                hintText:        'Search channels',
-                hintStyle:       GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
-                border:          InputBorder.none,
-                enabledBorder:   InputBorder.none,
-                focusedBorder:   InputBorder.none,
-                isDense:         true,
-                contentPadding:  EdgeInsets.zero,
-                fillColor:       Colors.transparent,
-                filled:          true,
+            child: Focus(
+              onKeyEvent: (_, event) {
+                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  onLeftArrow();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  onDownArrow();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                controller: controller,
+                focusNode:  focusNode,
+                style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText:       'Search channels',
+                  hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+                  border:         InputBorder.none,
+                  enabledBorder:  InputBorder.none,
+                  focusedBorder:  InputBorder.none,
+                  isDense:        true,
+                  contentPadding: EdgeInsets.zero,
+                  fillColor:      Colors.transparent,
+                  filled:         true,
+                ),
               ),
             ),
           ),
@@ -224,11 +260,124 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
+// ── Channel List ──────────────────────────────────────────────────────────────
+
+class _ChannelList extends StatefulWidget {
+  const _ChannelList({
+    required this.channels,
+    required this.categories,
+    required this.sidebarNode,
+    required this.onFirstNodeReady,
+    required this.onChannelTap,
+  });
+  final List<Channel>                channels;
+  final List<ChannelCategory>        categories;
+  final FocusNode                    sidebarNode;
+  final void Function(FocusNode)     onFirstNodeReady;
+  final void Function(Channel, int)  onChannelTap;
+
+  @override
+  State<_ChannelList> createState() => _ChannelListState();
+}
+
+class _ChannelListState extends State<_ChannelList> {
+  List<FocusNode> _nodes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _nodes = List.generate(widget.channels.length, (_) => FocusNode());
+    _notifyFirst();
+  }
+
+  @override
+  void didUpdateWidget(_ChannelList old) {
+    super.didUpdateWidget(old);
+    if (widget.channels.length != _nodes.length) {
+      for (final n in _nodes) n.dispose();
+      _nodes = List.generate(widget.channels.length, (_) => FocusNode());
+      _notifyFirst();
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  void _notifyFirst() {
+    if (_nodes.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onFirstNodeReady(_nodes[0]);
+      });
+    }
+  }
+
+  int get _focusedIndex {
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i;
+    }
+    return -1;
+  }
+
+  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final idx = _focusedIndex;
+    if (idx < 0) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
+      _nodes[idx + 1].requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (idx > 0) {
+        _nodes[idx - 1].requestFocus();
+      }
+      // arrowUp on first item → Flutter's default traversal goes up (to search bar)
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      widget.sidebarNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: const ScrollBehavior().copyWith(scrollbars: false),
+      child: Focus(
+        onKeyEvent:    _handleKey,
+        skipTraversal: true,
+        child: ListView.builder(
+          itemCount:  widget.channels.length,
+          itemExtent: kChannelRowHeight,
+          itemBuilder: (_, i) {
+            final ch = widget.channels[i];
+            return _ChannelRow(
+              channel:   ch,
+              focusNode: _nodes[i],
+              onTap:     () => widget.onChannelTap(ch, i),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ── Channel Row ───────────────────────────────────────────────────────────────
+
 class _ChannelRow extends StatefulWidget {
-  const _ChannelRow({required this.channel, required this.onTap, this.autofocus = false});
+  const _ChannelRow({
+    required this.channel,
+    required this.onTap,
+    required this.focusNode,
+  });
   final Channel      channel;
   final VoidCallback onTap;
-  final bool         autofocus;
+  final FocusNode    focusNode;
 
   @override
   State<_ChannelRow> createState() => _ChannelRowState();
@@ -240,7 +389,7 @@ class _ChannelRowState extends State<_ChannelRow> {
   @override
   Widget build(BuildContext context) {
     return Focus(
-      autofocus: widget.autofocus,
+      focusNode:     widget.focusNode,
       onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
@@ -260,7 +409,7 @@ class _ChannelRowState extends State<_ChannelRow> {
           decoration: BoxDecoration(
             color: _focused ? const Color(0x0FFFFFFF) : Colors.transparent,
             border: Border(
-              left:   BorderSide(
+              left: BorderSide(
                 color: _focused ? AppColors.textPrimary : Colors.transparent,
                 width: 2.5,
               ),
@@ -334,15 +483,21 @@ class _FirstLetterPlaceholder extends StatelessWidget {
   }
 }
 
+// ── Category Sidebar ──────────────────────────────────────────────────────────
+
 class _CategorySidebar extends StatelessWidget {
   const _CategorySidebar({
     required this.categories,
     required this.selectedId,
     required this.onSelect,
+    required this.onRightArrow,
+    this.firstItemNode,
   });
   final List<ChannelCategory> categories;
   final int?                  selectedId;
   final void Function(int)    onSelect;
+  final VoidCallback          onRightArrow;
+  final FocusNode?            firstItemNode;
 
   @override
   Widget build(BuildContext context) {
@@ -356,30 +511,42 @@ class _CategorySidebar extends StatelessWidget {
           itemBuilder: (_, i) {
             final cat        = categories[i];
             final isSelected = cat.id == selectedId;
-            return FocusableWidget(
-              onTap: () => onSelect(cat.id),
-              child: AnimatedContainer(
-                duration: AppDurations.medium,
-                height:   56,
-                padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0x14FFFFFF) : Colors.transparent,
-                  border: Border(
-                    left: BorderSide(
-                      color: isSelected ? AppColors.textPrimary : Colors.transparent,
-                      width: 2.5,
+            return Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  onRightArrow();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: FocusableWidget(
+                focusNode: i == 0 ? firstItemNode : null,
+                autofocus: i == 0,
+                onTap:     () => onSelect(cat.id),
+                child: AnimatedContainer(
+                  duration: AppDurations.medium,
+                  height:   56,
+                  padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0x14FFFFFF) : Colors.transparent,
+                    border: Border(
+                      left: BorderSide(
+                        color: isSelected ? AppColors.textPrimary : Colors.transparent,
+                        width: 2.5,
+                      ),
                     ),
                   ),
-                ),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  cat.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.dmSans(
-                    color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                    fontSize:   12,
-                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    cat.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(
+                      color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                      fontSize:   12,
+                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                    ),
                   ),
                 ),
               ),

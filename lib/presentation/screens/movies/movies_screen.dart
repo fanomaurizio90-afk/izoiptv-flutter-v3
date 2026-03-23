@@ -21,9 +21,13 @@ class MoviesScreen extends ConsumerStatefulWidget {
 }
 
 class _MoviesScreenState extends ConsumerState<MoviesScreen> {
-  final _searchCtrl              = TextEditingController();
-  final _debounce                = Debounce(duration: const Duration(milliseconds: 300));
-  final _firstCategoryFocusNode  = FocusNode();
+  final _searchCtrl             = TextEditingController();
+  final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
+  final _firstCategoryFocusNode = FocusNode();
+  final _searchFocusNode        = FocusNode();
+  final _backFocusNode          = FocusNode();
+  // First grid item focus node — set by _ContentList via callback
+  FocusNode? _firstGridFocusNode;
 
   List<VodCategory> _categories    = [];
   int?              _selectedCatId;
@@ -47,6 +51,8 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     _searchCtrl.dispose();
     _debounce.dispose();
     _firstCategoryFocusNode.dispose();
+    _searchFocusNode.dispose();
+    _backFocusNode.dispose();
     super.dispose();
   }
 
@@ -121,12 +127,17 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(searchCtrl: _searchCtrl),
+            _TopBar(
+              searchCtrl:     _searchCtrl,
+              backFocusNode:  _backFocusNode,
+              searchFocusNode: _searchFocusNode,
+            ),
             if (_categories.isNotEmpty) _CategoryBar(
               categories:         _categories,
               selectedId:         _selectedCatId,
               onSelect:           _selectCategory,
               firstItemFocusNode: _firstCategoryFocusNode,
+              onRightArrow:       () => _firstGridFocusNode?.requestFocus(),
             ),
             Expanded(child: _buildContent()),
           ],
@@ -158,6 +169,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       columns:            cols,
       categories:         _categories,
       categoryFocusNode:  _firstCategoryFocusNode,
+      onFirstNodeReady:   (node) { _firstGridFocusNode = node; },
       onTap:              (vod) async {
         final cat = _categories.firstWhere(
           (c) => c.id == vod.categoryId,
@@ -179,13 +191,15 @@ class _ContentList extends StatefulWidget {
     required this.columns,
     required this.categories,
     required this.onTap,
+    required this.onFirstNodeReady,
     this.categoryFocusNode,
   });
-  final List<VodItem>      items;
-  final int                columns;
-  final List<VodCategory>  categories;
+  final List<VodItem>          items;
+  final int                    columns;
+  final List<VodCategory>      categories;
   final void Function(VodItem) onTap;
-  final FocusNode?         categoryFocusNode;
+  final void Function(FocusNode) onFirstNodeReady;
+  final FocusNode?             categoryFocusNode;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -198,6 +212,7 @@ class _ContentListState extends State<_ContentList> {
   void initState() {
     super.initState();
     _nodes = List.generate(widget.items.length, (_) => FocusNode());
+    _notifyFirstNode();
   }
 
   @override
@@ -206,6 +221,15 @@ class _ContentListState extends State<_ContentList> {
     if (widget.items.length != _nodes.length) {
       for (final n in _nodes) n.dispose();
       _nodes = List.generate(widget.items.length, (_) => FocusNode());
+      _notifyFirstNode();
+    }
+  }
+
+  void _notifyFirstNode() {
+    if (_nodes.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onFirstNodeReady(_nodes[0]);
+      });
     }
   }
 
@@ -233,7 +257,6 @@ class _ContentListState extends State<_ContentList> {
     final col = idx % widget.columns;
 
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      // Last column → wrap to first column of next row
       _move(idx + 1);
       return KeyEventResult.handled;
     }
@@ -316,7 +339,6 @@ class _PosterCard extends StatelessWidget {
             )
           else
             const Center(child: Icon(Icons.movie_outlined, color: AppColors.textMuted, size: 22)),
-          // Bottom title gradient
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -351,8 +373,14 @@ class _PosterCard extends StatelessWidget {
 // ── Top Bar ────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.searchCtrl});
+  const _TopBar({
+    required this.searchCtrl,
+    required this.backFocusNode,
+    required this.searchFocusNode,
+  });
   final TextEditingController searchCtrl;
+  final FocusNode             backFocusNode;
+  final FocusNode             searchFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -363,9 +391,13 @@ class _TopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+          FocusableWidget(
+            focusNode: backFocusNode,
+            onTap:     () => context.pop(),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Text(
@@ -378,19 +410,31 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xl2),
           Expanded(
-            child: TextField(
-              controller: searchCtrl,
-              style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
-              decoration: InputDecoration(
-                hintText:       'Search...',
-                hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12),
-                border:         InputBorder.none,
-                enabledBorder:  InputBorder.none,
-                focusedBorder:  InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense:        true,
-                filled:         true,
-                fillColor:      Colors.transparent,
+            child: Focus(
+              focusNode: searchFocusNode,
+              onKeyEvent: (_, event) {
+                // Down arrow from search bar → first category
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  FocusScope.of(context).nextFocus();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
+                controller: searchCtrl,
+                style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText:       'Search...',
+                  hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12),
+                  border:         InputBorder.none,
+                  enabledBorder:  InputBorder.none,
+                  focusedBorder:  InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense:        true,
+                  filled:         true,
+                  fillColor:      Colors.transparent,
+                ),
               ),
             ),
           ),
@@ -400,18 +444,20 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Category Bar — plain text links ───────────────────────────────────────────
+// ── Category Bar ──────────────────────────────────────────────────────────────
 
 class _CategoryBar extends StatelessWidget {
   const _CategoryBar({
     required this.categories,
     required this.selectedId,
     required this.onSelect,
+    required this.onRightArrow,
     this.firstItemFocusNode,
   });
   final List<VodCategory>  categories;
   final int?               selectedId;
   final void Function(int) onSelect;
+  final VoidCallback       onRightArrow;
   final FocusNode?         firstItemFocusNode;
 
   @override
@@ -425,33 +471,45 @@ class _CategoryBar extends StatelessWidget {
         itemBuilder:     (_, i) {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
-          return FocusableWidget(
-            autofocus: i == 0,
-            focusNode: i == 0 ? firstItemFocusNode : null,
-            onTap:     () => onSelect(cat.id),
-            child: Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.xl2),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      cat.name,
-                      style: GoogleFonts.dmSans(
-                        color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                        fontSize:   12,
-                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+          return Focus(
+            // Right arrow on any category item moves to the grid
+            onKeyEvent: (_, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.arrowRight &&
+                  i == categories.length - 1) {
+                onRightArrow();
+                return KeyEventResult.handled;
+              }
+              // Right arrow on non-last items handled by Flutter traversal
+              return KeyEventResult.ignored;
+            },
+            child: FocusableWidget(
+              autofocus: i == 0,
+              focusNode: i == 0 ? firstItemFocusNode : null,
+              onTap:     () => onSelect(cat.id),
+              child: Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.xl2),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cat.name,
+                        style: GoogleFonts.dmSans(
+                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                          fontSize:   12,
+                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                        ),
                       ),
-                    ),
-                    // Active underline
-                    AnimatedContainer(
-                      duration: AppDurations.fast,
-                      margin: const EdgeInsets.only(top: 3),
-                      height: 1,
-                      width:  isSelected ? 20 : 0,
-                      color:  AppColors.textPrimary,
-                    ),
-                  ],
+                      AnimatedContainer(
+                        duration: AppDurations.fast,
+                        margin: const EdgeInsets.only(top: 3),
+                        height: 1,
+                        width:  isSelected ? 20 : 0,
+                        color:  AppColors.textPrimary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
