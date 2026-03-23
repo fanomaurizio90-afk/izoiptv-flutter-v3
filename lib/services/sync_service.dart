@@ -83,10 +83,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
       if (DateTime.now().difference(lastSync) > _kSyncInterval) {
         // 24-hour refresh — silent background, no UI blocking.
         _runFull(firstRun: false);
-      } else {
-        // Library is fresh — quietly fill in any gaps.
-        _doEnrich(firstRun: false);
       }
+      // Within 24hrs — library is fresh, do nothing.
     } catch (_) {}
   }
 
