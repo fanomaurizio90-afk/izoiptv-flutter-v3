@@ -136,6 +136,13 @@ class SyncNotifier extends StateNotifier<SyncState> {
     _running = false;
   }
 
+  /// Returns the time of the last completed sync, or null if never synced.
+  Future<DateTime?> lastSyncedAt() async {
+    final raw = await _storage.read(key: _kLastSyncKey);
+    if (raw == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(int.parse(raw));
+  }
+
   Future<void> _markSynced() => _storage.write(
     key:   _kLastSyncKey,
     value: DateTime.now().millisecondsSinceEpoch.toString(),

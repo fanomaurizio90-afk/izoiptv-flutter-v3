@@ -23,7 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_syncing) return;
     setState(() => _syncing = true);
     try {
-      await ref.read(syncServiceProvider).syncAndEnrich();
+      await ref.read(syncProvider.notifier).syncAndEnrich();
     } catch (_) {}
     if (mounted) setState(() => _syncing = false);
   }
@@ -74,14 +74,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (await canLaunchUrl(uri)) await launchUrl(uri);
                     },
                   ),
-                  _SectionHeader('App'),
+                  _SectionHeader('Library'),
+                  _LibraryStatusRow(),
                   _SettingsRow(
                     label: 'Refresh Library',
-                    value: _syncing ? 'Syncing…' : 'Fetch latest content',
+                    value: _syncing ? 'Syncing…' : 'Refresh now',
                     showArrow: !_syncing,
                     onTap: _syncing ? null : _forceSync,
                   ),
-                  const _SettingsRow(label: 'Version', value: '1.5.3'),
+                  _SectionHeader('App'),
+                  const _SettingsRow(label: 'Version', value: '1.7.0'),
                   const SizedBox(height: AppSpacing.xl6),
                   // Logout — muted red text only, no button shape
                   GestureDetector(
@@ -107,6 +109,100 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Library status row ─────────────────────────────────────────────────────────
+
+class _LibraryStatusRow extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_LibraryStatusRow> createState() => _LibraryStatusRowState();
+}
+
+class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
+  DateTime? _lastSynced;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(syncProvider.notifier).lastSyncedAt().then((t) {
+      if (mounted) setState(() => _lastSynced = t);
+    });
+  }
+
+  String _timeAgo(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 1)  return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours   < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final syncState = ref.watch(syncProvider);
+
+    final String rowLabel;
+    final String value;
+    final bool   active;
+
+    switch (syncState) {
+      case SyncDownloading():
+        rowLabel = 'Status';
+        value    = 'Downloading playlist…';
+        active   = true;
+      case SyncEnriching(:final done, :final total, :final label):
+        rowLabel = 'Status';
+        value    = 'Loading $label artwork · $done / $total';
+        active   = true;
+      case SyncDone():
+        rowLabel = 'Status';
+        value    = 'Complete ✓';
+        active   = false;
+      default:
+        rowLabel = 'Last synced';
+        value    = _lastSynced != null ? _timeAgo(_lastSynced!) : 'Never';
+        active   = false;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.tvH,
+        vertical:   AppSpacing.lg,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            rowLabel,
+            style: GoogleFonts.dmSans(
+              color:      AppColors.textPrimary,
+              fontSize:   13,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const Spacer(),
+          if (active)
+            const SizedBox(
+              width: 10, height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: AppColors.textMuted,
+              ),
+            ),
+          if (active) const SizedBox(width: 8),
+          Text(
+            value,
+            style: GoogleFonts.dmSans(
+              color:    AppColors.textMuted,
+              fontSize: 13,
+            ),
+          ),
+        ],
       ),
     );
   }
