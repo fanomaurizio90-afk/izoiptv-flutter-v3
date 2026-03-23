@@ -167,7 +167,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
           final ok = await showPinDialog(context);
           if (!ok || !mounted) return;
         }
-        if (mounted) context.push('/movies/${vod.id}');
+        if (mounted) context.push('/movies/player', extra: vod);
       },
     );
   }
