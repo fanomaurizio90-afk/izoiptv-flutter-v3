@@ -165,6 +165,19 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           if (event.logicalKey == LogicalKeyboardKey.select ||
               event.logicalKey == LogicalKeyboardKey.enter) {
             _playerNotifier.togglePlay();
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            final pos = ref.read(playerProvider).position;
+            _playerNotifier.seek(pos - const Duration(seconds: 10));
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            final pos = ref.read(playerProvider).position;
+            _playerNotifier.seek(pos + const Duration(seconds: 10));
+            _showControlsTemporarily();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -309,6 +322,17 @@ class _VodControls extends ConsumerWidget {
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 11)),
               const Spacer(),
+              // Rewind 10s
+              GestureDetector(
+                onTap: () {
+                  final p = ref.read(playerProvider).position;
+                  ref.read(playerProvider.notifier).seek(p - const Duration(seconds: 10));
+                },
+                child: const Icon(Icons.replay_10,
+                    color: AppColors.textSecondary, size: 26),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              // Play / Pause
               GestureDetector(
                 onTap: () => ref.read(playerProvider.notifier).togglePlay(),
                 child: Icon(
@@ -318,6 +342,16 @@ class _VodControls extends ConsumerWidget {
                   color: AppColors.textPrimary,
                   size:  AppSpacing.iconMd,
                 ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              // Forward 10s
+              GestureDetector(
+                onTap: () {
+                  final p = ref.read(playerProvider).position;
+                  ref.read(playerProvider.notifier).seek(p + const Duration(seconds: 10));
+                },
+                child: const Icon(Icons.forward_10,
+                    color: AppColors.textSecondary, size: 26),
               ),
               const Spacer(),
               // Next episode button in bottom bar (series)

@@ -8,30 +8,16 @@ import '../domain/repositories/vod_repository.dart';
 
 sealed class SyncState { const SyncState(); }
 
-/// Nothing is happening.
-class SyncIdle extends SyncState { const SyncIdle(); }
-
-/// Downloading the catalogue list from the server.
-class SyncDownloading extends SyncState {
-  const SyncDownloading({this.isFirstRun = false});
-  final bool isFirstRun;
-}
-
-/// Fetching artwork + info for individual items.
-class SyncEnriching extends SyncState {
-  const SyncEnriching(this.done, this.total, this.label, {this.isFirstRun = false});
+class SyncIdle       extends SyncState { const SyncIdle(); }
+class SyncDownloading extends SyncState { const SyncDownloading(); }
+class SyncEnriching  extends SyncState {
+  const SyncEnriching(this.done, this.total, this.label);
   final int    done;
   final int    total;
-  final String label;        // 'Movies' | 'Series'
-  final bool   isFirstRun;
+  final String label;
   double get progress => total > 0 ? done / total : 0.0;
 }
-
-/// Just finished — shown briefly before returning to Idle.
-class SyncDone extends SyncState {
-  const SyncDone({this.isFirstRun = false});
-  final bool isFirstRun;
-}
+class SyncDone extends SyncState { const SyncDone(); }
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
@@ -49,51 +35,48 @@ class SyncNotifier extends StateNotifier<SyncState> {
 
   bool _running = false;
 
-  /// Full sync (awaitable) then enrichment — used by Refresh Library button.
-  /// Never treated as first-run (user is already in the app).
+  /// Full sync (awaitable for the catalogue phase) then background enrichment.
+  /// Used by the Refresh Library button in Settings.
   Future<void> syncAndEnrich() async {
     if (_running) return;
     _running = true;
     try {
-      state = const SyncDownloading(isFirstRun: false);
+      state = const SyncDownloading();
       await _vod.syncVod();
       await _series.syncSeries();
       await _channels.syncChannels();
       await _markSynced();
     } catch (_) {
-      state = const SyncIdle();
+      if (mounted) state = const SyncIdle();
       _running = false;
       return;
     }
-    _doEnrich(firstRun: false);
+    _doEnrich();
   }
 
-  /// Called on home screen open — determines whether to block (first run)
-  /// or enrich silently in background (24hr refresh).
+  /// Called on home screen open — everything runs in background, never blocks.
   Future<void> syncIfNeeded() async {
     if (_running) return;
     try {
       final raw = await _storage.read(key: _kLastSyncKey);
       if (raw == null) {
-        // First launch — block with full-screen progress.
-        _runFull(firstRun: true);
+        _runFullInBackground();
         return;
       }
       final lastSync = DateTime.fromMillisecondsSinceEpoch(int.parse(raw));
       if (DateTime.now().difference(lastSync) > _kSyncInterval) {
-        // 24-hour refresh — silent background, no UI blocking.
-        _runFull(firstRun: false);
+        _runFullInBackground();
       }
-      // Within 24hrs — library is fresh, do nothing.
+      // Within 24 hrs — do nothing.
     } catch (_) {}
   }
 
-  void _runFull({required bool firstRun}) {
+  void _runFullInBackground() {
     if (_running) return;
     _running = true;
     Future(() async {
       try {
-        state = SyncDownloading(isFirstRun: firstRun);
+        state = const SyncDownloading();
         await _vod.syncVod();
         await _series.syncSeries();
         await _channels.syncChannels();
@@ -103,28 +86,22 @@ class SyncNotifier extends StateNotifier<SyncState> {
         _running = false;
         return;
       }
-      await _doEnrich(firstRun: firstRun);
+      await _doEnrich();
     });
   }
 
-  Future<void> _doEnrich({required bool firstRun}) async {
+  Future<void> _doEnrich() async {
     try {
       await _vod.enrichAll(onProgress: (done, total) {
         if (!mounted) return;
-        if (total > 0) {
-          state = SyncEnriching(done, total, 'Movies', isFirstRun: firstRun);
-        }
+        if (total > 0) state = SyncEnriching(done, total, 'Movies');
       });
-
       await _series.enrichAll(onProgress: (done, total) {
         if (!mounted) return;
-        if (total > 0) {
-          state = SyncEnriching(done, total, 'Series', isFirstRun: firstRun);
-        }
+        if (total > 0) state = SyncEnriching(done, total, 'Series');
       });
-
       if (mounted) {
-        state = SyncDone(isFirstRun: firstRun);
+        state = const SyncDone();
         await Future.delayed(const Duration(seconds: 3));
         if (mounted) state = const SyncIdle();
       }

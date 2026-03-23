@@ -73,6 +73,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         setState(() { _syncing = false; _loading = true; });
         cats = await repo.getCategories();
       }
+      cats.sort((a, b) {
+        final aA = isAdultCategory(a.name);
+        final bA = isAdultCategory(b.name);
+        if (aA == bA) return 0;
+        return aA ? 1 : -1;
+      });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
       final catId    = _selectedCatId ?? cats.first.id;

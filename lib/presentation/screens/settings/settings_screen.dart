@@ -83,7 +83,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onTap: _syncing ? null : _forceSync,
                   ),
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '1.7.0'),
+                  const _SettingsRow(label: 'Version', value: '1.8.0'),
                   const SizedBox(height: AppSpacing.xl6),
                   // Logout — muted red text only, no button shape
                   GestureDetector(

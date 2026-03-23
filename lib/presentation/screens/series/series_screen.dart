@@ -78,6 +78,12 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
         setState(() { _syncing = false; _loading = true; });
         cats = await repo.getCategories();
       }
+      cats.sort((a, b) {
+        final aA = isAdultCategory(a.name);
+        final bA = isAdultCategory(b.name);
+        if (aA == bA) return 0;
+        return aA ? 1 : -1;
+      });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
       final catId = (_selectedCatId != null && cats.any((c) => c.id == _selectedCatId))
@@ -189,21 +195,18 @@ class _ContentList extends StatefulWidget {
 class _ContentListState extends State<_ContentList> {
   List<FocusNode> _nodes = [];
 
-  List<SeriesItem> get _rest =>
-      widget.items.length > 1 ? widget.items.sublist(1) : <SeriesItem>[];
-
   @override
   void initState() {
     super.initState();
-    _nodes = List.generate(_rest.length, (_) => FocusNode());
+    _nodes = List.generate(widget.items.length, (_) => FocusNode());
   }
 
   @override
   void didUpdateWidget(_ContentList old) {
     super.didUpdateWidget(old);
-    if (_rest.length != _nodes.length) {
+    if (widget.items.length != _nodes.length) {
       for (final n in _nodes) n.dispose();
-      _nodes = List.generate(_rest.length, (_) => FocusNode());
+      _nodes = List.generate(widget.items.length, (_) => FocusNode());
     }
   }
 
@@ -255,136 +258,34 @@ class _ContentListState extends State<_ContentList> {
 
   @override
   Widget build(BuildContext context) {
-    final hero = widget.items.first;
-    final rest = _rest;
     return SingleChildScrollView(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FocusableWidget(
-            autofocus:    true,
-            borderRadius: 0,
-            onTap:        () => widget.onTap(hero),
-            child: _HeroCard(series: hero),
-          ),
-          if (rest.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Focus(
-              onKeyEvent:    _handleGridKey,
-              skipTraversal: true,
-              child: GridView.builder(
-                shrinkWrap:   true,
-                physics:      const NeverScrollableScrollPhysics(),
-                padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount:   widget.columns,
-                  crossAxisSpacing: AppSpacing.sm,
-                  mainAxisSpacing:  AppSpacing.sm,
-                  childAspectRatio: 2 / 3,
-                ),
-                itemCount:   rest.length,
-                itemBuilder: (_, i) => FocusableWidget(
-                  focusNode:    _nodes[i],
-                  autofocus:    false,
-                  borderRadius: AppSpacing.radiusCard,
-                  onTap:        () => widget.onTap(rest[i]),
-                  child:        _PosterCard(series: rest[i]),
-                ),
+          const SizedBox(height: AppSpacing.lg),
+          Focus(
+            onKeyEvent:    _handleGridKey,
+            skipTraversal: true,
+            child: GridView.builder(
+              shrinkWrap:   true,
+              physics:      const NeverScrollableScrollPhysics(),
+              padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount:   widget.columns,
+                crossAxisSpacing: AppSpacing.sm,
+                mainAxisSpacing:  AppSpacing.sm,
+                childAspectRatio: 2 / 3,
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl3),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── Hero Card ──────────────────────────────────────────────────────────────────
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.series});
-  final SeriesItem series;
-
-  @override
-  Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height * 0.32;
-    return SizedBox(
-      height: h,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (series.posterUrl != null)
-            CachedNetworkImage(
-              imageUrl:    series.posterUrl!,
-              fit:         BoxFit.cover,
-              errorWidget: (_, __, ___) => Container(color: AppColors.card),
-            )
-          else
-            Container(color: AppColors.card),
-          // Dark gradient overlay
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin:  Alignment.topCenter,
-                end:    Alignment.bottomCenter,
-                colors: [Colors.transparent, Color(0xCC080808), Color(0xFF080808)],
-                stops:  [0.3, 0.75, 1.0],
+              itemCount:   widget.items.length,
+              itemBuilder: (_, i) => FocusableWidget(
+                focusNode:    _nodes[i],
+                autofocus:    i == 0,
+                borderRadius: AppSpacing.radiusCard,
+                onTap:        () => widget.onTap(widget.items[i]),
+                child:        _PosterCard(series: widget.items[i]),
               ),
             ),
           ),
-          // Title bottom-left
-          Positioned(
-            left: AppSpacing.tvH, right: AppSpacing.tvH, bottom: AppSpacing.lg,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize:       MainAxisSize.min,
-              children: [
-                Text(
-                  series.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.dmSans(
-                    color:      AppColors.textPrimary,
-                    fontSize:   18,
-                    fontWeight: FontWeight.w500,
-                    height:     1.2,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                if (series.genre != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    series.genre!,
-                    style: GoogleFonts.dmSans(
-                      color:    AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          // FEATURED badge top left
-          Positioned(
-            top: AppSpacing.md, left: AppSpacing.md,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color:        AppColors.textPrimary,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(
-                'FEATURED',
-                style: GoogleFonts.dmSans(
-                  color:         AppColors.background,
-                  fontSize:      8,
-                  fontWeight:    FontWeight.w600,
-                  letterSpacing: 1.0,
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(height: AppSpacing.xl3),
         ],
       ),
     );
