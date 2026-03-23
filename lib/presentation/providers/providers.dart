@@ -17,6 +17,7 @@ import '../../domain/repositories/favourites_repository.dart';
 import '../../domain/repositories/history_repository.dart';
 import '../../domain/repositories/series_repository.dart';
 import '../../domain/repositories/vod_repository.dart';
+import '../../services/sync_service.dart';
 
 // ─── Infrastructure ──────────────────────────────────────────────────────────
 
@@ -82,5 +83,14 @@ final favouritesRepositoryProvider = Provider<FavouritesRepository>((ref) {
   return FavouritesRepositoryImpl(
     ref.read(channelDaoProvider),
     ref.read(vodDaoProvider),
+  );
+});
+
+final syncServiceProvider = Provider<SyncService>((ref) {
+  return SyncService(
+    ref.read(vodRepositoryProvider),
+    ref.read(seriesRepositoryProvider),
+    ref.read(channelRepositoryProvider),
+    ref.read(secureStorageProvider),
   );
 });

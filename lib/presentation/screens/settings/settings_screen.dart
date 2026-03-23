@@ -23,9 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_syncing) return;
     setState(() => _syncing = true);
     try {
-      await ref.read(vodRepositoryProvider).syncVod();
-      await ref.read(seriesRepositoryProvider).syncSeries();
-      await ref.read(channelRepositoryProvider).syncChannels();
+      await ref.read(syncServiceProvider).syncAndEnrich();
     } catch (_) {}
     if (mounted) setState(() => _syncing = false);
   }

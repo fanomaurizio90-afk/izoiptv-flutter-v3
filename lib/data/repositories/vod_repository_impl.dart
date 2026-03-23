@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../domain/entities/vod.dart';
 import '../../domain/repositories/vod_repository.dart';
 import '../local/database/daos/vod_dao.dart';
@@ -33,6 +35,21 @@ class VodRepositoryImpl implements VodRepository {
   Future<void> fetchVodInfo(int vodId) async {
     final meta = await _api.getVodInfo(vodId);
     if (meta != null) await _dao.updateVodMeta(vodId, meta);
+  }
+
+  @override
+  Future<void> enrichAll() async {
+    final ids = await _dao.getVodIdsMissingMeta();
+    const concurrency = 5;
+    for (var i = 0; i < ids.length; i += concurrency) {
+      final batch = ids.sublist(i, min(i + concurrency, ids.length));
+      await Future.wait(batch.map((id) async {
+        try {
+          final meta = await _api.getVodInfo(id);
+          if (meta != null) await _dao.updateVodMeta(id, meta);
+        } catch (_) {}
+      }));
+    }
   }
 
   @override

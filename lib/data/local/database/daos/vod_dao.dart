@@ -108,6 +108,12 @@ class VodDao {
     return Sqflite.firstIntValue(res) ?? 0;
   }
 
+  Future<List<int>> getVodIdsMissingMeta() async {
+    final db   = await _db;
+    final rows = await db.query('vod', columns: ['id'], where: 'poster_url IS NULL');
+    return rows.map((r) => r['id'] as int).toList();
+  }
+
   // ─── Series Categories ───────────────────────────────────────────────────────
 
   Future<List<SeriesCategory>> getSeriesCategories() async {
@@ -200,6 +206,12 @@ class VodDao {
     final db  = await _db;
     final res = await db.rawQuery('SELECT COUNT(*) FROM series');
     return Sqflite.firstIntValue(res) ?? 0;
+  }
+
+  Future<List<int>> getSeriesIdsMissingMeta() async {
+    final db   = await _db;
+    final rows = await db.query('series', columns: ['id'], where: 'poster_url IS NULL');
+    return rows.map((r) => r['id'] as int).toList();
   }
 
   // ─── Episodes ────────────────────────────────────────────────────────────────

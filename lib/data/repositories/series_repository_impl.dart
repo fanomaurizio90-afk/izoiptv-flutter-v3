@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../domain/entities/series.dart';
 import '../../domain/repositories/series_repository.dart';
 import '../local/database/daos/vod_dao.dart';
@@ -42,6 +44,24 @@ class SeriesRepositoryImpl implements SeriesRepository {
     final series = await _api.getSeries();
     await _dao.insertSeriesCategories(cats);
     await _dao.insertSeries(series);
+  }
+
+  @override
+  Future<void> enrichAll() async {
+    final ids = await _dao.getSeriesIdsMissingMeta();
+    const concurrency = 3;
+    for (var i = 0; i < ids.length; i += concurrency) {
+      final batch = ids.sublist(i, min(i + concurrency, ids.length));
+      await Future.wait(batch.map((id) async {
+        try {
+          final (meta, episodes) = await _api.getSeriesInfo(id);
+          if (meta != null) {
+            try { await _dao.updateSeriesMeta(id, meta); } catch (_) {}
+          }
+          if (episodes.isNotEmpty) await _dao.insertEpisodes(id, episodes);
+        } catch (_) {}
+      }));
+    }
   }
 
   @override
