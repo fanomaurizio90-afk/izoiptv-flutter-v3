@@ -20,9 +20,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _syncing = false;
 
-  // Focus nodes for D-pad navigation
+  // Explicit D-pad navigation chain
   final _backNode      = FocusNode();
   final _managePlNode  = FocusNode();
+  final _deviceIdNode  = FocusNode();
   final _refreshNode   = FocusNode();
   final _signOutNode   = FocusNode();
 
@@ -30,6 +31,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _backNode.dispose();
     _managePlNode.dispose();
+    _deviceIdNode.dispose();
     _refreshNode.dispose();
     _signOutNode.dispose();
     super.dispose();
@@ -52,7 +54,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // ── Header ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, AppSpacing.xl,
@@ -61,6 +63,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   FocusableWidget(
                     focusNode: _backNode,
+                    autofocus: true,
                     onTap:     () => context.pop(),
                     child: const Padding(
                       padding: EdgeInsets.all(4),
@@ -79,55 +82,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
             ),
+
+            // ── Rows ──────────────────────────────────────────────────
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
                   _SectionHeader('Device'),
-                  _DeviceIdRow(),
+
+                  // Device ID — focusable display row (select copies ID)
+                  _DeviceIdRow(
+                    focusNode: _deviceIdNode,
+                    upNode:    _backNode,
+                    downNode:  _managePlNode,
+                  ),
+
+                  // Manage Playlist
                   _SettingsRow(
                     label:     'Manage Playlist',
                     value:     'izoiptv.com/authenticate',
                     showArrow: true,
                     focusNode: _managePlNode,
-                    autofocus: true,
+                    upNode:    _deviceIdNode,
+                    downNode:  _refreshNode,
                     onTap: () async {
                       final uri = Uri.parse('https://izoiptv.com/authenticate');
                       if (await canLaunchUrl(uri)) await launchUrl(uri);
                     },
                   ),
+
                   _SectionHeader('Library'),
                   _LibraryStatusRow(),
+
+                  // Refresh Library
                   _SettingsRow(
                     label:     'Refresh Library',
                     value:     _syncing ? 'Syncing…' : 'Refresh now',
                     showArrow: !_syncing,
                     focusNode: _refreshNode,
+                    upNode:    _managePlNode,
+                    downNode:  _signOutNode,
                     onTap:     _syncing ? null : _forceSync,
                   ),
+
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '1.8.1'),
+                  const _SettingsRow(label: 'Version', value: '1.9.0'),
                   const SizedBox(height: AppSpacing.xl6),
-                  // Sign Out — muted red text, centred
-                  Center(
-                    child: FocusableWidget(
-                      focusNode:    _signOutNode,
-                      borderRadius: AppSpacing.radiusCard,
-                      onTap: () async {
-                        await ref.read(authProvider.notifier).logout();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.xl2),
-                        child: Text(
-                          'Sign Out',
-                          style: GoogleFonts.dmSans(
-                            color:      const Color(0xFFE57373),
-                            fontSize:   13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                    ),
+
+                  // Sign Out
+                  _SignOutRow(
+                    focusNode: _signOutNode,
+                    upNode:    _refreshNode,
+                    onTap: () async {
+                      await ref.read(authProvider.notifier).logout();
+                    },
                   ),
                 ],
               ),
@@ -139,7 +147,182 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-// ── Library status row ─────────────────────────────────────────────────────────
+// ── Shared row focus mixin ─────────────────────────────────────────────────────
+// Every interactive row uses the same pattern:
+//   - white left-border accent when focused
+//   - up/down arrows move to explicit neighbour nodes
+//   - select/enter triggers the action
+
+KeyEventResult _rowKeyEvent(
+  KeyEvent event,
+  FocusNode? upNode,
+  FocusNode? downNode,
+  VoidCallback? onTap,
+) {
+  if (event is! KeyDownEvent) return KeyEventResult.ignored;
+  if (event.logicalKey == LogicalKeyboardKey.arrowUp   && upNode   != null) {
+    upNode.requestFocus();
+    return KeyEventResult.handled;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.arrowDown && downNode != null) {
+    downNode.requestFocus();
+    return KeyEventResult.handled;
+  }
+  if ((event.logicalKey == LogicalKeyboardKey.select ||
+       event.logicalKey == LogicalKeyboardKey.enter) && onTap != null) {
+    onTap();
+    return KeyEventResult.handled;
+  }
+  return KeyEventResult.ignored;
+}
+
+// ── Settings Row ───────────────────────────────────────────────────────────────
+
+class _SettingsRow extends StatefulWidget {
+  const _SettingsRow({
+    required this.label,
+    this.value,
+    this.onTap,
+    this.showArrow = false,
+    this.focusNode,
+    this.upNode,
+    this.downNode,
+  });
+  final String        label;
+  final String?       value;
+  final VoidCallback? onTap;
+  final bool          showArrow;
+  final FocusNode?    focusNode;
+  final FocusNode?    upNode;
+  final FocusNode?    downNode;
+
+  @override
+  State<_SettingsRow> createState() => _SettingsRowState();
+}
+
+class _SettingsRowState extends State<_SettingsRow> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = AnimatedContainer(
+      duration: AppDurations.medium,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.tvH,
+        vertical:   AppSpacing.lg,
+      ),
+      decoration: BoxDecoration(
+        color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+        border: Border(
+          left: BorderSide(
+            color: _focused ? AppColors.focusBorder : Colors.transparent,
+            width: 2.5,
+          ),
+          bottom: const BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            widget.label,
+            style: GoogleFonts.dmSans(
+              color:      AppColors.textPrimary,
+              fontSize:   13,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const Spacer(),
+          if (widget.value != null)
+            Text(
+              widget.value!,
+              style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+            ),
+          if (widget.showArrow) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 10),
+          ],
+        ],
+      ),
+    );
+
+    // Display-only rows (no focusNode, no onTap)
+    if (widget.focusNode == null && widget.onTap == null) return content;
+
+    return Focus(
+      focusNode:     widget.focusNode,
+      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
+      onKeyEvent: (_, event) => _rowKeyEvent(
+        event, widget.upNode, widget.downNode, widget.onTap,
+      ),
+      child: GestureDetector(
+        onTap:  widget.onTap,
+        child:  content,
+      ),
+    );
+  }
+}
+
+// ── Sign Out Row ───────────────────────────────────────────────────────────────
+
+class _SignOutRow extends StatefulWidget {
+  const _SignOutRow({
+    required this.focusNode,
+    required this.upNode,
+    required this.onTap,
+  });
+  final FocusNode    focusNode;
+  final FocusNode    upNode;
+  final VoidCallback onTap;
+
+  @override
+  State<_SignOutRow> createState() => _SignOutRowState();
+}
+
+class _SignOutRowState extends State<_SignOutRow> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode:     widget.focusNode,
+      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
+      onKeyEvent: (_, event) => _rowKeyEvent(
+        event, widget.upNode, null, widget.onTap,
+      ),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.medium,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.tvH,
+            vertical:   AppSpacing.lg,
+          ),
+          decoration: BoxDecoration(
+            color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+            border: Border(
+              left: BorderSide(
+                color: _focused ? AppColors.focusBorder : Colors.transparent,
+                width: 2.5,
+              ),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              'Sign Out',
+              style: GoogleFonts.dmSans(
+                color:      const Color(0xFFE57373),
+                fontSize:   13,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Library Status Row ─────────────────────────────────────────────────────────
 
 class _LibraryStatusRow extends ConsumerStatefulWidget {
   @override
@@ -211,7 +394,7 @@ class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
             ),
           ),
           const Spacer(),
-          if (active)
+          if (active) ...[
             const SizedBox(
               width: 10, height: 10,
               child: CircularProgressIndicator(
@@ -219,19 +402,19 @@ class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
                 color: AppColors.textMuted,
               ),
             ),
-          if (active) const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           Text(
             value,
-            style: GoogleFonts.dmSans(
-              color:    AppColors.textMuted,
-              fontSize: 13,
-            ),
+            style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
           ),
         ],
       ),
     );
   }
 }
+
+// ── Section Header ─────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.title);
@@ -256,78 +439,26 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
-    this.value,
-    this.onTap,
-    this.showArrow = false,
-    this.focusNode,
-    this.autofocus = false,
-  });
-  final String        label;
-  final String?       value;
-  final VoidCallback? onTap;
-  final bool          showArrow;
-  final FocusNode?    focusNode;
-  final bool          autofocus;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.tvH,
-        vertical:   AppSpacing.lg,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.dmSans(
-              color:      AppColors.textPrimary,
-              fontSize:   13,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const Spacer(),
-          if (value != null)
-            Text(
-              value!,
-              style: GoogleFonts.dmSans(
-                color:    AppColors.textMuted,
-                fontSize: 13,
-              ),
-            ),
-          if (showArrow) ...[
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 10),
-          ],
-        ],
-      ),
-    );
-
-    if (onTap == null) return content;
-
-    return FocusableWidget(
-      focusNode: focusNode,
-      autofocus: autofocus,
-      onTap:     onTap!,
-      child:     content,
-    );
-  }
-}
+// ── Device ID Row ─────────────────────────────────────────────────────────────
 
 class _DeviceIdRow extends StatefulWidget {
+  const _DeviceIdRow({
+    required this.focusNode,
+    required this.upNode,
+    required this.downNode,
+  });
+  final FocusNode focusNode;
+  final FocusNode upNode;
+  final FocusNode downNode;
+
   @override
   State<_DeviceIdRow> createState() => _DeviceIdRowState();
 }
 
 class _DeviceIdRowState extends State<_DeviceIdRow> {
   String? _id;
-  bool    _copied = false;
+  bool    _copied  = false;
+  bool    _focused = false;
 
   @override
   void initState() {
@@ -337,58 +468,76 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
     });
   }
 
+  Future<void> _copy() async {
+    if (_id == null) return;
+    await Clipboard.setData(ClipboardData(text: _id!));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl2,
-        vertical:   AppSpacing.lg,
+    return Focus(
+      focusNode:     widget.focusNode,
+      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
+      onKeyEvent: (_, event) => _rowKeyEvent(
+        event, widget.upNode, widget.downNode, _copy,
       ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Device ID',
-            style: GoogleFonts.dmSans(
-              color:      AppColors.textPrimary,
-              fontSize:   13,
-              fontWeight: FontWeight.w400,
+      child: GestureDetector(
+        onTap: _copy,
+        child: AnimatedContainer(
+          duration: AppDurations.medium,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.tvH,
+            vertical:   AppSpacing.lg,
+          ),
+          decoration: BoxDecoration(
+            color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+            border: Border(
+              left: BorderSide(
+                color: _focused ? AppColors.focusBorder : Colors.transparent,
+                width: 2.5,
+              ),
+              bottom: const BorderSide(color: AppColors.border, width: 0.5),
             ),
           ),
-          const Spacer(),
-          if (_id != null) ...[
-            Text(
-              _id!.length > 14 ? '${_id!.substring(0, 14)}...' : _id!,
-              style: const TextStyle(
-                color:         AppColors.textMuted,
-                fontSize:      11,
-                fontFamily:    'monospace',
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            FocusableWidget(
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: _id!));
-                if (!mounted) return;
-                setState(() => _copied = true);
-                await Future.delayed(const Duration(seconds: 2));
-                if (mounted) setState(() => _copied = false);
-              },
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                child: Icon(
-                  _copied ? Icons.check : Icons.copy_outlined,
-                  key:   ValueKey(_copied),
-                  color: _copied ? AppColors.success : AppColors.textMuted,
-                  size:  14,
+          child: Row(
+            children: [
+              Text(
+                'Device ID',
+                style: GoogleFonts.dmSans(
+                  color:      AppColors.textPrimary,
+                  fontSize:   13,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
-            ),
-          ],
-        ],
+              const Spacer(),
+              if (_id != null) ...[
+                Text(
+                  _id!.length > 14 ? '${_id!.substring(0, 14)}...' : _id!,
+                  style: const TextStyle(
+                    color:         AppColors.textMuted,
+                    fontSize:      11,
+                    fontFamily:    'monospace',
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 150),
+                  child: Icon(
+                    _copied ? Icons.check : Icons.copy_outlined,
+                    key:   ValueKey(_copied),
+                    color: _copied ? AppColors.success : AppColors.textMuted,
+                    size:  14,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

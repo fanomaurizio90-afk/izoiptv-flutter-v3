@@ -206,7 +206,9 @@ class _ContentList extends StatefulWidget {
 }
 
 class _ContentListState extends State<_ContentList> {
-  List<FocusNode> _nodes = [];
+  List<FocusNode>        _nodes     = [];
+  final ScrollController _scrollCtrl = ScrollController();
+  double _availableWidth             = 0.0;
 
   @override
   void initState() {
@@ -236,6 +238,7 @@ class _ContentListState extends State<_ContentList> {
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -247,7 +250,36 @@ class _ContentListState extends State<_ContentList> {
   }
 
   void _move(int to) {
-    if (to >= 0 && to < _nodes.length) _nodes[to].requestFocus();
+    if (to < 0 || to >= _nodes.length) return;
+    _nodes[to].requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(to));
+  }
+
+  void _ensureVisible(int index) {
+    if (!_scrollCtrl.hasClients || _availableWidth == 0) return;
+    final cols       = widget.columns;
+    final itemWidth  = (_availableWidth - AppSpacing.tvH * 2 - (cols - 1) * AppSpacing.sm) / cols;
+    final itemHeight = itemWidth * 3 / 2;
+    final rowHeight  = itemHeight + AppSpacing.sm;
+    final row        = index ~/ cols;
+    final itemTop    = AppSpacing.lg + row * rowHeight;
+    final itemBottom = itemTop + itemHeight;
+    final viewport   = _scrollCtrl.position.viewportDimension;
+    final offset     = _scrollCtrl.offset;
+    const pad        = 16.0;
+    double? target;
+    if (itemTop < offset + pad) {
+      target = itemTop - pad;
+    } else if (itemBottom > offset + viewport - pad) {
+      target = itemBottom - viewport + pad;
+    }
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 180),
+        curve:    Curves.easeOut,
+      );
+    }
   }
 
   KeyEventResult _handleGridKey(FocusNode _, KeyEvent event) {
@@ -281,36 +313,42 @@ class _ContentListState extends State<_ContentList> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const SizedBox(height: AppSpacing.lg),
-          Focus(
-            onKeyEvent:    _handleGridKey,
-            skipTraversal: true,
-            child: GridView.builder(
-              shrinkWrap:   true,
-              physics:      const NeverScrollableScrollPhysics(),
-              padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount:   widget.columns,
-                crossAxisSpacing: AppSpacing.sm,
-                mainAxisSpacing:  AppSpacing.sm,
-                childAspectRatio: 2 / 3,
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        _availableWidth = constraints.maxWidth;
+        return SingleChildScrollView(
+          controller: _scrollCtrl,
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.lg),
+              Focus(
+                onKeyEvent:    _handleGridKey,
+                skipTraversal: true,
+                child: GridView.builder(
+                  shrinkWrap:   true,
+                  physics:      const NeverScrollableScrollPhysics(),
+                  padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount:   widget.columns,
+                    crossAxisSpacing: AppSpacing.sm,
+                    mainAxisSpacing:  AppSpacing.sm,
+                    childAspectRatio: 2 / 3,
+                  ),
+                  itemCount:   widget.items.length,
+                  itemBuilder: (_, i) => FocusableWidget(
+                    focusNode:    _nodes[i],
+                    autofocus:    i == 0,
+                    borderRadius: AppSpacing.radiusCard,
+                    onTap:        () => widget.onTap(widget.items[i]),
+                    child:        _PosterCard(series: widget.items[i]),
+                  ),
+                ),
               ),
-              itemCount:   widget.items.length,
-              itemBuilder: (_, i) => FocusableWidget(
-                focusNode:    _nodes[i],
-                autofocus:    i == 0,
-                borderRadius: AppSpacing.radiusCard,
-                onTap:        () => widget.onTap(widget.items[i]),
-                child:        _PosterCard(series: widget.items[i]),
-              ),
-            ),
+              const SizedBox(height: AppSpacing.xl3),
+            ],
           ),
-          const SizedBox(height: AppSpacing.xl3),
-        ],
-      ),
+        );
+      },
     );
   }
 }

@@ -333,7 +333,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
 
 // ── Episode List ───────────────────────────────────────────────────────────────
 
-class _EpisodeList extends StatefulWidget {
+class _EpisodeList extends ConsumerStatefulWidget {
   const _EpisodeList({
     super.key,
     required this.episodes,
@@ -345,17 +345,20 @@ class _EpisodeList extends StatefulWidget {
   final FocusNode?               firstSeasonNode;
 
   @override
-  State<_EpisodeList> createState() => _EpisodeListState();
+  ConsumerState<_EpisodeList> createState() => _EpisodeListState();
 }
 
-class _EpisodeListState extends State<_EpisodeList> {
-  List<FocusNode> _nodes = [];
+class _EpisodeListState extends ConsumerState<_EpisodeList> {
+  List<FocusNode> _nodes   = [];
+  // episode.id → {position_secs, duration_secs}
+  Map<int, Map<String, dynamic>> _history = {};
 
   @override
   void initState() {
     super.initState();
     _nodes = List.generate(widget.episodes.length, (_) => FocusNode());
     _notifyFirst();
+    _loadHistory();
   }
 
   @override
@@ -370,6 +373,16 @@ class _EpisodeListState extends State<_EpisodeList> {
         if (mounted) widget.onFirstNodeReady(_nodes[0]);
       });
     }
+  }
+
+  Future<void> _loadHistory() async {
+    final repo   = ref.read(historyRepositoryProvider);
+    final result = <int, Map<String, dynamic>>{};
+    for (final ep in widget.episodes) {
+      final record = await repo.getPosition(ep.id, 'vod');
+      if (record != null) result[ep.id] = record;
+    }
+    if (mounted) setState(() => _history = result);
   }
 
   int get _focusedIndex {
@@ -409,6 +422,7 @@ class _EpisodeListState extends State<_EpisodeList> {
           episodes:  widget.episodes,
           index:     e.key,
           focusNode: _nodes[e.key],
+          history:   _history[e.value.id],
         )).toList(),
       ),
     );
@@ -423,11 +437,13 @@ class _EpisodeRow extends StatefulWidget {
     required this.episodes,
     required this.index,
     required this.focusNode,
+    this.history,
   });
-  final Episode       episode;
-  final List<Episode> episodes;
-  final int           index;
-  final FocusNode     focusNode;
+  final Episode                  episode;
+  final List<Episode>            episodes;
+  final int                      index;
+  final FocusNode                focusNode;
+  final Map<String, dynamic>?    history;  // from watch_history table
 
   @override
   State<_EpisodeRow> createState() => _EpisodeRowState();
@@ -442,8 +458,24 @@ class _EpisodeRowState extends State<_EpisodeRow> {
     'index':    widget.index,
   });
 
+  // 0.0 = never watched, 0.0–0.9 = in-progress, ≥0.9 = watched
+  double get _progress {
+    final h = widget.history;
+    if (h == null) return 0.0;
+    final pos = (h['position_secs'] as int? ?? 0).toDouble();
+    final dur = (h['duration_secs'] as int? ?? 1).toDouble();
+    return dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0;
+  }
+
+  bool get _isWatched    => _progress >= 0.9;
+  bool get _isInProgress => widget.history != null && !_isWatched;
+
   @override
   Widget build(BuildContext context) {
+    final titleColor = _isWatched
+        ? const Color(0xFF888888)
+        : AppColors.textPrimary;
+
     return Focus(
       focusNode: widget.focusNode,
       onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
@@ -477,20 +509,60 @@ class _EpisodeRowState extends State<_EpisodeRow> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thumbnail
+              // Thumbnail with watch-state overlays
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: SizedBox(
                   width:  96,
                   height: 54,
-                  child: widget.episode.thumbnailUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl:    widget.episode.thumbnailUrl!,
-                          fit:         BoxFit.cover,
-                          errorWidget: (_, __, ___) =>
-                              _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
-                        )
-                      : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Base image
+                      widget.episode.thumbnailUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl:    widget.episode.thumbnailUrl!,
+                              fit:         BoxFit.cover,
+                              errorWidget: (_, __, ___) =>
+                                  _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                            )
+                          : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+
+                      // Watched: dim overlay + checkmark bottom-right
+                      if (_isWatched) ...[
+                        Container(color: const Color(0x55000000)),
+                        const Positioned(
+                          right: 4, bottom: 4,
+                          child: Icon(Icons.check_circle, color: Colors.white, size: 16),
+                        ),
+                      ],
+
+                      // In-progress: thin progress bar at very bottom
+                      if (_isInProgress)
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: LinearProgressIndicator(
+                            value:           _progress,
+                            minHeight:       3,
+                            backgroundColor: Colors.white24,
+                            valueColor:      const AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        ),
+
+                      // Unwatched: small white dot top-right
+                      if (!_isWatched && !_isInProgress)
+                        const Positioned(
+                          right: 5, top: 5,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color:  Colors.white,
+                              shape:  BoxShape.circle,
+                            ),
+                            child: SizedBox(width: 5, height: 5),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -504,7 +576,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.dmSans(
-                        color:      AppColors.textPrimary,
+                        color:      titleColor,
                         fontSize:   13,
                         fontWeight: FontWeight.w400,
                         height:     1.4,

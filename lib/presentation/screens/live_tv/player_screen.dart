@@ -110,7 +110,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               return KeyEventResult.handled;
             case LogicalKeyboardKey.escape:
             case LogicalKeyboardKey.goBack:
-              context.pop();
+              context.go('/live');
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
@@ -141,7 +141,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     channel:   ch,
                     onPrev:    _previousChannel,
                     onNext:    _nextChannel,
-                    onBack:    () => context.pop(),
+                    onBack:    () => context.go('/live'),
                   ),
                 ),
             ],
