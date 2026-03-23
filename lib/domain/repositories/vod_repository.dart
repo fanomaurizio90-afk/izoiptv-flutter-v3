@@ -7,7 +7,7 @@ abstract interface class VodRepository {
   Future<VodItem?> getVodById(int id);
   Future<void> syncVod();
   Future<void> fetchVodInfo(int vodId);
-  Future<void> enrichAll();
+  Future<void> enrichAll({void Function(int done, int total)? onProgress});
   Future<void> toggleFavourite(int vodId, bool isFav);
   Future<List<VodItem>> getFavourites();
 }

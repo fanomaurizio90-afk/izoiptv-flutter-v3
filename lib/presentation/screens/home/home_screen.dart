@@ -20,12 +20,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider).syncIfNeeded();
+      ref.read(syncProvider.notifier).syncIfNeeded();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final syncState = ref.watch(syncProvider);
+
+    // First-run: block access until library is fully downloaded.
+    final isFirstRun = switch (syncState) {
+      SyncDownloading(:final isFirstRun) => isFirstRun,
+      SyncEnriching(:final isFirstRun)   => isFirstRun,
+      SyncDone(:final isFirstRun)        => isFirstRun,
+      _                                  => false,
+    };
+    if (isFirstRun) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _FirstRunOverlay(syncState),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -52,6 +68,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+      ),
+    );
+  }
+}
+
+// ── First-Run Overlay (blocks content until library is ready) ──────────────────
+
+class _FirstRunOverlay extends StatelessWidget {
+  const _FirstRunOverlay(this.state);
+  final SyncState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone = state is SyncDone;
+
+    final headline = switch (state) {
+      SyncDownloading() => 'Setting up your library',
+      SyncEnriching()   => 'Loading artwork',
+      SyncDone()        => 'Library ready',
+      _                 => 'Please wait…',
+    };
+    final subline = switch (state) {
+      SyncDownloading()                              => 'Downloading playlist…',
+      SyncEnriching(:final done, :final total, :final label) => '$label  ·  $done / $total',
+      SyncDone()                                     => 'Enjoy your content',
+      _                                              => '',
+    };
+    final progress = switch (state) {
+      SyncEnriching(:final progress) => progress,
+      SyncDone()                     => 1.0,
+      _                              => null,
+    };
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const IzoLogo(size: 56),
+            const SizedBox(height: 40),
+            Text(
+              headline,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(
+                color:      AppColors.textPrimary,
+                fontSize:   20,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.3,
+              ),
+            ),
+            if (subline.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                subline,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.dmSans(
+                  color:    AppColors.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+            ],
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 280,
+              child: LinearProgressIndicator(
+                value:           progress,   // null = indeterminate
+                backgroundColor: AppColors.borderSubtle,
+                valueColor:      const AlwaysStoppedAnimation(AppColors.textPrimary),
+                minHeight:       2,
+              ),
+            ),
+            if (isDone) ...[
+              const SizedBox(height: 20),
+              const Icon(Icons.check_circle_outline,
+                color: AppColors.textMuted, size: 20),
+            ],
+          ],
+        ),
       ),
     );
   }

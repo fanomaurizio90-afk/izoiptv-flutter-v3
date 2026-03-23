@@ -47,8 +47,10 @@ class SeriesRepositoryImpl implements SeriesRepository {
   }
 
   @override
-  Future<void> enrichAll() async {
+  Future<void> enrichAll({void Function(int done, int total)? onProgress}) async {
     final ids = await _dao.getSeriesIdsMissingMeta();
+    final total = ids.length;
+    var done = 0;
     const concurrency = 3;
     for (var i = 0; i < ids.length; i += concurrency) {
       final batch = ids.sublist(i, min(i + concurrency, ids.length));
@@ -60,6 +62,8 @@ class SeriesRepositoryImpl implements SeriesRepository {
           }
           if (episodes.isNotEmpty) await _dao.insertEpisodes(id, episodes);
         } catch (_) {}
+        done++;
+        onProgress?.call(done, total);
       }));
     }
   }

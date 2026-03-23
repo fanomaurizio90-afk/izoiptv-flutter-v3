@@ -38,8 +38,10 @@ class VodRepositoryImpl implements VodRepository {
   }
 
   @override
-  Future<void> enrichAll() async {
+  Future<void> enrichAll({void Function(int done, int total)? onProgress}) async {
     final ids = await _dao.getVodIdsMissingMeta();
+    final total = ids.length;
+    var done = 0;
     const concurrency = 5;
     for (var i = 0; i < ids.length; i += concurrency) {
       final batch = ids.sublist(i, min(i + concurrency, ids.length));
@@ -48,6 +50,8 @@ class VodRepositoryImpl implements VodRepository {
           final meta = await _api.getVodInfo(id);
           if (meta != null) await _dao.updateVodMeta(id, meta);
         } catch (_) {}
+        done++;
+        onProgress?.call(done, total);
       }));
     }
   }

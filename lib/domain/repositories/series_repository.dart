@@ -7,7 +7,7 @@ abstract interface class SeriesRepository {
   Future<SeriesItem?> getSeriesById(int id);
   Future<List<Season>> getSeasons(int seriesId);
   Future<void> syncSeries();
-  Future<void> enrichAll();
+  Future<void> enrichAll({void Function(int done, int total)? onProgress});
   Future<void> toggleFavourite(int seriesId, bool isFav);
   Future<List<SeriesItem>> getFavourites();
 }

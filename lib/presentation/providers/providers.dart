@@ -18,6 +18,7 @@ import '../../domain/repositories/history_repository.dart';
 import '../../domain/repositories/series_repository.dart';
 import '../../domain/repositories/vod_repository.dart';
 import '../../services/sync_service.dart';
+export '../../services/sync_service.dart' show SyncState, SyncIdle, SyncDownloading, SyncEnriching, SyncDone, SyncNotifier;
 
 // ─── Infrastructure ──────────────────────────────────────────────────────────
 
@@ -86,8 +87,8 @@ final favouritesRepositoryProvider = Provider<FavouritesRepository>((ref) {
   );
 });
 
-final syncServiceProvider = Provider<SyncService>((ref) {
-  return SyncService(
+final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
+  return SyncNotifier(
     ref.read(vodRepositoryProvider),
     ref.read(seriesRepositoryProvider),
     ref.read(channelRepositoryProvider),
