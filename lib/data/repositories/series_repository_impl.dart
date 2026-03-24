@@ -94,12 +94,18 @@ class SeriesRepositoryImpl implements SeriesRepository {
   Future<List<SeriesItem>> getFavourites() => _dao.getSeriesFavourites();
 
   List<Season> _groupIntoSeasons(List<Episode> episodes) {
+    // Sort by season then episode first — insertion order into the map is correct
+    final sorted = [...episodes]
+      ..sort((a, b) {
+        final s = a.seasonNumber.compareTo(b.seasonNumber);
+        return s != 0 ? s : a.episodeNumber.compareTo(b.episodeNumber);
+      });
     final map = <int, List<Episode>>{};
-    for (final ep in episodes) {
+    for (final ep in sorted) {
       map.putIfAbsent(ep.seasonNumber, () => []).add(ep);
     }
     return map.entries
-        .map((e) => Season(number: e.key, episodes: e.value..sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber))))
+        .map((e) => Season(number: e.key, episodes: e.value))
         .toList()
       ..sort((a, b) => a.number.compareTo(b.number));
   }
