@@ -40,8 +40,12 @@ class SyncNotifier extends StateNotifier<SyncState> {
   Future<void> syncAndEnrich() async {
     if (_running) return;
     _running = true;
-    final ok = await _runSync();
-    if (ok) await _doEnrich();
+    try {
+      final ok = await _runSync();
+      if (ok) await _doEnrich();
+    } finally {
+      _running = false;
+    }
   }
 
   /// Called on home screen open — everything runs in background, never blocks.
@@ -65,8 +69,12 @@ class SyncNotifier extends StateNotifier<SyncState> {
     if (_running) return;
     _running = true;
     Future(() async {
-      final ok = await _runSync();
-      if (ok) await _doEnrich();
+      try {
+        final ok = await _runSync();
+        if (ok) await _doEnrich();
+      } finally {
+        _running = false;
+      }
     });
   }
 
@@ -82,7 +90,6 @@ class SyncNotifier extends StateNotifier<SyncState> {
       return true;
     } catch (_) {
       if (mounted) state = const SyncIdle();
-      _running = false;
       return false;
     }
   }
@@ -105,7 +112,6 @@ class SyncNotifier extends StateNotifier<SyncState> {
     } catch (_) {
       if (mounted) state = const SyncIdle();
     }
-    _running = false;
   }
 
   /// Returns the time of the last completed sync, or null if never synced.
