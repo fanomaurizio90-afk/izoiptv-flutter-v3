@@ -5,6 +5,23 @@ import '../../domain/repositories/vod_repository.dart';
 import '../local/database/daos/vod_dao.dart';
 import '../remote/api/xtream_api.dart';
 
+/// Retries [fn] up to [maxAttempts] times with [delay] between attempts.
+/// Returns null silently if all attempts fail.
+Future<T?> _withRetry<T>(
+  Future<T> Function() fn, {
+  int      maxAttempts = 3,
+  Duration delay       = const Duration(seconds: 2),
+}) async {
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (_) {
+      if (attempt < maxAttempts - 1) await Future.delayed(delay);
+    }
+  }
+  return null;
+}
+
 class VodRepositoryImpl implements VodRepository {
   VodRepositoryImpl(this._api, this._dao);
   final XtreamApi _api;
@@ -46,10 +63,8 @@ class VodRepositoryImpl implements VodRepository {
     for (var i = 0; i < ids.length; i += concurrency) {
       final batch = ids.sublist(i, min(i + concurrency, ids.length));
       await Future.wait(batch.map((id) async {
-        try {
-          final meta = await _api.getVodInfo(id);
-          if (meta != null) await _dao.updateVodMeta(id, meta);
-        } catch (_) {}
+        final meta = await _withRetry(() => _api.getVodInfo(id));
+        if (meta != null) await _dao.updateVodMeta(id, meta);
         done++;
         onProgress?.call(done, total);
       }));
