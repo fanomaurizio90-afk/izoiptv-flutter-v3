@@ -1,4 +1,3 @@
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
@@ -16,25 +15,15 @@ class DeviceIdService {
   Future<String> getDeviceId() async {
     if (_cached != null) return _cached!;
 
-    // 1. Secure storage (previous run)
+    // Return persisted ID from previous run
     final stored = await _storage.read(key: _keyDeviceId);
     if (stored != null && stored.isNotEmpty) {
       _cached = stored;
       return _cached!;
     }
 
-    // 2. Android hardware info
-    String? id;
-    try {
-      final info = await DeviceInfoPlugin().androidInfo;
-      if (info.id.isNotEmpty && info.id != 'unknown') {
-        id = info.id;
-      }
-    } catch (_) {}
-
-    // 3. UUID fallback
-    id ??= const Uuid().v4();
-
+    // Generate a new unique ID for this device and persist it
+    final id = const Uuid().v4();
     await _storage.write(key: _keyDeviceId, value: id);
     _cached = id;
     return _cached!;
