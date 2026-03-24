@@ -54,6 +54,7 @@ class HistoryDao {
           ? 'content_id = ? AND content_type = ? AND episode_id = ?'
           : 'content_id = ? AND content_type = ? AND episode_id IS NULL',
       whereArgs: episodeId != null ? [contentId, contentType, episodeId] : [contentId, contentType],
+      orderBy: 'updated_at DESC',
       limit: 1,
     );
     return rows.isEmpty ? null : rows.first;
