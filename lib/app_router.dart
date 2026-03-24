@@ -75,7 +75,7 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: ':id',
             builder: (_, state) {
-              final id = int.parse(state.pathParameters['id']!);
+              final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
               return MovieDetailScreen(vodId: id);
             },
           ),
@@ -109,7 +109,7 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: ':id',
             builder: (_, state) {
-              final id     = int.parse(state.pathParameters['id']!);
+              final id     = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
               final series = state.extra as SeriesItem?;
               return SeriesDetailScreen(seriesId: id, series: series);
             },
@@ -122,4 +122,8 @@ GoRouter buildRouter(Ref ref) {
   );
 }
 
-final routerProvider = Provider<GoRouter>((ref) => buildRouter(ref));
+final routerProvider = Provider<GoRouter>((ref) {
+  final router = buildRouter(ref);
+  ref.onDispose(router.dispose);
+  return router;
+});
