@@ -15,7 +15,8 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
-  bool _isXtream = true;
+  bool    _isXtream  = true;
+  String? _m3uError;
 
   final _serverCtrl   = TextEditingController();
   final _usernameCtrl = TextEditingController();
@@ -57,6 +58,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     } else {
       final url = _m3uCtrl.text.trim();
       if (url.isEmpty) return;
+      final validationError = _validateM3uUrl(url);
+      if (validationError != null) {
+        setState(() => _m3uError = validationError);
+        return;
+      }
+      setState(() => _m3uError = null);
       await ref.read(authProvider.notifier).loginM3u(url);
     }
   }
@@ -85,12 +92,26 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     return KeyEventResult.ignored;
   }
 
+  String? _validateM3uUrl(String url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return 'URL must start with http:// or https://';
+    }
+    final lower = url.toLowerCase();
+    final validFormat = lower.endsWith('.m3u') ||
+        lower.endsWith('.m3u8') ||
+        lower.contains('/get.php');
+    if (!validFormat) {
+      return 'URL must end with .m3u or .m3u8, or contain /get.php';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth      = ref.watch(authProvider);
     final isLoading = auth is AuthLoading;
-    String? error;
-    if (auth is AuthError) error = auth.message;
+    String? error = _m3uError;
+    if (error == null && auth is AuthError) error = auth.message;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -125,7 +146,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                         focusNode: _xtreamTabNode,
                         autofocus: true,
                         onTap: () {
-                          setState(() => _isXtream = true);
+                          setState(() { _isXtream = true; _m3uError = null; });
                           _serverNode.requestFocus();
                         },
                         child: Padding(
@@ -147,7 +168,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       child: FocusableWidget(
                         focusNode: _m3uTabNode,
                         onTap: () {
-                          setState(() => _isXtream = false);
+                          setState(() { _isXtream = false; _m3uError = null; });
                           _m3uUrlNode.requestFocus();
                         },
                         child: Padding(
