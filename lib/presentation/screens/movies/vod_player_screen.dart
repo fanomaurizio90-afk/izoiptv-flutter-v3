@@ -8,6 +8,7 @@ import '../../../domain/entities/vod.dart';
 import '../../../domain/entities/series.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/providers.dart';
+import '../../../domain/repositories/history_repository.dart';
 
 class VodPlayerScreen extends ConsumerStatefulWidget {
   const VodPlayerScreen({
@@ -26,8 +27,9 @@ class VodPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
-  late VideoController _videoController;
-  late PlayerNotifier  _playerNotifier; // saved in initState — safe to use in dispose
+  late VideoController    _videoController;
+  late PlayerNotifier     _playerNotifier;   // saved in initState — safe to use in dispose
+  late HistoryRepository  _historyRepo;      // saved in initState — safe to use in dispose
   bool   _showControls = true;
   Timer? _hideTimer;
   Timer? _saveTimer;
@@ -39,8 +41,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    // Save notifier reference NOW — ref is not safe to use in dispose()
+    // Save references NOW — ref is not safe to use in dispose()
     _playerNotifier = ref.read(playerProvider.notifier);
+    _historyRepo    = ref.read(historyRepositoryProvider);
     _videoController = VideoController(
       _playerNotifier.player,
       configuration: const VideoControllerConfiguration(enableHardwareAcceleration: false),
@@ -118,10 +121,20 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     } catch (_) {}
   }
 
-  // Sync-safe save — called from dispose (no async, no ref)
+  // Called from dispose — uses pre-saved references, fires async without awaiting.
+  // The future completes independently after the widget is gone.
   void _savePositionSync() {
-    // Position is already in playerProvider state which survives dispose briefly
-    // The periodic timer handles the last flush; this is best-effort
+    final pos = _playerNotifier.currentPosition.inSeconds;
+    final dur = _playerNotifier.currentDuration.inSeconds;
+    if (pos <= 0) return;
+    _historyRepo.savePosition(
+      contentId:    widget.vod.id,
+      contentType:  'vod',
+      contentName:  widget.vod.name,
+      positionSecs: pos,
+      durationSecs: dur,
+      thumbnailUrl: widget.vod.posterUrl,
+    );
   }
 
   void _playNextEpisode() {

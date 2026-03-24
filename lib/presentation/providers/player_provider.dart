@@ -25,7 +25,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   late final Player _player;
-  Player get player => _player;
+  Player   get player          => _player;
+  Duration get currentPosition => _player.state.position;
+  Duration get currentDuration => _player.state.duration;
 
   void _setupListeners() {
     _player.stream.playing.listen((v) {
