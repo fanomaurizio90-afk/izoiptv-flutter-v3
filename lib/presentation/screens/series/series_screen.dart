@@ -462,7 +462,7 @@ class _TopBar extends StatelessWidget {
                 controller: searchCtrl,
                 style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
                 decoration: InputDecoration(
-                  hintText:       'Search...',
+                  hintText:       'Search in this category...',
                   hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12),
                   border:         InputBorder.none,
                   enabledBorder:  InputBorder.none,
@@ -511,8 +511,7 @@ class _CategoryBar extends StatelessWidget {
           return Focus(
             onKeyEvent: (_, event) {
               if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.arrowRight &&
-                  i == categories.length - 1) {
+                  event.logicalKey == LogicalKeyboardKey.arrowRight) {
                 onRightArrow();
                 return KeyEventResult.handled;
               }

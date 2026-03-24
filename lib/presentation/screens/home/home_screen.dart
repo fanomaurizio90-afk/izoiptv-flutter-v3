@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/providers.dart';
@@ -17,12 +18,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _heroScope     = FocusScopeNode();
+  final _continueScope = FocusScopeNode();
+  final _favScope      = FocusScopeNode();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncProvider.notifier).syncIfNeeded();
     });
+  }
+
+  @override
+  void dispose() {
+    _heroScope.dispose();
+    _continueScope.dispose();
+    _favScope.dispose();
+    super.dispose();
   }
 
   @override
@@ -42,11 +55,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeroTiles(),
+                    FocusScope(
+                      node: _heroScope,
+                      child: _HeroTiles(
+                        onDownArrow: () => _continueScope.requestFocus(),
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xl3),
-                    _ContinueWatchingRow(),
+                    FocusScope(
+                      node: _continueScope,
+                      child: _ContinueWatchingRow(
+                        onUpArrow:   () => _heroScope.requestFocus(),
+                        onDownArrow: () => _favScope.requestFocus(),
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xl3),
-                    _FavouritesRow(),
+                    FocusScope(
+                      node: _favScope,
+                      child: _FavouritesRow(
+                        onUpArrow: () => _continueScope.requestFocus(),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -144,10 +173,14 @@ class _TileData {
 }
 
 class _HeroTiles extends StatelessWidget {
+  const _HeroTiles({this.onDownArrow});
+  final VoidCallback? onDownArrow;
+
   @override
   Widget build(BuildContext context) {
-    final screenH   = MediaQuery.of(context).size.height;
-    final tileHeight = (screenH - 56 - 32).clamp(200.0, 500.0) * 0.60;
+    final screenH    = MediaQuery.of(context).size.height;
+    final tileHeight = (screenH - AppConstants.homeTopBarHeight - AppConstants.homeSafeAreaPadding)
+        .clamp(200.0, 500.0) * 0.60;
 
     final tiles = const [
       _TileData(
@@ -173,25 +206,36 @@ class _HeroTiles extends StatelessWidget {
       ),
     ];
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: tiles.asMap().entries.map((e) {
-        final t = e.value;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left:  e.key == 0               ? 0 : 6,
-              right: e.key == tiles.length - 1 ? 0 : 6,
+    return Focus(
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          onDownArrow?.call();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: tiles.asMap().entries.map((e) {
+          final t = e.value;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left:  e.key == 0               ? 0 : 6,
+                right: e.key == tiles.length - 1 ? 0 : 6,
+              ),
+              child: FocusableWidget(
+                autofocus:    e.key == 0,
+                borderRadius: AppSpacing.radiusCard,
+                onTap:        () => context.push(t.route),
+                child: _HeroTile(tile: t, height: tileHeight),
+              ),
             ),
-            child: FocusableWidget(
-              autofocus:    e.key == 0,
-              borderRadius: AppSpacing.radiusCard,
-              onTap:        () => context.push(t.route),
-              child: _HeroTile(tile: t, height: tileHeight),
-            ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -286,6 +330,10 @@ class _DiagonalLinePainter extends CustomPainter {
 // ── Continue Watching ──────────────────────────────────────────────────────────
 
 class _ContinueWatchingRow extends ConsumerStatefulWidget {
+  const _ContinueWatchingRow({this.onUpArrow, this.onDownArrow});
+  final VoidCallback? onUpArrow;
+  final VoidCallback? onDownArrow;
+
   @override
   ConsumerState<_ContinueWatchingRow> createState() => _ContinueWatchingRowState();
 }
@@ -319,6 +367,14 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      widget.onUpArrow?.call();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      widget.onDownArrow?.call();
+      return KeyEventResult.handled;
+    }
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
@@ -431,12 +487,26 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
 // ── Favourites Row ─────────────────────────────────────────────────────────────
 
 class _FavouritesRow extends StatelessWidget {
+  const _FavouritesRow({this.onUpArrow});
+  final VoidCallback? onUpArrow;
+
   @override
   Widget build(BuildContext context) {
-    return _SectionLabel(
-      'FAVOURITES',
-      trailing:      'See all',
-      onTrailingTap: () => context.push('/favourites'),
+    return Focus(
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          onUpArrow?.call();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: _SectionLabel(
+        'FAVOURITES',
+        trailing:      'See all',
+        onTrailingTap: () => context.push('/favourites'),
+      ),
     );
   }
 }

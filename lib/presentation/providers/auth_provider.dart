@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/device_service.dart';
 import '../../domain/entities/user_info.dart';
 import 'providers.dart';
 
@@ -35,6 +36,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user == null) {
         state = const AuthInitial();
       } else {
+        // Check activation expiry stored by DeviceService
+        final expiryStr = await DeviceService.instance.readExpiryDate();
+        if (expiryStr != null) {
+          final expiry = DateTime.tryParse(expiryStr);
+          if (expiry != null && DateTime.now().isAfter(expiry)) {
+            state = const AuthExpired();
+            return;
+          }
+        }
         state = AuthAuthenticated(user);
       }
     } catch (e) {

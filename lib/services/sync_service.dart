@@ -40,18 +40,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
   Future<void> syncAndEnrich() async {
     if (_running) return;
     _running = true;
-    try {
-      state = const SyncDownloading();
-      await _vod.syncVod();
-      await _series.syncSeries();
-      await _channels.syncChannels();
-      await _markSynced();
-    } catch (_) {
-      if (mounted) state = const SyncIdle();
-      _running = false;
-      return;
-    }
-    _doEnrich();
+    final ok = await _runSync();
+    if (ok) await _doEnrich();
   }
 
   /// Called on home screen open — everything runs in background, never blocks.
@@ -75,19 +65,26 @@ class SyncNotifier extends StateNotifier<SyncState> {
     if (_running) return;
     _running = true;
     Future(() async {
-      try {
-        state = const SyncDownloading();
-        await _vod.syncVod();
-        await _series.syncSeries();
-        await _channels.syncChannels();
-        await _markSynced();
-      } catch (_) {
-        if (mounted) state = const SyncIdle();
-        _running = false;
-        return;
-      }
-      await _doEnrich();
+      final ok = await _runSync();
+      if (ok) await _doEnrich();
     });
+  }
+
+  /// Downloads all catalogues and marks the sync timestamp.
+  /// Returns true on success, false on failure (state is reset to Idle on failure).
+  Future<bool> _runSync() async {
+    try {
+      state = const SyncDownloading();
+      await _vod.syncVod();
+      await _series.syncSeries();
+      await _channels.syncChannels();
+      await _markSynced();
+      return true;
+    } catch (_) {
+      if (mounted) state = const SyncIdle();
+      _running = false;
+      return false;
+    }
   }
 
   Future<void> _doEnrich() async {

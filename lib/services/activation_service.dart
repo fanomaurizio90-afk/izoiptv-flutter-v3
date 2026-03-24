@@ -23,16 +23,11 @@ class ActivationCredentials {
 }
 
 class ActivationService {
-  ActivationService._();
-  static final ActivationService instance = ActivationService._();
+  ActivationService(this._dio);
+  final Dio _dio;
 
   // CRITICAL: www.izoiptv.com — NOT api.izoiptv.com
   static const _baseUrl = AppConstants.activationBaseUrl;
-
-  final _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 8),
-  ));
 
   Future<ActivationCredentials?> checkActivation(String deviceId) async {
     try {

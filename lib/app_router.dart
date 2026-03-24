@@ -17,7 +17,7 @@ import 'presentation/screens/favourites/favourites_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
 import 'domain/entities/vod.dart';
 import 'domain/entities/series.dart';
-import 'screens/activation_screen.dart';
+import 'presentation/screens/activation/activation_screen.dart';
 
 class _AuthListenable extends ChangeNotifier {
   _AuthListenable(Ref ref) {

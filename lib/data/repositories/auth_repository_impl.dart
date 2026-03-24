@@ -17,9 +17,14 @@ class AuthRepositoryImpl implements AuthRepository {
     if (loginType == null) return null;
 
     if (loginType == 'xtream') {
-      final serverUrl = await _storage.read(key: AppConstants.keyServerUrl);
-      final username  = await _storage.read(key: AppConstants.keyUsername);
-      final password  = await _storage.read(key: AppConstants.keyPassword);
+      final results = await Future.wait([
+        _storage.read(key: AppConstants.keyServerUrl),
+        _storage.read(key: AppConstants.keyUsername),
+        _storage.read(key: AppConstants.keyPassword),
+      ]);
+      final serverUrl = results[0];
+      final username  = results[1];
+      final password  = results[2];
       if (serverUrl == null || username == null || password == null) return null;
 
       _xtream.configure(serverUrl: serverUrl, username: username, password: password);

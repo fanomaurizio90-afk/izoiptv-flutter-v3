@@ -44,6 +44,10 @@ class DeviceService {
     return val == 'true';
   }
 
+  Future<String?> readExpiryDate() async {
+    return _storage.read(key: _keyExpiryDate);
+  }
+
   Future<void> clearActivation() async {
     await _storage.delete(key: _keyActivated);
     await _storage.delete(key: _keyPlaylistType);

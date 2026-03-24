@@ -16,9 +16,40 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), AppConstants.dbName);
     return openDatabase(
       path,
-      version: AppConstants.dbVersion,
-      onCreate: _onCreate,
+      version:   AppConstants.dbVersion,
+      onCreate:  _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // v1 → v2: drop is_watched column from episodes (recreate table)
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE episodes_new (
+          id                  INTEGER PRIMARY KEY,
+          series_id           INTEGER NOT NULL,
+          season_number       INTEGER NOT NULL,
+          episode_number      INTEGER NOT NULL,
+          title               TEXT NOT NULL,
+          stream_url          TEXT NOT NULL,
+          thumbnail_url       TEXT,
+          plot                TEXT,
+          duration_secs       INTEGER,
+          container_extension TEXT,
+          FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO episodes_new
+          SELECT id, series_id, season_number, episode_number, title,
+                 stream_url, thumbnail_url, plot, duration_secs, container_extension
+          FROM episodes
+      ''');
+      await db.execute('DROP TABLE episodes');
+      await db.execute('ALTER TABLE episodes_new RENAME TO episodes');
+      await db.execute('CREATE INDEX idx_episodes_series ON episodes(series_id)');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -102,7 +133,6 @@ class AppDatabase {
         plot                TEXT,
         duration_secs       INTEGER,
         container_extension TEXT,
-        is_watched          INTEGER DEFAULT 0,
         FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE
       )
     ''');

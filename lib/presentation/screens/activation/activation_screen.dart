@@ -2,13 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/theme/app_theme.dart';
-import '../presentation/providers/auth_provider.dart';
-import '../presentation/widgets/common/app_logo.dart';
-import '../services/activation_service.dart';
-import '../services/device_id_service.dart';
-import '../core/constants/app_constants.dart';
-import '../core/services/device_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/providers.dart';
+import '../../widgets/common/app_logo.dart';
+import '../../widgets/common/focusable_widget.dart';
+import '../../../services/device_id_service.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/services/device_service.dart';
 
 class IzoActivationScreen extends ConsumerStatefulWidget {
   const IzoActivationScreen({super.key});
@@ -56,20 +57,20 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
 
   Future<void> _poll() async {
     if (_deviceId == null) return;
-    final result = await ActivationService.instance.checkActivation(_deviceId!);
+    final result = await ref.read(activationServiceProvider).checkActivation(_deviceId!);
     if (!mounted || result == null) return;
 
     _pollTimer?.cancel();
 
     // Save activation credentials
     await DeviceService.instance.saveActivationCredentials(
-      playlistType:   result.playlistType,
-      xtreamServer:   result.xtreamServer,
-      xtreamUsername: result.xtreamUsername,
-      xtreamPassword: result.xtreamPassword,
-      m3uUrl:         result.m3uUrl,
-      expiryDate:     result.expiryDate,
-      displayName:    result.displayName,
+      playlistType:     result.playlistType,
+      xtreamServer:     result.xtreamServer,
+      xtreamUsername:   result.xtreamUsername,
+      xtreamPassword:   result.xtreamPassword,
+      m3uUrl:           result.m3uUrl,
+      expiryDate:       result.expiryDate,
+      displayName:      result.displayName,
       subscriptionPlan: result.subscriptionPlan,
     );
 
@@ -156,7 +157,8 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
-                          GestureDetector(
+                          FocusableWidget(
+                            borderRadius: 6,
                             onTap: () {
                               if (_deviceId != null) {
                                 Clipboard.setData(ClipboardData(text: _deviceId!));
@@ -169,10 +171,13 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                                 );
                               }
                             },
-                            child: const Icon(
-                              Icons.copy_outlined,
-                              color: AppColors.textSecondary,
-                              size:  18,
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.copy_outlined,
+                                color: AppColors.textSecondary,
+                                size:  18,
+                              ),
                             ),
                           ),
                         ],

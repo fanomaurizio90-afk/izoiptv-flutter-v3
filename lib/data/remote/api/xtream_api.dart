@@ -4,18 +4,11 @@ import '../../../domain/entities/vod.dart';
 import '../../../domain/entities/series.dart';
 
 class XtreamApi {
+  XtreamApi(this._dio);
+  final Dio    _dio;
   String? _serverUrl;
   String? _username;
   String? _password;
-  late final Dio _dio;
-
-  XtreamApi() {
-    _dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 120),
-      headers: {'User-Agent': 'Mozilla/5.0'},
-    ));
-  }
 
   void configure({
     required String serverUrl,

@@ -11,6 +11,5 @@ bool isAdultCategory(String name) {
          n.contains('erotic')  ||
          n.contains('nude')    ||
          n.contains('sex')     ||
-         n.contains('+18')     ||
-         n.contains('hot');
+         n.contains('+18');
 }
