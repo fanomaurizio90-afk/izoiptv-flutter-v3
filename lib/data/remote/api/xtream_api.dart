@@ -28,18 +28,6 @@ class XtreamApi {
     }
     _username = username.trim();
     _password = password.trim();
-
-    // Print test URLs for verification
-    // ignore: avoid_print
-    print('IZO XtreamApi configured:');
-    // ignore: avoid_print
-    print('  Auth URL: $_base');
-    // ignore: avoid_print
-    print('  Live stream example: ${getLiveStreamUrl(12345)}');
-    // ignore: avoid_print
-    print('  VOD stream example: ${getVodStreamUrl(12345, "mp4")}');
-    // ignore: avoid_print
-    print('  Episode stream example: ${getEpisodeStreamUrl(12345, "mkv")}');
   }
 
   bool get isConfigured =>
@@ -51,8 +39,6 @@ class XtreamApi {
   // ─── Authentication ──────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> authenticate() async {
-    // ignore: avoid_print
-    print('IZO AUTH URL: $_base');
     final response = await _dio.get<Map<String, dynamic>>(_base);
     return response.data!;
   }
