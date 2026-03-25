@@ -305,7 +305,11 @@ class _ContentListState extends State<_ContentList> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      if (idx - widget.columns >= 0) _move(idx - widget.columns);
+      if (idx - widget.columns >= 0) {
+        _move(idx - widget.columns);
+      } else {
+        widget.categoryFocusNode?.requestFocus();
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;

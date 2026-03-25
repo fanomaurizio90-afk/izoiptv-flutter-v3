@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/app_logo.dart';
@@ -21,6 +22,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _heroScope     = FocusScopeNode();
   final _continueScope = FocusScopeNode();
   final _favScope      = FocusScopeNode();
+  final _settingsNode  = FocusNode();
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _heroScope.dispose();
     _continueScope.dispose();
     _favScope.dispose();
+    _settingsNode.dispose();
     super.dispose();
   }
 
@@ -46,39 +49,95 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         bottom: false,
         child: Column(
           children: [
-            _TopBar(),
+            _TopBar(settingsNode: _settingsNode),
             Expanded(
-              child: SingleChildScrollView(
+              child: ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.xl3,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FocusScope(
-                      node: _heroScope,
-                      child: _HeroTiles(
-                        onDownArrow: () => _continueScope.requestFocus(),
-                      ),
+                children: [
+                  _ExpiryBanner(),
+                  FocusScope(
+                    node: _heroScope,
+                    child: _HeroTiles(
+                      onUpArrow:   () => _settingsNode.requestFocus(),
+                      onDownArrow: () => _continueScope.requestFocus(),
                     ),
-                    const SizedBox(height: AppSpacing.xl3),
-                    FocusScope(
-                      node: _continueScope,
-                      child: _ContinueWatchingRow(
-                        onUpArrow:   () => _heroScope.requestFocus(),
-                        onDownArrow: () => _favScope.requestFocus(),
-                      ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl3),
+                  FocusScope(
+                    node: _continueScope,
+                    child: _ContinueWatchingRow(
+                      onUpArrow:   () => _heroScope.requestFocus(),
+                      onDownArrow: () => _favScope.requestFocus(),
                     ),
-                    const SizedBox(height: AppSpacing.xl3),
-                    FocusScope(
-                      node: _favScope,
-                      child: _FavouritesRow(
-                        onUpArrow: () => _continueScope.requestFocus(),
-                      ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl3),
+                  FocusScope(
+                    node: _favScope,
+                    child: _FavouritesRow(
+                      onUpArrow: () => _continueScope.requestFocus(),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Expiry Banner ──────────────────────────────────────────────────────────────
+
+class _ExpiryBanner extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_ExpiryBanner> createState() => _ExpiryBannerState();
+}
+
+class _ExpiryBannerState extends ConsumerState<_ExpiryBanner> {
+  bool _dismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_dismissed) return const SizedBox.shrink();
+
+    final auth = ref.watch(authProvider);
+    if (auth is! AuthAuthenticated) return const SizedBox.shrink();
+
+    final days = AuthNotifier.daysUntilExpiry(auth.user.expiryDate);
+    if (days == null || days > 7) return const SizedBox.shrink();
+
+    final label = days <= 0
+        ? 'Your subscription expires today'
+        : 'Your subscription expires in $days day${days == 1 ? '' : 's'}';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical:   AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color:        AppColors.errorSurface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          border:       Border.all(color: AppColors.error, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 16),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(color: AppColors.error, fontSize: 12),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _dismissed = true),
+              child: const Icon(Icons.close, color: AppColors.error, size: 16),
             ),
           ],
         ),
@@ -90,6 +149,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 // ── Top Bar ────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
+  const _TopBar({required this.settingsNode});
+  final FocusNode settingsNode;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -103,6 +165,7 @@ class _TopBar extends StatelessWidget {
           const IzoLogo(size: 28),
           const Spacer(),
           FocusableWidget(
+            focusNode:    settingsNode,
             onTap:        () => context.push('/settings'),
             borderRadius: AppSpacing.radiusCard,
             child: const Padding(
@@ -173,7 +236,8 @@ class _TileData {
 }
 
 class _HeroTiles extends StatelessWidget {
-  const _HeroTiles({this.onDownArrow});
+  const _HeroTiles({this.onUpArrow, this.onDownArrow});
+  final VoidCallback? onUpArrow;
   final VoidCallback? onDownArrow;
 
   @override
@@ -209,8 +273,12 @@ class _HeroTiles extends StatelessWidget {
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          onUpArrow?.call();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
           onDownArrow?.call();
           return KeyEventResult.handled;
         }

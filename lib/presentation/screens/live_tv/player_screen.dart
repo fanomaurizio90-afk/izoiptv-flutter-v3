@@ -68,23 +68,27 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   }
 
   void _previousChannel() {
+    // Snapshot list and index atomically — a sync could replace the list
+    // between reads, making the index stale and out-of-bounds.
     final list  = ref.read(currentChannelListProvider);
     final index = ref.read(currentChannelIndexProvider);
-    if (index <= 0 || list.isEmpty) return;
+    if (list.isEmpty || index <= 0 || index >= list.length) return;
     final newIndex = index - 1;
+    final channel  = list[newIndex];
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
-    ref.read(selectedChannelProvider.notifier).state     = list[newIndex];
-    ref.read(playerProvider.notifier).openUrl(list[newIndex].streamUrl);
+    ref.read(selectedChannelProvider.notifier).state     = channel;
+    ref.read(playerProvider.notifier).openUrl(channel.streamUrl);
   }
 
   void _nextChannel() {
     final list  = ref.read(currentChannelListProvider);
     final index = ref.read(currentChannelIndexProvider);
-    if (index >= list.length - 1) return;
+    if (list.isEmpty || index >= list.length - 1) return;
     final newIndex = index + 1;
+    final channel  = list[newIndex];
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
-    ref.read(selectedChannelProvider.notifier).state     = list[newIndex];
-    ref.read(playerProvider.notifier).openUrl(list[newIndex].streamUrl);
+    ref.read(selectedChannelProvider.notifier).state     = channel;
+    ref.read(playerProvider.notifier).openUrl(channel.streamUrl);
   }
 
   @override
@@ -110,7 +114,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               return KeyEventResult.handled;
             case LogicalKeyboardKey.escape:
             case LogicalKeyboardKey.goBack:
-              context.go('/live');
+              context.pop();
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
@@ -141,7 +145,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     channel:   ch,
                     onPrev:    _previousChannel,
                     onNext:    _nextChannel,
-                    onBack:    () => context.go('/live'),
+                    onBack:    () => context.pop(),
                   ),
                 ),
             ],

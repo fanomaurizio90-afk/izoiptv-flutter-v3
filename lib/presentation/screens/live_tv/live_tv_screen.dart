@@ -281,7 +281,8 @@ class _ChannelList extends StatefulWidget {
 }
 
 class _ChannelListState extends State<_ChannelList> {
-  List<FocusNode> _nodes = [];
+  List<FocusNode>        _nodes     = [];
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -303,6 +304,7 @@ class _ChannelListState extends State<_ChannelList> {
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -321,20 +323,49 @@ class _ChannelListState extends State<_ChannelList> {
     return -1;
   }
 
+  void _moveTo(int idx) {
+    if (idx < 0 || idx >= _nodes.length) return;
+    _nodes[idx].requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
+  }
+
+  void _ensureVisible(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    final itemTop    = idx * kChannelRowHeight;
+    final itemBottom = itemTop + kChannelRowHeight;
+    final viewport   = _scrollCtrl.position.viewportDimension;
+    final offset     = _scrollCtrl.offset;
+    double? target;
+    if (itemTop < offset) {
+      target = itemTop;
+    } else if (itemBottom > offset + viewport) {
+      target = itemBottom - viewport;
+    }
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
+  }
+
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
-      _nodes[idx + 1].requestFocus();
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _moveTo(idx + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (idx > 0) {
-        _nodes[idx - 1].requestFocus();
+        _moveTo(idx - 1);
+      } else {
+        // First item — let focus go up to the search bar
+        return KeyEventResult.ignored;
       }
-      // arrowUp on first item → Flutter's default traversal goes up (to search bar)
-      return KeyEventResult.ignored;
+      return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       widget.sidebarNode.requestFocus();
@@ -351,6 +382,7 @@ class _ChannelListState extends State<_ChannelList> {
         onKeyEvent:    _handleKey,
         skipTraversal: true,
         child: ListView.builder(
+          controller: _scrollCtrl,
           itemCount:  widget.channels.length,
           itemExtent: kChannelRowHeight,
           itemBuilder: (_, i) {
