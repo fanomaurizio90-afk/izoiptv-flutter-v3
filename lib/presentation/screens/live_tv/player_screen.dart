@@ -95,9 +95,11 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   Widget build(BuildContext context) {
     final ch = ref.watch(selectedChannelProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Focus(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Focus(
         autofocus:  true,
         onKeyEvent: (_, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -114,7 +116,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               return KeyEventResult.handled;
             case LogicalKeyboardKey.escape:
             case LogicalKeyboardKey.goBack:
-              context.pushReplacement('/live');
+              context.pop();
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
@@ -145,14 +147,14 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     channel:   ch,
                     onPrev:    _previousChannel,
                     onNext:    _nextChannel,
-                    onBack:    () => context.pushReplacement('/live'),
+                    onBack:    () => context.pop(),
                   ),
                 ),
             ],
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
