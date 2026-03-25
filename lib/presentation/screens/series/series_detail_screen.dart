@@ -510,8 +510,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       },
       child: GestureDetector(
         onTap: () => _play(context),
-        child: AnimatedContainer(
-          duration: AppDurations.medium,
+        child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.tvH,
             vertical:   AppSpacing.md,

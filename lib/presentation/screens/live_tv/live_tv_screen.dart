@@ -434,8 +434,7 @@ class _ChannelRowState extends State<_ChannelRow> {
       },
       child: GestureDetector(
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: AppDurations.medium,
+        child: Container(
           height:  kChannelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
           decoration: BoxDecoration(
@@ -556,8 +555,7 @@ class _CategorySidebar extends StatelessWidget {
                 focusNode: i == 0 ? firstItemNode : null,
                 autofocus: i == 0,
                 onTap:     () => onSelect(cat.id),
-                child: AnimatedContainer(
-                  duration: AppDurations.medium,
+                child: Container(
                   height:   56,
                   padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),
                   decoration: BoxDecoration(

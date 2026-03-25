@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Handles D-pad focus (TV remote), touch, and focus effects.
-/// Focus: 1px white border only — no glow, no fill.
-/// Press: scales to 0.97 for 100ms — feels responsive.
+/// Focus: 1px white border only — no glow, no fill, no animation.
 class FocusableWidget extends StatefulWidget {
   const FocusableWidget({
     super.key,
@@ -31,7 +30,6 @@ class FocusableWidget extends StatefulWidget {
 
 class _FocusableWidgetState extends State<FocusableWidget> {
   bool _focused = false;
-  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,24 +49,16 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap:        widget.onTap,
-        onLongPress:  widget.onLongPress,
-        onTapDown:    (_) { if (mounted) setState(() => _pressed = true);  },
-        onTapUp:      (_) { if (mounted) setState(() => _pressed = false); },
-        onTapCancel:  ()  { if (mounted) setState(() => _pressed = false); },
-        child: AnimatedScale(
-          scale:    _pressed ? 0.97 : 1.0,
-          duration: AppDurations.press,
-          child: AnimatedContainer(
-            duration: AppDurations.fast,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(widget.borderRadius),
-              border: _focused
-                  ? Border.all(color: AppColors.focusBorder, width: 1.0)
-                  : Border.all(color: Colors.transparent, width: 1.0),
-            ),
-            child: widget.child,
+        onTap:       widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            border: _focused
+                ? Border.all(color: AppColors.focusBorder, width: 1.0)
+                : Border.all(color: Colors.transparent, width: 1.0),
           ),
+          child: widget.child,
         ),
       ),
     );
