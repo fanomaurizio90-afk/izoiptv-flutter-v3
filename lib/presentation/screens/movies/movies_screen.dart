@@ -511,10 +511,10 @@ class _CategoryBar extends StatelessWidget {
           final cat        = categories[i];
           final isSelected = cat.id == selectedId;
           return Focus(
-            // Right arrow on any category item moves to the grid
             onKeyEvent: (_, event) {
               if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  event.logicalKey == LogicalKeyboardKey.arrowRight &&
+                  i == categories.length - 1) {
                 onRightArrow();
                 return KeyEventResult.handled;
               }

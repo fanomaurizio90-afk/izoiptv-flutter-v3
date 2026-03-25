@@ -511,7 +511,8 @@ class _CategoryBar extends StatelessWidget {
           return Focus(
             onKeyEvent: (_, event) {
               if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  event.logicalKey == LogicalKeyboardKey.arrowRight &&
+                  i == categories.length - 1) {
                 onRightArrow();
                 return KeyEventResult.handled;
               }
