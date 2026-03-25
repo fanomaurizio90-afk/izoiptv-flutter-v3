@@ -349,14 +349,16 @@ class _EpisodeList extends ConsumerStatefulWidget {
 }
 
 class _EpisodeListState extends ConsumerState<_EpisodeList> {
-  List<FocusNode> _nodes   = [];
+  List<FocusNode>  _nodes   = [];
+  List<GlobalKey>  _rowKeys = [];
   // episode.id → {position_secs, duration_secs}
   Map<int, Map<String, dynamic>> _history = {};
 
   @override
   void initState() {
     super.initState();
-    _nodes = List.generate(widget.episodes.length, (_) => FocusNode());
+    _nodes   = List.generate(widget.episodes.length, (_) => FocusNode());
+    _rowKeys = List.generate(widget.episodes.length, (_) => GlobalKey());
     _notifyFirst();
     _loadHistory();
   }
@@ -392,17 +394,33 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     return -1;
   }
 
+  void _scrollTo(int idx) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _rowKeys[idx].currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 150),
+          curve:    Curves.easeOut,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
       _nodes[idx + 1].requestFocus();
+      _scrollTo(idx + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (idx > 0) {
         _nodes[idx - 1].requestFocus();
+        _scrollTo(idx - 1);
       } else {
         widget.firstSeasonNode?.requestFocus();
       }
@@ -418,6 +436,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
       skipTraversal: true,
       child: Column(
         children: widget.episodes.asMap().entries.map((e) => _EpisodeRow(
+          key:       _rowKeys[e.key],
           episode:   e.value,
           episodes:  widget.episodes,
           index:     e.key,
@@ -433,6 +452,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
 
 class _EpisodeRow extends StatefulWidget {
   const _EpisodeRow({
+    super.key,
     required this.episode,
     required this.episodes,
     required this.index,
