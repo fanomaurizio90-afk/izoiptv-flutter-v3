@@ -394,15 +394,17 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     return -1;
   }
 
-  void _scrollTo(int idx) {
+  void _scrollTo(int idx, {required bool goingDown}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = _rowKeys[idx].currentContext;
       if (ctx != null) {
         Scrollable.ensureVisible(
           ctx,
-          duration: const Duration(milliseconds: 150),
-          curve:    Curves.easeOut,
-          alignment: 0.5,
+          duration:        const Duration(milliseconds: 150),
+          curve:           Curves.easeOut,
+          alignmentPolicy: goingDown
+              ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+              : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
         );
       }
     });
@@ -414,13 +416,13 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
       _nodes[idx + 1].requestFocus();
-      _scrollTo(idx + 1);
+      _scrollTo(idx + 1, goingDown: true);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (idx > 0) {
         _nodes[idx - 1].requestFocus();
-        _scrollTo(idx - 1);
+        _scrollTo(idx - 1, goingDown: false);
       } else {
         widget.firstSeasonNode?.requestFocus();
       }

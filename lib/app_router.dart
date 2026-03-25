@@ -60,7 +60,10 @@ GoRouter buildRouter(Ref ref) {
         path: '/live',
         builder: (_, __) => const LiveTvScreen(),
         routes: [
-          GoRoute(path: 'player', builder: (_, __) => const LivePlayerScreen()),
+          GoRoute(
+            path: 'player',
+            pageBuilder: (_, __) => const NoTransitionPage(child: LivePlayerScreen()),
+          ),
         ],
       ),
       GoRoute(
@@ -70,7 +73,9 @@ GoRouter buildRouter(Ref ref) {
           // player MUST be declared BEFORE :id
           GoRoute(
             path: 'player',
-            builder: (_, state) => VodPlayerScreen(vod: state.extra as VodItem),
+            pageBuilder: (_, state) => NoTransitionPage(
+              child: VodPlayerScreen(vod: state.extra as VodItem),
+            ),
           ),
           GoRoute(
             path: ':id',
@@ -88,21 +93,23 @@ GoRouter buildRouter(Ref ref) {
           // player MUST be declared BEFORE :id
           GoRoute(
             path: 'player',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final extra    = state.extra as Map<String, dynamic>;
               final ep       = extra['episode']  as Episode;
               final episodes = extra['episodes'] as List<Episode>;
               final index    = extra['index']    as int;
-              return VodPlayerScreen(
-                vod: VodItem(
-                  id:          ep.id,
-                  name:        ep.title,
-                  streamUrl:   ep.streamUrl,
-                  categoryId:  0,
-                  durationSecs: ep.durationSecs,
+              return NoTransitionPage(
+                child: VodPlayerScreen(
+                  vod: VodItem(
+                    id:          ep.id,
+                    name:        ep.title,
+                    streamUrl:   ep.streamUrl,
+                    categoryId:  0,
+                    durationSecs: ep.durationSecs,
+                  ),
+                  episodes:     episodes,
+                  episodeIndex: index,
                 ),
-                episodes:     episodes,
-                episodeIndex: index,
               );
             },
           ),

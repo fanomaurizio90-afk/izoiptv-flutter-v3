@@ -516,7 +516,7 @@ class _FirstLetterPlaceholder extends StatelessWidget {
 
 // ── Category Sidebar ──────────────────────────────────────────────────────────
 
-class _CategorySidebar extends StatelessWidget {
+class _CategorySidebar extends StatefulWidget {
   const _CategorySidebar({
     required this.categories,
     required this.selectedId,
@@ -531,30 +531,103 @@ class _CategorySidebar extends StatelessWidget {
   final FocusNode?            firstItemNode;
 
   @override
+  State<_CategorySidebar> createState() => _CategorySidebarState();
+}
+
+class _CategorySidebarState extends State<_CategorySidebar> {
+  final ScrollController _scrollCtrl = ScrollController();
+  // _nodes[i] is for item index i+1 (item 0 uses widget.firstItemNode)
+  List<FocusNode> _nodes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuildNodes();
+    widget.firstItemNode?.addListener(_onFirstNodeFocus);
+  }
+
+  @override
+  void didUpdateWidget(_CategorySidebar old) {
+    super.didUpdateWidget(old);
+    if (widget.categories.length - 1 != _nodes.length) _rebuildNodes();
+    if (widget.firstItemNode != old.firstItemNode) {
+      old.firstItemNode?.removeListener(_onFirstNodeFocus);
+      widget.firstItemNode?.addListener(_onFirstNodeFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.firstItemNode?.removeListener(_onFirstNodeFocus);
+    for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onFirstNodeFocus() {
+    if (widget.firstItemNode?.hasFocus == true && mounted) _ensureVisible(0);
+  }
+
+  void _rebuildNodes() {
+    for (final n in _nodes) n.dispose();
+    _nodes = [];
+    for (int i = 1; i < widget.categories.length; i++) {
+      final idx = i;
+      final n   = FocusNode();
+      n.addListener(() { if (n.hasFocus && mounted) _ensureVisible(idx); });
+      _nodes.add(n);
+    }
+  }
+
+  void _ensureVisible(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    const h      = 56.0;
+    final top    = idx * h;
+    final bottom = top + h;
+    final vp     = _scrollCtrl.position.viewportDimension;
+    final off    = _scrollCtrl.offset;
+    double? target;
+    if (top < off) {
+      target = top;
+    } else if (bottom > off + vp) {
+      target = bottom - vp;
+    }
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 200,
       child: ScrollConfiguration(
         behavior: const ScrollBehavior().copyWith(scrollbars: false),
         child: ListView.builder(
-          itemCount:  categories.length,
+          controller: _scrollCtrl,
+          itemCount:  widget.categories.length,
           itemExtent: 56,
           itemBuilder: (_, i) {
-            final cat        = categories[i];
-            final isSelected = cat.id == selectedId;
+            final cat        = widget.categories[i];
+            final isSelected = cat.id == widget.selectedId;
+            final node       = i == 0 ? widget.firstItemNode : _nodes[i - 1];
             return Focus(
               onKeyEvent: (_, event) {
                 if (event is KeyDownEvent &&
                     event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  onRightArrow();
+                  widget.onRightArrow();
                   return KeyEventResult.handled;
                 }
                 return KeyEventResult.ignored;
               },
               child: FocusableWidget(
-                focusNode: i == 0 ? firstItemNode : null,
+                focusNode: node,
                 autofocus: i == 0,
-                onTap:     () => onSelect(cat.id),
+                onTap:     () => widget.onSelect(cat.id),
                 child: Container(
                   height:   56,
                   padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),

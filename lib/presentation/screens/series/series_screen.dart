@@ -131,6 +131,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
               searchCtrl:      _searchCtrl,
               backFocusNode:   _backFocusNode,
               searchFocusNode: _searchFocusNode,
+              onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
             ),
             if (_categories.isNotEmpty) _CategoryBar(
               categories:         _categories,
@@ -419,10 +420,12 @@ class _TopBar extends StatelessWidget {
     required this.searchCtrl,
     required this.backFocusNode,
     required this.searchFocusNode,
+    this.onDownArrow,
   });
   final TextEditingController searchCtrl;
   final FocusNode             backFocusNode;
   final FocusNode             searchFocusNode;
+  final VoidCallback?         onDownArrow;
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +460,7 @@ class _TopBar extends StatelessWidget {
               onKeyEvent: (_, event) {
                 if (event is KeyDownEvent &&
                     event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  FocusScope.of(context).nextFocus();
+                  onDownArrow?.call();
                   return KeyEventResult.handled;
                 }
                 return KeyEventResult.ignored;
@@ -487,7 +490,7 @@ class _TopBar extends StatelessWidget {
 
 // ── Category Bar ──────────────────────────────────────────────────────────────
 
-class _CategoryBar extends StatelessWidget {
+class _CategoryBar extends StatefulWidget {
   const _CategoryBar({
     required this.categories,
     required this.selectedId,
@@ -502,30 +505,97 @@ class _CategoryBar extends StatelessWidget {
   final FocusNode?           firstItemFocusNode;
 
   @override
+  State<_CategoryBar> createState() => _CategoryBarState();
+}
+
+class _CategoryBarState extends State<_CategoryBar> {
+  List<FocusNode> _nodes = [];
+  List<GlobalKey> _keys  = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuild();
+    widget.firstItemFocusNode?.addListener(_onFirstFocus);
+  }
+
+  @override
+  void didUpdateWidget(_CategoryBar old) {
+    super.didUpdateWidget(old);
+    if (widget.categories.length != _nodes.length + 1) _rebuild();
+    if (widget.firstItemFocusNode != old.firstItemFocusNode) {
+      old.firstItemFocusNode?.removeListener(_onFirstFocus);
+      widget.firstItemFocusNode?.addListener(_onFirstFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.firstItemFocusNode?.removeListener(_onFirstFocus);
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  void _onFirstFocus() {
+    if (widget.firstItemFocusNode?.hasFocus == true && mounted) {
+      _scrollToKey(_keys[0]);
+    }
+  }
+
+  void _rebuild() {
+    for (final n in _nodes) n.dispose();
+    _keys  = List.generate(widget.categories.length, (_) => GlobalKey());
+    _nodes = [];
+    for (int i = 1; i < widget.categories.length; i++) {
+      final key = _keys[i];
+      final n   = FocusNode();
+      n.addListener(() {
+        if (n.hasFocus && mounted) _scrollToKey(key);
+      });
+      _nodes.add(n);
+    }
+  }
+
+  void _scrollToKey(GlobalKey key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = key.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx,
+          duration:  const Duration(milliseconds: 150),
+          curve:     Curves.easeOut,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        itemCount:       categories.length,
+        itemCount:       widget.categories.length,
         itemBuilder:     (_, i) {
-          final cat        = categories[i];
-          final isSelected = cat.id == selectedId;
+          final cat        = widget.categories[i];
+          final isSelected = cat.id == widget.selectedId;
+          final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
           return Focus(
+            key: _keys[i],
             onKeyEvent: (_, event) {
               if (event is KeyDownEvent &&
                   event.logicalKey == LogicalKeyboardKey.arrowRight &&
-                  i == categories.length - 1) {
-                onRightArrow();
+                  i == widget.categories.length - 1) {
+                widget.onRightArrow();
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
             },
             child: FocusableWidget(
               autofocus: i == 0,
-              focusNode: i == 0 ? firstItemFocusNode : null,
-              onTap:     () => onSelect(cat.id),
+              focusNode: node,
+              onTap:     () => widget.onSelect(cat.id),
               child: Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.xl2),
                 child: Center(

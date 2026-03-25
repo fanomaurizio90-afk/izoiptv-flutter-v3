@@ -126,7 +126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
 
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '1.9.3'),
+                  const _SettingsRow(label: 'Version', value: '2.0.0'),
                   const SizedBox(height: AppSpacing.xl6),
 
                   // Sign Out

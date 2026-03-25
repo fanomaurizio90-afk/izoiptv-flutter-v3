@@ -212,7 +212,8 @@ class _ChannelList extends ConsumerStatefulWidget {
 }
 
 class _ChannelListState extends ConsumerState<_ChannelList> {
-  List<FocusNode> _nodes = [];
+  List<FocusNode>        _nodes      = [];
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -232,6 +233,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -242,16 +244,41 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
     return -1;
   }
 
+  void _moveTo(int idx) {
+    if (idx < 0 || idx >= _nodes.length) return;
+    _nodes[idx].requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
+  }
+
+  void _ensureVisible(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    const h      = 56.0;
+    final top    = idx * h;
+    final bottom = top + h;
+    final vp     = _scrollCtrl.position.viewportDimension;
+    final off    = _scrollCtrl.offset;
+    double? target;
+    if (top < off) target = top;
+    else if (bottom > off + vp) target = bottom - vp;
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
+  }
+
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
-      _nodes[idx + 1].requestFocus();
+      _moveTo(idx + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp && idx > 0) {
-      _nodes[idx - 1].requestFocus();
+      _moveTo(idx - 1);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -269,6 +296,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
       onKeyEvent:    _handleKey,
       skipTraversal: true,
       child: ListView.builder(
+        controller: _scrollCtrl,
         itemCount:  widget.channels.length,
         itemExtent: 56,
         itemBuilder: (_, i) {
@@ -310,7 +338,8 @@ class _SimpleList extends StatefulWidget {
 }
 
 class _SimpleListState extends State<_SimpleList> {
-  List<FocusNode> _nodes = [];
+  List<FocusNode>        _nodes      = [];
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -330,6 +359,7 @@ class _SimpleListState extends State<_SimpleList> {
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -340,16 +370,41 @@ class _SimpleListState extends State<_SimpleList> {
     return -1;
   }
 
+  void _moveTo(int idx) {
+    if (idx < 0 || idx >= _nodes.length) return;
+    _nodes[idx].requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
+  }
+
+  void _ensureVisible(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    const h      = 56.0;
+    final top    = idx * h;
+    final bottom = top + h;
+    final vp     = _scrollCtrl.position.viewportDimension;
+    final off    = _scrollCtrl.offset;
+    double? target;
+    if (top < off) target = top;
+    else if (bottom > off + vp) target = bottom - vp;
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
+  }
+
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
-      _nodes[idx + 1].requestFocus();
+      _moveTo(idx + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp && idx > 0) {
-      _nodes[idx - 1].requestFocus();
+      _moveTo(idx - 1);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -367,6 +422,7 @@ class _SimpleListState extends State<_SimpleList> {
       onKeyEvent:    _handleKey,
       skipTraversal: true,
       child: ListView.builder(
+        controller: _scrollCtrl,
         itemCount:  widget.items.length,
         itemExtent: 56,
         itemBuilder: (_, i) {

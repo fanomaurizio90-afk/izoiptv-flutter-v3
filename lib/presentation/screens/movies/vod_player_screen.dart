@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
@@ -164,7 +165,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: Focus(
         autofocus:  true,
@@ -172,7 +175,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
           if (event.logicalKey == LogicalKeyboardKey.escape ||
               event.logicalKey == LogicalKeyboardKey.goBack) {
-            Navigator.of(context).pop();
+            context.pop();
             return KeyEventResult.handled;
           }
           if (event.logicalKey == LogicalKeyboardKey.select ||
@@ -225,7 +228,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                             child: Row(
                               children: [
                                 GestureDetector(
-                                  onTap: () => Navigator.of(context).pop(),
+                                  onTap: () => context.pop(),
                                   child: const Icon(Icons.arrow_back,
                                       color: AppColors.textPrimary, size: 18),
                                 ),
@@ -284,7 +287,8 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           ),
         ),
       ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 }
 

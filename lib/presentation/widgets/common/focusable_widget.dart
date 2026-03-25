@@ -30,6 +30,7 @@ class FocusableWidget extends StatefulWidget {
 
 class _FocusableWidgetState extends State<FocusableWidget> {
   bool _focused = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -51,14 +52,22 @@ class _FocusableWidgetState extends State<FocusableWidget> {
       child: GestureDetector(
         onTap:       widget.onTap,
         onLongPress: widget.onLongPress,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            border: _focused
-                ? Border.all(color: AppColors.focusBorder, width: 1.0)
-                : Border.all(color: Colors.transparent, width: 1.0),
+        onTapDown:   (_) { if (mounted) setState(() => _pressed = true); },
+        onTapUp:     (_) { if (mounted) setState(() => _pressed = false); },
+        onTapCancel: ()  { if (mounted) setState(() => _pressed = false); },
+        child: AnimatedScale(
+          scale:    _pressed ? 0.97 : 1.0,
+          duration: AppDurations.press,
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(widget.borderRadius),
+              border: _focused
+                  ? Border.all(color: AppColors.focusBorder, width: 1.0)
+                  : Border.all(color: Colors.transparent, width: 1.0),
+            ),
+            child: widget.child,
           ),
-          child: widget.child,
         ),
       ),
     );

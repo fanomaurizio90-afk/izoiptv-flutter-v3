@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -63,14 +64,30 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
   }
 }
 
-class _MovieDetailBody extends StatelessWidget {
+class _MovieDetailBody extends StatefulWidget {
   const _MovieDetailBody({required this.vod});
   final VodItem vod;
 
   @override
+  State<_MovieDetailBody> createState() => _MovieDetailBodyState();
+}
+
+class _MovieDetailBodyState extends State<_MovieDetailBody> {
+  final _backNode = FocusNode();
+  final _playNode = FocusNode();
+
+  @override
+  void dispose() {
+    _backNode.dispose();
+    _playNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
+    final topPad  = MediaQuery.of(context).padding.top;
     final screenH = MediaQuery.of(context).size.height;
+    final vod     = widget.vod;
 
     return Stack(
       children: [
@@ -112,7 +129,8 @@ class _MovieDetailBody extends StatelessWidget {
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
           child: FocusableWidget(
-            onTap: () => context.pop(),
+            focusNode: _backNode,
+            onTap:     () => context.pop(),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
@@ -165,32 +183,43 @@ class _MovieDetailBody extends StatelessWidget {
                       ],
                       const SizedBox(height: AppSpacing.xl3),
                       // Play button — full width, white bg, dark text, unmissable
-                      FocusableWidget(
-                        autofocus:    true,
-                        borderRadius: AppSpacing.radiusCard,
-                        onTap:        () => context.push('/movies/player', extra: vod),
-                        child: Container(
-                          width:   double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color:        AppColors.textPrimary,
-                            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                          ),
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.play_arrow, color: Color(0xFF080808), size: 20),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Play',
-                                style: GoogleFonts.dmSans(
-                                  color:      const Color(0xFF080808),
-                                  fontSize:   14,
-                                  fontWeight: FontWeight.w500,
+                      Focus(
+                        onKeyEvent: (_, event) {
+                          if (event is KeyDownEvent &&
+                              event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                            _backNode.requestFocus();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: FocusableWidget(
+                          focusNode:    _playNode,
+                          autofocus:    true,
+                          borderRadius: AppSpacing.radiusCard,
+                          onTap:        () => context.push('/movies/player', extra: vod),
+                          child: Container(
+                            width:   double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color:        AppColors.textPrimary,
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+                            ),
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.play_arrow, color: Color(0xFF080808), size: 20),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Play',
+                                  style: GoogleFonts.dmSans(
+                                    color:      const Color(0xFF080808),
+                                    fontSize:   14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

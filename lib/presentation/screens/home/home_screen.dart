@@ -23,6 +23,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _continueScope = FocusScopeNode();
   final _favScope      = FocusScopeNode();
   final _settingsNode  = FocusNode();
+  final _seeAllNode    = FocusNode();
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _continueScope.dispose();
     _favScope.dispose();
     _settingsNode.dispose();
+    _seeAllNode.dispose();
     super.dispose();
   }
 
@@ -69,14 +71,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     node: _continueScope,
                     child: _ContinueWatchingRow(
                       onUpArrow:   () => _heroScope.requestFocus(),
-                      onDownArrow: () => _favScope.requestFocus(),
+                      onDownArrow: () => _seeAllNode.requestFocus(),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl3),
                   FocusScope(
                     node: _favScope,
                     child: _FavouritesRow(
-                      onUpArrow: () => _continueScope.requestFocus(),
+                      onUpArrow:  () => _continueScope.requestFocus(),
+                      seeAllNode: _seeAllNode,
                     ),
                   ),
                 ],
@@ -182,10 +185,11 @@ class _TopBar extends StatelessWidget {
 // ── Section Label ──────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text, {this.trailing, this.onTrailingTap});
+  const _SectionLabel(this.text, {this.trailing, this.onTrailingTap, this.trailingNode});
   final String        text;
   final String?       trailing;
   final VoidCallback? onTrailingTap;
+  final FocusNode?    trailingNode;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +207,8 @@ class _SectionLabel extends StatelessWidget {
         if (trailing != null) ...[
           const Spacer(),
           FocusableWidget(
-            onTap: onTrailingTap ?? () {},
+            focusNode: trailingNode,
+            onTap:     onTrailingTap ?? () {},
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
@@ -407,11 +412,13 @@ class _ContinueWatchingRow extends ConsumerStatefulWidget {
 }
 
 class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
-  List<FocusNode> _nodes = [];
+  List<FocusNode>        _nodes      = [];
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -423,7 +430,31 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
   }
 
   void _move(int to) {
-    if (to >= 0 && to < _nodes.length) _nodes[to].requestFocus();
+    if (to < 0 || to >= _nodes.length) return;
+    _nodes[to].requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(to));
+  }
+
+  void _ensureVisible(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    const itemWidth  = 180.0 + AppSpacing.md; // item width + margin
+    final itemLeft   = idx * itemWidth;
+    final itemRight  = itemLeft + 180.0;
+    final viewport   = _scrollCtrl.position.viewportDimension;
+    final offset     = _scrollCtrl.offset;
+    double? target;
+    if (itemLeft < offset) {
+      target = itemLeft;
+    } else if (itemRight > offset + viewport) {
+      target = itemRight - viewport;
+    }
+    if (target != null) {
+      _scrollCtrl.animateTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
   }
 
   int get _focusedIndex {
@@ -485,6 +516,7 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
                 onKeyEvent:    _handleKey,
                 skipTraversal: true,
                 child: ListView.builder(
+                  controller:      _scrollCtrl,
                   scrollDirection: Axis.horizontal,
                   itemCount:       items.length,
                   itemBuilder:     (_, i) {
@@ -555,16 +587,17 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
 // ── Favourites Row ─────────────────────────────────────────────────────────────
 
 class _FavouritesRow extends StatelessWidget {
-  const _FavouritesRow({this.onUpArrow});
+  const _FavouritesRow({this.onUpArrow, required this.seeAllNode});
   final VoidCallback? onUpArrow;
+  final FocusNode     seeAllNode;
 
   @override
   Widget build(BuildContext context) {
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
           onUpArrow?.call();
           return KeyEventResult.handled;
         }
@@ -573,6 +606,7 @@ class _FavouritesRow extends StatelessWidget {
       child: _SectionLabel(
         'FAVOURITES',
         trailing:      'See all',
+        trailingNode:  seeAllNode,
         onTrailingTap: () => context.push('/favourites'),
       ),
     );
