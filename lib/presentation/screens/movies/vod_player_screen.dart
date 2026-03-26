@@ -16,7 +16,6 @@ class VodPlayerScreen extends ConsumerStatefulWidget {
     super.key,
     required this.vod,
     required this.backPath,
-    // Optional: episode list for series next-episode support
     this.episodes,
     this.episodeIndex,
   });
@@ -31,20 +30,34 @@ class VodPlayerScreen extends ConsumerStatefulWidget {
 
 class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   late VideoController    _videoController;
-  late PlayerNotifier     _playerNotifier;   // saved in initState — safe to use in dispose
-  late HistoryRepository  _historyRepo;      // saved in initState — safe to use in dispose
+  late PlayerNotifier     _playerNotifier;
+  late HistoryRepository  _historyRepo;
   bool   _showControls = true;
   Timer? _hideTimer;
   Timer? _saveTimer;
+
+  // True when playing a series episode
+  bool get _isEpisode => widget.episodes != null;
 
   int get _currentEpIndex => widget.episodeIndex ?? 0;
   bool get _hasNextEpisode =>
       widget.episodes != null && _currentEpIndex < widget.episodes!.length - 1;
 
+  // Extract series ID from backPath e.g. '/series/123' → 123
+  int get _seriesId {
+    final match = RegExp(r'/series/(\d+)').firstMatch(widget.backPath);
+    return int.tryParse(match?.group(1) ?? '') ?? 0;
+  }
+
+  // The current episode's ID (widget.vod.id is episode.id when in episode mode)
+  int get _episodeId => widget.vod.id;
+
+  String get _contentType => _isEpisode ? 'episode' : 'movie';
+  int    get _contentId   => _isEpisode ? _seriesId : widget.vod.id;
+
   @override
   void initState() {
     super.initState();
-    // Save references NOW — ref is not safe to use in dispose()
     _playerNotifier = ref.read(playerProvider.notifier);
     _historyRepo    = ref.read(historyRepositoryProvider);
     _videoController = VideoController(
@@ -67,9 +80,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     _hideTimer?.cancel();
     _saveTimer?.cancel();
     _savePositionSync();
-    _playerNotifier.stop(); // use saved reference — always safe
+    _playerNotifier.stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([]); // clear override — TV stays landscape
+    SystemChrome.setPreferredOrientations([]);
     super.dispose();
   }
 
@@ -77,7 +90,11 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     Duration startPos = Duration.zero;
     try {
       final repo = ref.read(historyRepositoryProvider);
-      final hist = await repo.getPosition(widget.vod.id, 'vod');
+      final hist = await repo.getPosition(
+        _contentId,
+        _contentType,
+        episodeId: _isEpisode ? _episodeId : null,
+      );
       if (hist != null) {
         startPos = Duration(seconds: hist['position_secs'] as int);
       }
@@ -106,7 +123,6 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     _saveTimer = Timer.periodic(AppDurations.historyFlushPeriod, (_) => _savePosition());
   }
 
-  // Async save — used by the periodic timer
   Future<void> _savePosition() async {
     if (!mounted) return;
     final pos = ref.read(playerProvider).position.inSeconds;
@@ -114,28 +130,28 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     if (pos <= 0) return;
     try {
       await ref.read(historyRepositoryProvider).savePosition(
-        contentId:    widget.vod.id,
-        contentType:  'vod',
+        contentId:    _contentId,
+        contentType:  _contentType,
         contentName:  widget.vod.name,
         positionSecs: pos,
         durationSecs: dur,
+        episodeId:    _isEpisode ? _episodeId : null,
         thumbnailUrl: widget.vod.posterUrl,
       );
     } catch (_) {}
   }
 
-  // Called from dispose — uses pre-saved references, fires async without awaiting.
-  // The future completes independently after the widget is gone.
   void _savePositionSync() {
     final pos = _playerNotifier.currentPosition.inSeconds;
     final dur = _playerNotifier.currentDuration.inSeconds;
     if (pos <= 0) return;
     _historyRepo.savePosition(
-      contentId:    widget.vod.id,
-      contentType:  'vod',
+      contentId:    _contentId,
+      contentType:  _contentType,
       contentName:  widget.vod.name,
       positionSecs: pos,
       durationSecs: dur,
+      episodeId:    _isEpisode ? _episodeId : null,
       thumbnailUrl: widget.vod.posterUrl,
     );
   }
@@ -144,13 +160,32 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     if (!_hasNextEpisode) return;
     final nextEp    = widget.episodes![_currentEpIndex + 1];
     final nextIndex = _currentEpIndex + 1;
-    // Use go_router to keep the back stack consistent
+    // Build VodItem from the next episode — same structure the detail screen uses
+    final nextVod = VodItem(
+      id:          nextEp.id,
+      name:        nextEp.title,
+      streamUrl:   nextEp.streamUrl,
+      categoryId:  0,
+      posterUrl:   nextEp.thumbnailUrl,
+      durationSecs: nextEp.durationSecs,
+    );
     context.pushReplacement('/series/player', extra: {
-      'episode':  nextEp,
-      'episodes': widget.episodes!,
-      'index':    nextIndex,
-      'seriesId': nextEp.seriesId,
+      'vod':          nextVod,
+      'backPath':     widget.backPath,
+      'episodes':     widget.episodes!,
+      'episodeIndex': nextIndex,
     });
+  }
+
+  static bool _isActivateKey(KeyEvent event) {
+    if (event.logicalKey == LogicalKeyboardKey.select) return true;
+    if (event.logicalKey == LogicalKeyboardKey.enter) return true;
+    if (event.logicalKey == LogicalKeyboardKey.numpadEnter) return true;
+    if (event.logicalKey == LogicalKeyboardKey.gameButtonA) return true;
+    if (event.physicalKey.usbHidUsage == 0x00070058) return true;
+    if (event.physicalKey == PhysicalKeyboardKey.select) return true;
+    if (event.physicalKey == PhysicalKeyboardKey.gameButtonA) return true;
+    return false;
   }
 
   @override
@@ -161,135 +196,134 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
         if (!didPop) context.go(widget.backPath);
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      body: Focus(
-        autofocus:  true,
-        onKeyEvent: (_, event) {
-          if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          if (event.logicalKey == LogicalKeyboardKey.select ||
-              event.logicalKey == LogicalKeyboardKey.enter) {
-            _playerNotifier.togglePlay();
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            final pos = ref.read(playerProvider).position;
-            _playerNotifier.seek(pos - const Duration(seconds: 10));
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            final pos = ref.read(playerProvider).position;
-            _playerNotifier.seek(pos + const Duration(seconds: 10));
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: GestureDetector(
-          onTap: _showControlsTemporarily,
-          child: Stack(
-            children: [
-              RepaintBoundary(
-                child: Video(
-                  controller: _videoController,
-                  fit:        BoxFit.contain,
-                  fill:       AppColors.background,
-                  controls:   NoVideoControls,
+        backgroundColor: AppColors.background,
+        body: Focus(
+          autofocus:  true,
+          onKeyEvent: (_, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            if (_isActivateKey(event)) {
+              _playerNotifier.togglePlay();
+              _showControlsTemporarily();
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              final pos = ref.read(playerProvider).position;
+              _playerNotifier.seek(pos - const Duration(seconds: 10));
+              _showControlsTemporarily();
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              final pos = ref.read(playerProvider).position;
+              _playerNotifier.seek(pos + const Duration(seconds: 10));
+              _showControlsTemporarily();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: GestureDetector(
+            onTap: _showControlsTemporarily,
+            child: Stack(
+              children: [
+                RepaintBoundary(
+                  child: Video(
+                    controller: _videoController,
+                    fit:        BoxFit.contain,
+                    fill:       AppColors.background,
+                    controls:   NoVideoControls,
+                  ),
                 ),
-              ),
-              if (_showControls)
+                // CRITICAL: AnimatedOpacity ALWAYS in tree — use IgnorePointer to block
+                // input when hidden. Never guard with if() — that breaks the fade animation
+                // and lets D-pad keypresses land on hidden buttons.
                 AnimatedOpacity(
-                  opacity:  1.0,
+                  opacity:  _showControls ? 1.0 : 0.0,
                   duration: AppDurations.fast,
-                  child: Container(
-                    color: AppColors.playerOverlay,
-                    child: Stack(
-                      children: [
-                        // Top bar
-                        Positioned(
-                          top:   MediaQuery.of(context).padding.top,
-                          left:  0,
-                          right: 0,
-                          child: Padding(
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            child: Row(
-                              children: [
-                                Focus(
-                                  onKeyEvent: (_, event) {
-                                    if (event is KeyDownEvent &&
-                                        (event.logicalKey == LogicalKeyboardKey.select ||
-                                         event.logicalKey == LogicalKeyboardKey.enter ||
-                                         event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-                                         event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
-                                      context.go(widget.backPath);
-                                      return KeyEventResult.handled;
-                                    }
-                                    return KeyEventResult.ignored;
-                                  },
-                                  child: GestureDetector(
-                                    onTap: () => context.go(widget.backPath),
-                                    child: const Icon(Icons.arrow_back,
-                                        color: AppColors.textPrimary, size: 18),
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Text(
-                                    widget.vod.name,
-                                    style: const TextStyle(
-                                      color:      AppColors.textPrimary,
-                                      fontSize:   14,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                // Next episode button (series only)
-                                if (_hasNextEpisode)
-                                  GestureDetector(
-                                    onTap: _playNextEpisode,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Text(
-                                          'Next',
-                                          style: TextStyle(
-                                              color: AppColors.textSecondary,
-                                              fontSize: 12),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(Icons.skip_next_outlined,
-                                            color: AppColors.textPrimary,
-                                            size: 18),
-                                      ],
+                  child: IgnorePointer(
+                    ignoring: !_showControls,
+                    child: Container(
+                      color: AppColors.playerOverlay,
+                      child: Stack(
+                        children: [
+                          // Top bar
+                          Positioned(
+                            top:   MediaQuery.of(context).padding.top,
+                            left:  0,
+                            right: 0,
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              child: Row(
+                                children: [
+                                  Focus(
+                                    onKeyEvent: (_, event) {
+                                      if (event is KeyDownEvent && _isActivateKey(event)) {
+                                        context.go(widget.backPath);
+                                        return KeyEventResult.handled;
+                                      }
+                                      return KeyEventResult.ignored;
+                                    },
+                                    child: GestureDetector(
+                                      onTap: () => context.go(widget.backPath),
+                                      child: const Icon(Icons.arrow_back,
+                                          color: AppColors.textPrimary, size: 18),
                                     ),
                                   ),
-                              ],
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Text(
+                                      widget.vod.name,
+                                      style: const TextStyle(
+                                        color:      AppColors.textPrimary,
+                                        fontSize:   14,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (_hasNextEpisode)
+                                    GestureDetector(
+                                      onTap: _playNextEpisode,
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Next',
+                                            style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 12),
+                                          ),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.skip_next_outlined,
+                                              color: AppColors.textPrimary,
+                                              size: 18),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        // Bottom controls
-                        Positioned(
-                          bottom: 0,
-                          left:   0,
-                          right:  0,
-                          child: _VodControls(
-                            hasNext:       _hasNextEpisode,
-                            onNextEpisode: _playNextEpisode,
+                          // Bottom controls
+                          Positioned(
+                            bottom: 0,
+                            left:   0,
+                            right:  0,
+                            child: _VodControls(
+                              hasNext:       _hasNextEpisode,
+                              onNextEpisode: _playNextEpisode,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-      ), // Scaffold
-    ); // PopScope
+    );
   }
 }
 
@@ -315,7 +349,6 @@ class _VodControls extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Seek bar
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight:        1.0,
@@ -340,7 +373,6 @@ class _VodControls extends ConsumerWidget {
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 11)),
               const Spacer(),
-              // Rewind 10s
               GestureDetector(
                 onTap: () {
                   final p = ref.read(playerProvider).position;
@@ -350,7 +382,6 @@ class _VodControls extends ConsumerWidget {
                     color: AppColors.textSecondary, size: 26),
               ),
               const SizedBox(width: AppSpacing.xl2),
-              // Play / Pause
               GestureDetector(
                 onTap: () => ref.read(playerProvider.notifier).togglePlay(),
                 child: Icon(
@@ -362,7 +393,6 @@ class _VodControls extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.xl2),
-              // Forward 10s
               GestureDetector(
                 onTap: () {
                   final p = ref.read(playerProvider).position;
@@ -372,7 +402,6 @@ class _VodControls extends ConsumerWidget {
                     color: AppColors.textSecondary, size: 26),
               ),
               const Spacer(),
-              // Next episode button in bottom bar (series)
               if (hasNext)
                 GestureDetector(
                   onTap: onNextEpisode,

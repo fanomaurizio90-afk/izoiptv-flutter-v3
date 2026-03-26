@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/series.dart';
+import '../../../domain/entities/vod.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
@@ -203,7 +204,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
           child: FocusableWidget(
             focusNode: _backNode,
             autofocus: true,
-            onTap: () => context.pop(),
+            onTap: () => context.go('/series'),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
@@ -396,7 +397,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     final repo   = ref.read(historyRepositoryProvider);
     final result = <int, Map<String, dynamic>>{};
     for (final ep in widget.episodes) {
-      final record = await repo.getPosition(ep.id, 'vod');
+      final record = await repo.getPosition(ep.seriesId, 'episode', episodeId: ep.id);
       if (record != null) result[ep.id] = record;
     }
     if (mounted) setState(() => _history = result);
@@ -493,10 +494,17 @@ class _EpisodeRowState extends State<_EpisodeRow> {
   bool _focused = false;
 
   void _play(BuildContext context) => context.push('/series/player', extra: {
-    'episode':  widget.episode,
-    'episodes': widget.episodes,
-    'index':    widget.index,
-    'seriesId': widget.seriesId,
+    'vod': VodItem(
+      id:           widget.episode.id,
+      name:         widget.episode.title,
+      streamUrl:    widget.episode.streamUrl,
+      categoryId:   0,
+      posterUrl:    widget.episode.thumbnailUrl,
+      durationSecs: widget.episode.durationSecs,
+    ),
+    'backPath':     '/series/${widget.seriesId}',
+    'episodes':     widget.episodes,
+    'episodeIndex': widget.index,
   });
 
   // 0.0 = never watched, 0.0–0.9 = in-progress, ≥0.9 = watched

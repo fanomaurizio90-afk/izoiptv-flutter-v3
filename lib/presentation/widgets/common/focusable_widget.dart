@@ -32,6 +32,22 @@ class _FocusableWidgetState extends State<FocusableWidget> {
   bool _focused = false;
   bool _pressed = false;
 
+  static bool _isActivateKey(KeyEvent event) {
+    // Handle all possible "OK/confirm" keys on Android TV remotes and game controllers
+    if (event.logicalKey == LogicalKeyboardKey.select) return true;
+    if (event.logicalKey == LogicalKeyboardKey.enter) return true;
+    if (event.logicalKey == LogicalKeyboardKey.numpadEnter) return true;
+    if (event.logicalKey == LogicalKeyboardKey.gameButtonA) return true;
+    // Raw numpad enter (USB HID usage 0x00070058) — some Android TV boxes report this
+    if (event.physicalKey.usbHidUsage == 0x00070058) return true;
+    // Android KEYCODE_DPAD_CENTER (23) → already covered by LogicalKeyboardKey.select on most
+    // Android KEYCODE_BUTTON_A (96) → already covered by LogicalKeyboardKey.gameButtonA on most
+    // Extra physical key aliases to cover manufacturer-specific mappings
+    if (event.physicalKey == PhysicalKeyboardKey.select) return true;
+    if (event.physicalKey == PhysicalKeyboardKey.gameButtonA) return true;
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Focus(
@@ -41,9 +57,7 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         if (mounted) setState(() => _focused = focused);
       },
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.select ||
-             event.logicalKey == LogicalKeyboardKey.enter)) {
+        if (event is KeyDownEvent && _isActivateKey(event)) {
           widget.onTap();
           return KeyEventResult.handled;
         }

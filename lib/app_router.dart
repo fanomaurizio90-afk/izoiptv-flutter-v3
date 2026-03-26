@@ -74,16 +74,9 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: 'player',
             pageBuilder: (_, state) {
-              final extra = state.extra;
-              final VodItem vod;
-              String backPath;
-              if (extra is Map<String, dynamic>) {
-                vod      = extra['vod'] as VodItem;
-                backPath = extra['backPath'] as String? ?? '/movies';
-              } else {
-                vod      = extra as VodItem;
-                backPath = '/movies';
-              }
+              final extra    = state.extra as Map<String, dynamic>;
+              final vod      = extra['vod']      as VodItem;
+              final backPath = extra['backPath'] as String;
               return NoTransitionPage(
                 child: VodPlayerScreen(vod: vod, backPath: backPath),
               );
@@ -106,23 +99,17 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: 'player',
             pageBuilder: (_, state) {
-              final extra    = state.extra as Map<String, dynamic>;
-              final ep       = extra['episode']  as Episode;
-              final episodes = extra['episodes'] as List<Episode>;
-              final index    = extra['index']    as int;
-              final seriesId = extra['seriesId'] as int;
+              final extra        = state.extra as Map<String, dynamic>;
+              final vod          = extra['vod']          as VodItem;
+              final backPath     = extra['backPath']      as String;
+              final episodes     = extra['episodes']     as List<Episode>?;
+              final episodeIndex = extra['episodeIndex'] as int?;
               return NoTransitionPage(
                 child: VodPlayerScreen(
-                  vod: VodItem(
-                    id:          ep.id,
-                    name:        ep.title,
-                    streamUrl:   ep.streamUrl,
-                    categoryId:  0,
-                    durationSecs: ep.durationSecs,
-                  ),
-                  backPath:     '/series/$seriesId',
+                  vod:          vod,
+                  backPath:     backPath,
                   episodes:     episodes,
-                  episodeIndex: index,
+                  episodeIndex: episodeIndex,
                 ),
               );
             },

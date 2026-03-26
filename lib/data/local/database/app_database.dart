@@ -28,6 +28,20 @@ class AppDatabase {
     // Keep migrations additive — never drop columns in the ALTER TABLE path,
     // only in a full table-recreate migration like v1→v2 below.
 
+    // v2 → v3: rename watch_history content_type 'vod' → 'movie' or 'episode'
+    if (oldVersion < 3) {
+      await db.execute('''
+        UPDATE watch_history
+        SET content_type = 'episode'
+        WHERE content_type = 'vod' AND episode_id IS NOT NULL
+      ''');
+      await db.execute('''
+        UPDATE watch_history
+        SET content_type = 'movie'
+        WHERE content_type = 'vod' AND episode_id IS NULL
+      ''');
+    }
+
     // v1 → v2: drop is_watched column from episodes (recreate table)
     if (oldVersion < 2) {
       await db.execute('''

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../domain/entities/vod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/history_provider.dart';
@@ -492,35 +493,36 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
     final contentType = item['content_type'] as String?;
     if (contentId == null || contentType == null) return;
 
-    if (contentType == 'vod') {
-      // Try vod table first; if null it may be a series episode saved under old format
+    if (contentType == 'movie') {
       final vod = await ref.read(vodRepositoryProvider).getVodById(contentId);
       if (vod != null && mounted) {
-        context.push('/movies/player', extra: vod);
-        return;
-      }
-      // Fall back: look up as episode
-      final episode = await ref.read(seriesRepositoryProvider).getEpisodeById(contentId);
-      if (episode != null && mounted) {
-        context.push('/series/player', extra: {
-          'episode':  episode,
-          'episodes': [episode],
-          'index':    0,
-          'seriesId': episode.seriesId,
+        context.push('/movies/player', extra: {
+          'vod':      vod,
+          'backPath': '/movies/${vod.id}',
         });
       }
-    } else if (contentType == 'series') {
+    } else if (contentType == 'episode') {
       final episodeId = item['episode_id'] as int?;
       if (episodeId == null) return;
       final episode = await ref.read(seriesRepositoryProvider).getEpisodeById(episodeId);
       if (episode != null && mounted) {
         context.push('/series/player', extra: {
-          'episode':  episode,
-          'episodes': [episode],
-          'index':    0,
-          'seriesId': episode.seriesId,
+          'vod': VodItem(
+            id:           episode.id,
+            name:         episode.title,
+            streamUrl:    episode.streamUrl,
+            categoryId:   0,
+            posterUrl:    episode.thumbnailUrl,
+            durationSecs: episode.durationSecs,
+          ),
+          'backPath':     '/series/${episode.seriesId}',
+          'episodes':     [episode],
+          'episodeIndex': 0,
         });
       }
+    } else if (contentType == 'live') {
+      // Live TV resume — navigate back to live player with saved channel if available
+      context.push('/live');
     }
   }
 
