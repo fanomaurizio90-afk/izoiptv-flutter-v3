@@ -213,52 +213,55 @@ class _ContentList extends StatefulWidget {
 }
 
 class _ContentListState extends State<_ContentList> {
-  List<FocusNode>  _nodes            = [];
-  final ScrollController _scrollCtrl = ScrollController();
-  double _availableWidth             = 0.0;
+  // Lazy map — FocusNodes are created on first render, not upfront.
+  // Avoids allocating thousands of nodes for large categories.
+  final Map<int, FocusNode> _nodes     = {};
+  final ScrollController    _scrollCtrl = ScrollController();
+  double _availableWidth               = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _nodes = List.generate(widget.items.length, (_) => FocusNode());
     _notifyFirstNode();
   }
 
   @override
   void didUpdateWidget(_ContentList old) {
     super.didUpdateWidget(old);
-    if (widget.items.length != _nodes.length) {
-      for (final n in _nodes) n.dispose();
-      _nodes = List.generate(widget.items.length, (_) => FocusNode());
+    if (widget.items != old.items) {
+      for (final n in _nodes.values) n.dispose();
+      _nodes.clear();
       _notifyFirstNode();
     }
   }
 
   void _notifyFirstNode() {
-    if (_nodes.isNotEmpty) {
+    if (widget.items.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.onFirstNodeReady(_nodes[0]);
+        if (mounted) widget.onFirstNodeReady(_nodeFor(0));
       });
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
+  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
+
   int get _focusedIndex {
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
 
   void _move(int to) {
-    if (to < 0 || to >= _nodes.length) return;
-    _nodes[to].requestFocus();
+    if (to < 0 || to >= widget.items.length) return;
+    _nodeFor(to).requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(to));
   }
 
@@ -328,36 +331,28 @@ class _ContentListState extends State<_ContentList> {
     return LayoutBuilder(
       builder: (_, constraints) {
         _availableWidth = constraints.maxWidth;
-        return SingleChildScrollView(
-          controller: _scrollCtrl,
-          child: Column(
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              Focus(
-                onKeyEvent:    _handleGridKey,
-                skipTraversal: true,
-                child: GridView.builder(
-                  shrinkWrap:   true,
-                  physics:      const NeverScrollableScrollPhysics(),
-                  padding:      const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount:   widget.columns,
-                    crossAxisSpacing: AppSpacing.sm,
-                    mainAxisSpacing:  AppSpacing.sm,
-                    childAspectRatio: 2 / 3,
-                  ),
-                  itemCount:   widget.items.length,
-                  itemBuilder: (_, i) => FocusableWidget(
-                    focusNode:    _nodes[i],
-                    autofocus:    i == 0,
-                    borderRadius: AppSpacing.radiusCard,
-                    onTap:        () => widget.onTap(widget.items[i]),
-                    child:        _PosterCard(vod: widget.items[i]),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl3),
-            ],
+        return Focus(
+          onKeyEvent:    _handleGridKey,
+          skipTraversal: true,
+          child: GridView.builder(
+            controller: _scrollCtrl,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.xl3,
+            ),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount:   widget.columns,
+              crossAxisSpacing: AppSpacing.sm,
+              mainAxisSpacing:  AppSpacing.sm,
+              childAspectRatio: 2 / 3,
+            ),
+            itemCount:   widget.items.length,
+            itemBuilder: (_, i) => FocusableWidget(
+              focusNode:    _nodeFor(i),
+              autofocus:    i == 0,
+              borderRadius: AppSpacing.radiusCard,
+              onTap:        () => widget.onTap(widget.items[i]),
+              child:        _PosterCard(vod: widget.items[i]),
+            ),
           ),
         );
       },
