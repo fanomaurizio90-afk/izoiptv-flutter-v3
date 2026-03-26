@@ -302,6 +302,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                         // Episode list with explicit up/down navigation
                         _EpisodeList(
                           key:            ValueKey('${widget.series.id}_$selectedSeason'),
+                          seriesId:       widget.series.id,
                           episodes:       season.episodes,
                           firstSeasonNode: _seasonNodes.isNotEmpty ? _seasonNodes[0] : null,
                           onFirstNodeReady: (node) {
@@ -336,10 +337,12 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
 class _EpisodeList extends ConsumerStatefulWidget {
   const _EpisodeList({
     super.key,
+    required this.seriesId,
     required this.episodes,
     required this.onFirstNodeReady,
     this.firstSeasonNode,
   });
+  final int                      seriesId;
   final List<Episode>            episodes;
   final void Function(FocusNode) onFirstNodeReady;
   final FocusNode?               firstSeasonNode;
@@ -439,6 +442,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
       child: Column(
         children: widget.episodes.asMap().entries.map((e) => _EpisodeRow(
           key:       _rowKeys[e.key],
+          seriesId:  widget.seriesId,
           episode:   e.value,
           episodes:  widget.episodes,
           index:     e.key,
@@ -455,12 +459,14 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
 class _EpisodeRow extends StatefulWidget {
   const _EpisodeRow({
     super.key,
+    required this.seriesId,
     required this.episode,
     required this.episodes,
     required this.index,
     required this.focusNode,
     this.history,
   });
+  final int                      seriesId;
   final Episode                  episode;
   final List<Episode>            episodes;
   final int                      index;
@@ -478,6 +484,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
     'episode':  widget.episode,
     'episodes': widget.episodes,
     'index':    widget.index,
+    'seriesId': widget.seriesId,
   });
 
   // 0.0 = never watched, 0.0–0.9 = in-progress, ≥0.9 = watched

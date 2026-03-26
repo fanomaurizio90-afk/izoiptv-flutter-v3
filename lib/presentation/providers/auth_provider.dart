@@ -45,6 +45,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
             return;
           }
         }
+        // Check Xtream subscription expiry (Unix timestamp from exp_date field)
+        if (_isExpired(user.expiryDate)) {
+          state = const AuthExpired();
+          return;
+        }
         state = AuthAuthenticated(user);
       }
     } catch (e) {
@@ -71,6 +76,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         },
         userInfo: user,
       );
+      // Subscription already expired at login time
+      if (_isExpired(user.expiryDate)) {
+        state = const AuthExpired();
+        return;
+      }
       state = AuthAuthenticated(user);
     } catch (e) {
       state = AuthError(e.toString());
@@ -124,6 +134,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _ref.read(authRepositoryProvider).clearSession();
     } catch (_) {}
     state = const AuthInitial();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Returns true if the Xtream exp_date Unix timestamp is in the past.
+  /// Null exp_date means unlimited — never expired.
+  static bool _isExpired(String? expDate) {
+    if (expDate == null) return false;
+    final secs = int.tryParse(expDate);
+    if (secs == null) return false;
+    return DateTime.fromMillisecondsSinceEpoch(secs * 1000).isBefore(DateTime.now());
+  }
+
+  /// Days remaining until expiry. Null = unlimited or unparseable.
+  static int? daysUntilExpiry(String? expDate) {
+    if (expDate == null) return null;
+    final secs = int.tryParse(expDate);
+    if (secs == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(secs * 1000)
+        .difference(DateTime.now())
+        .inDays;
   }
 }
 

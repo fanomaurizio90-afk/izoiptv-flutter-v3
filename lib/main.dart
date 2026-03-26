@@ -10,6 +10,10 @@ void main() {
   MediaKit.ensureInitialized(); // MUST be before runApp
   // Edge-to-edge so SafeArea insets are always correct on Fire Stick
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // Cap decoded-image RAM: 500 images / 200 MB — safe for Fire Stick's limited memory
+  PaintingBinding.instance.imageCache
+    ..maximumSize      = 500
+    ..maximumSizeBytes = 200 * 1024 * 1024;
   runApp(const ProviderScope(child: IzoApp()));
 }
 

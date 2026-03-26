@@ -74,7 +74,7 @@ GoRouter buildRouter(Ref ref) {
           GoRoute(
             path: 'player',
             pageBuilder: (_, state) => NoTransitionPage(
-              child: VodPlayerScreen(vod: state.extra as VodItem),
+              child: VodPlayerScreen(vod: state.extra as VodItem, backPath: '/movies'),
             ),
           ),
           GoRoute(
@@ -98,6 +98,7 @@ GoRouter buildRouter(Ref ref) {
               final ep       = extra['episode']  as Episode;
               final episodes = extra['episodes'] as List<Episode>;
               final index    = extra['index']    as int;
+              final seriesId = extra['seriesId'] as int;
               return NoTransitionPage(
                 child: VodPlayerScreen(
                   vod: VodItem(
@@ -107,6 +108,7 @@ GoRouter buildRouter(Ref ref) {
                     categoryId:  0,
                     durationSecs: ep.durationSecs,
                   ),
+                  backPath:     '/series/$seriesId',
                   episodes:     episodes,
                   episodeIndex: index,
                 ),

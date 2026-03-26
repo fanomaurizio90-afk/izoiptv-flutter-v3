@@ -29,11 +29,13 @@ class AuthRepositoryImpl implements AuthRepository {
 
       _xtream.configure(serverUrl: serverUrl, username: username, password: password);
 
+      final expDate = await _storage.read(key: AppConstants.keyExpDate);
       return UserInfo(
-        username:  username,
-        status:    'Active',
-        serverUrl: serverUrl,
-        loginType: 'xtream',
+        username:   username,
+        status:     'Active',
+        serverUrl:  serverUrl,
+        loginType:  'xtream',
+        expiryDate: expDate,
       );
     }
 
@@ -65,6 +67,10 @@ class AuthRepositoryImpl implements AuthRepository {
       if (serverUrl != null && username != null && password != null) {
         _xtream.configure(serverUrl: serverUrl, username: username, password: password);
       }
+      // Persist expiry so it survives app restarts
+      if (userInfo.expiryDate != null) {
+        await _storage.write(key: AppConstants.keyExpDate, value: userInfo.expiryDate);
+      }
     }
   }
 
@@ -75,6 +81,7 @@ class AuthRepositoryImpl implements AuthRepository {
     await _storage.delete(key: AppConstants.keyUsername);
     await _storage.delete(key: AppConstants.keyPassword);
     await _storage.delete(key: AppConstants.keyM3uUrl);
+    await _storage.delete(key: AppConstants.keyExpDate);
   }
 
   @override

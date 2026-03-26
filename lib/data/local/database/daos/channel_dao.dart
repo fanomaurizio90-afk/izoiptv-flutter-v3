@@ -41,12 +41,14 @@ class ChannelDao {
   }
 
   Future<List<Channel>> search(String query) async {
-    final db   = await _db;
-    final rows = await db.query(
-      'channels',
-      where: 'name LIKE ?',
-      whereArgs: ['%$query%'],
-      limit: 200,
+    final db = await _db;
+    final escaped = query
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final rows = await db.rawQuery(
+      "SELECT * FROM channels WHERE name LIKE ? ESCAPE '\\' LIMIT 200",
+      ['%$escaped%'],
     );
     return rows.map(_rowToChannel).toList();
   }

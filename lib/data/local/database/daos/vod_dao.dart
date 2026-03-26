@@ -43,8 +43,15 @@ class VodDao {
   }
 
   Future<List<VodItem>> searchVod(String query) async {
-    final db   = await _db;
-    final rows = await db.query('vod', where: 'name LIKE ?', whereArgs: ['%$query%'], limit: 200);
+    final db = await _db;
+    final escaped = query
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final rows = await db.rawQuery(
+      "SELECT * FROM vod WHERE name LIKE ? ESCAPE '\\' LIMIT 200",
+      ['%$escaped%'],
+    );
     return rows.map(_rowToVod).toList();
   }
 
@@ -148,8 +155,15 @@ class VodDao {
   }
 
   Future<List<SeriesItem>> searchSeries(String query) async {
-    final db   = await _db;
-    final rows = await db.query('series', where: 'name LIKE ?', whereArgs: ['%$query%'], limit: 200);
+    final db = await _db;
+    final escaped = query
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final rows = await db.rawQuery(
+      "SELECT * FROM series WHERE name LIKE ? ESCAPE '\\' LIMIT 200",
+      ['%$escaped%'],
+    );
     return rows.map(_rowToSeries).toList();
   }
 
@@ -244,7 +258,6 @@ class VodDao {
           'plot':                ep.plot,
           'duration_secs':       ep.durationSecs,
           'container_extension': ep.containerExtension,
-          'is_watched':          ep.isWatched ? 1 : 0,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -304,6 +317,6 @@ class VodDao {
     plot:               r['plot'] as String?,
     durationSecs:       r['duration_secs'] as int?,
     containerExtension: r['container_extension'] as String?,
-    isWatched:          (r['is_watched'] as int? ?? 0) == 1,
+    isWatched:          false,
   );
 }

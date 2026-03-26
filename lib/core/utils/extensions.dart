@@ -21,8 +21,3 @@ extension DurationX on Duration {
   }
 }
 
-extension StringX on String {
-  String get titleCase => split(' ')
-      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-      .join(' ');
-}

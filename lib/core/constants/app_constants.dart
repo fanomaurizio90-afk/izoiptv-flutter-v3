@@ -9,6 +9,7 @@ abstract final class AppConstants {
   static const keyUsername  = 'username';
   static const keyPassword  = 'password';
   static const keyM3uUrl    = 'm3u_url';
+  static const keyExpDate   = 'exp_date';   // Unix-timestamp string from Xtream
 
   // Layout
   static const double channelRowHeight    = 56.0;

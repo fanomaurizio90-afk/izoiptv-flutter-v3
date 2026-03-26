@@ -503,7 +503,23 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
     final history = ref.watch(recentHistoryProvider);
     return history.when(
       data: (items) {
-        if (items.isEmpty) return const SizedBox.shrink();
+        if (items.isEmpty) {
+          return Focus(
+            onKeyEvent: (_, event) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                widget.onUpArrow?.call();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                widget.onDownArrow?.call();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: const SizedBox.shrink(),
+          );
+        }
         _ensureNodes(items.length);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -15,11 +15,13 @@ class VodPlayerScreen extends ConsumerStatefulWidget {
   const VodPlayerScreen({
     super.key,
     required this.vod,
+    required this.backPath,
     // Optional: episode list for series next-episode support
     this.episodes,
     this.episodeIndex,
   });
   final VodItem        vod;
+  final String         backPath;
   final List<Episode>? episodes;
   final int?           episodeIndex;
 
@@ -155,6 +157,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           parent: ProviderScope.containerOf(context),
           child: VodPlayerScreen(
             vod:          nextVod,
+            backPath:     widget.backPath,
             episodes:     widget.episodes,
             episodeIndex: _currentEpIndex + 1,
           ),
@@ -175,7 +178,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
           if (event.logicalKey == LogicalKeyboardKey.escape ||
               event.logicalKey == LogicalKeyboardKey.goBack) {
-            context.pop();
+            context.go(widget.backPath);
             return KeyEventResult.handled;
           }
           if (event.logicalKey == LogicalKeyboardKey.select ||
@@ -228,7 +231,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                             child: Row(
                               children: [
                                 GestureDetector(
-                                  onTap: () => context.pop(),
+                                  onTap: () => context.go(widget.backPath),
                                   child: const Icon(Icons.arrow_back,
                                       color: AppColors.textPrimary, size: 18),
                                 ),
