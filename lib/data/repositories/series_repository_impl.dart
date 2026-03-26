@@ -31,8 +31,20 @@ class SeriesRepositoryImpl implements SeriesRepository {
   Future<List<SeriesCategory>> getCategories() => _dao.getSeriesCategories();
 
   @override
-  Future<List<SeriesItem>> getSeriesByCategory(int categoryId) =>
-      _dao.getSeriesByCategory(categoryId);
+  Future<List<SeriesItem>> getSeriesByCategory(int categoryId) async {
+    var items = await _dao.getSeriesByCategory(categoryId);
+    if (items.isEmpty) {
+      // Fetch only this category from the server on demand
+      final fresh = await _withRetry(
+        () => _api.getSeries(categoryId: categoryId),
+      );
+      if (fresh != null && fresh.isNotEmpty) {
+        await _dao.insertSeries(fresh);
+        items = await _dao.getSeriesByCategory(categoryId);
+      }
+    }
+    return items;
+  }
 
   @override
   Future<SeriesItem?> getSeriesById(int id) => _dao.getSeriesById(id);
@@ -44,13 +56,18 @@ class SeriesRepositoryImpl implements SeriesRepository {
   Future<List<Season>> getSeasons(int seriesId) async {
     var episodes = await _dao.getEpisodesBySeries(seriesId);
     if (episodes.isEmpty) {
-      final (meta, apiEpisodes) = await _api.getSeriesInfo(seriesId);
-      // Best-effort metadata enrichment — must never block episode insertion
-      if (meta != null) {
-        try { await _dao.updateSeriesMeta(seriesId, meta); } catch (_) {}
+      try {
+        final (meta, apiEpisodes) = await _api.getSeriesInfo(seriesId);
+        // Best-effort metadata enrichment — must never block episode insertion
+        if (meta != null) {
+          try { await _dao.updateSeriesMeta(seriesId, meta); } catch (_) {}
+        }
+        episodes = apiEpisodes;
+        if (episodes.isNotEmpty) await _dao.insertEpisodes(seriesId, episodes);
+      } catch (e) {
+        // Timeout / 503 — return empty list; UI will show error state
+        rethrow;
       }
-      episodes = apiEpisodes;
-      await _dao.insertEpisodes(seriesId, episodes);
     }
     return _groupIntoSeasons(episodes);
   }

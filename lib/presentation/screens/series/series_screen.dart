@@ -122,7 +122,12 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) context.go('/home');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -144,7 +149,8 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
           ],
         ),
       ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 
   Widget _buildContent() {

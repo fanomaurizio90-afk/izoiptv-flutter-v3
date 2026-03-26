@@ -25,7 +25,7 @@ export '../../services/sync_service.dart' show SyncState, SyncIdle, SyncDownload
 
 final dioProvider = Provider<Dio>((_) {
   return Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 10),
+    connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(seconds: 120), // 120s — large IPTV libraries
     headers: {'User-Agent': 'IZO-IPTV/1.0'},
   ));

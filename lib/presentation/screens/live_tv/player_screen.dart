@@ -97,6 +97,9 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
 
     return PopScope(
       canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) context.go('/live');
+      },
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Focus(
@@ -113,10 +116,6 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
             case LogicalKeyboardKey.select:
             case LogicalKeyboardKey.enter:
               ref.read(playerProvider.notifier).togglePlay();
-              return KeyEventResult.handled;
-            case LogicalKeyboardKey.escape:
-            case LogicalKeyboardKey.goBack:
-              context.go('/live');
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();

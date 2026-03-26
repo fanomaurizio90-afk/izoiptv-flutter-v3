@@ -31,8 +31,20 @@ class VodRepositoryImpl implements VodRepository {
   Future<List<VodCategory>> getCategories() => _dao.getVodCategories();
 
   @override
-  Future<List<VodItem>> getVodByCategory(int categoryId) =>
-      _dao.getVodByCategory(categoryId);
+  Future<List<VodItem>> getVodByCategory(int categoryId) async {
+    var items = await _dao.getVodByCategory(categoryId);
+    if (items.isEmpty) {
+      // Fetch only this category from the server on demand
+      final fresh = await _withRetry(
+        () => _api.getVodStreams(categoryId: categoryId),
+      );
+      if (fresh != null && fresh.isNotEmpty) {
+        await _dao.insertVod(fresh);
+        items = await _dao.getVodByCategory(categoryId);
+      }
+    }
+    return items;
+  }
 
   @override
   Future<VodItem?> getVodById(int id) => _dao.getVodById(id);

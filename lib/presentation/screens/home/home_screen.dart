@@ -21,9 +21,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _heroScope     = FocusScopeNode();
   final _continueScope = FocusScopeNode();
-  final _favScope      = FocusScopeNode();
   final _settingsNode  = FocusNode();
-  final _seeAllNode    = FocusNode();
 
   @override
   void initState() {
@@ -37,9 +35,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void dispose() {
     _heroScope.dispose();
     _continueScope.dispose();
-    _favScope.dispose();
     _settingsNode.dispose();
-    _seeAllNode.dispose();
     super.dispose();
   }
 
@@ -70,16 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   FocusScope(
                     node: _continueScope,
                     child: _ContinueWatchingRow(
-                      onUpArrow:   () => _heroScope.requestFocus(),
-                      onDownArrow: () => _seeAllNode.requestFocus(),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl3),
-                  FocusScope(
-                    node: _favScope,
-                    child: _FavouritesRow(
-                      onUpArrow:  () => _continueScope.requestFocus(),
-                      seeAllNode: _seeAllNode,
+                      onUpArrow: () => _heroScope.requestFocus(),
                     ),
                   ),
                 ],

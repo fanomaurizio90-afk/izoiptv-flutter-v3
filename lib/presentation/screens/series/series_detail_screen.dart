@@ -44,13 +44,24 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.series != null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF080808),
-        body: _SeriesDetailBody(series: widget.series!),
+      return PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) {
+          if (!didPop) context.go('/series');
+        },
+        child: Scaffold(
+          backgroundColor: const Color(0xFF080808),
+          body: _SeriesDetailBody(series: widget.series!),
+        ),
       );
     }
     final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) context.go('/series');
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFF080808),
       body: seriesAsync.when(
         data: (series) {
@@ -64,7 +75,8 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         error:   (e, _) => Center(child: Text(e.toString(),
           style: GoogleFonts.dmSans(color: AppColors.error, fontSize: 12))),
       ),
-    );
+      ), // Scaffold
+    ); // PopScope
   }
 }
 

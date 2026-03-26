@@ -170,17 +170,15 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) context.go(widget.backPath);
+      },
       child: Scaffold(
       backgroundColor: AppColors.background,
       body: Focus(
         autofocus:  true,
         onKeyEvent: (_, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          if (event.logicalKey == LogicalKeyboardKey.escape ||
-              event.logicalKey == LogicalKeyboardKey.goBack) {
-            context.go(widget.backPath);
-            return KeyEventResult.handled;
-          }
           if (event.logicalKey == LogicalKeyboardKey.select ||
               event.logicalKey == LogicalKeyboardKey.enter) {
             _playerNotifier.togglePlay();

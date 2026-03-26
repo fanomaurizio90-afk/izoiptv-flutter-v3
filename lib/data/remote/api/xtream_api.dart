@@ -79,8 +79,11 @@ class XtreamApi {
     }).toList();
   }
 
-  Future<List<VodItem>> getVodStreams() async {
-    final response = await _dio.get<List<dynamic>>('$_base&action=get_vod_streams');
+  Future<List<VodItem>> getVodStreams({int? categoryId}) async {
+    final url = categoryId != null
+        ? '$_base&action=get_vod_streams&category_id=$categoryId'
+        : '$_base&action=get_vod_streams';
+    final response = await _dio.get<List<dynamic>>(url);
     return (response.data ?? []).map((e) {
       final m    = e as Map<String, dynamic>;
       final id   = int.parse(m['stream_id'].toString());
@@ -151,8 +154,11 @@ class XtreamApi {
     }).toList();
   }
 
-  Future<List<SeriesItem>> getSeries() async {
-    final response = await _dio.get<List<dynamic>>('$_base&action=get_series');
+  Future<List<SeriesItem>> getSeries({int? categoryId}) async {
+    final url = categoryId != null
+        ? '$_base&action=get_series&category_id=$categoryId'
+        : '$_base&action=get_series';
+    final response = await _dio.get<List<dynamic>>(url);
     return (response.data ?? []).map((e) {
       final m    = e as Map<String, dynamic>;
       final info = _infoMap(m['info']);
@@ -176,6 +182,10 @@ class XtreamApi {
   Future<(SeriesItem?, List<Episode>)> getSeriesInfo(int seriesId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '$_base&action=get_series_info&series_id=$seriesId',
+      options: Options(
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 60),
+      ),
     );
     final data = response.data ?? {};
 
