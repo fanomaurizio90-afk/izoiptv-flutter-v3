@@ -31,7 +31,7 @@ class VodDao {
 
   Future<List<VodItem>> getVodByCategory(int categoryId) async {
     final db   = await _db;
-    final rows = await db.query('vod', where: 'category_id = ?', whereArgs: [categoryId]);
+    final rows = await db.query('vod', where: 'category_id = ?', whereArgs: [categoryId], orderBy: 'id DESC');
     return rows.map(_rowToVod).toList();
   }
 
@@ -143,7 +143,7 @@ class VodDao {
 
   Future<List<SeriesItem>> getSeriesByCategory(int categoryId) async {
     final db   = await _db;
-    final rows = await db.query('series', where: 'category_id = ?', whereArgs: [categoryId]);
+    final rows = await db.query('series', where: 'category_id = ?', whereArgs: [categoryId], orderBy: 'id DESC');
     return rows.map(_rowToSeries).toList();
   }
 

@@ -54,7 +54,7 @@ class XtreamApi {
     return (response.data ?? []).map((e) {
       final m   = e as Map<String, dynamic>;
       final id  = int.parse(m['stream_id'].toString());
-      final ext = m['container_extension'] as String? ?? 'ts';
+      final ext = _nullIfEmpty(m['container_extension'] as String?) ?? 'ts';
       return Channel(
         id:         id,
         name:       m['name'] as String? ?? '',
@@ -87,7 +87,7 @@ class XtreamApi {
     return (response.data ?? []).map((e) {
       final m    = e as Map<String, dynamic>;
       final id   = int.parse(m['stream_id'].toString());
-      final ext  = m['container_extension'] as String? ?? 'mp4';
+      final ext  = _nullIfEmpty(m['container_extension'] as String?) ?? 'mp4';
       final info = _infoMap(m['info']);
       return VodItem(
         id:                 id,
@@ -120,7 +120,7 @@ class XtreamApi {
       if (info.isEmpty) return null;
 
       final id  = int.tryParse(movieData['stream_id']?.toString() ?? vodId.toString()) ?? vodId;
-      final ext = movieData['container_extension'] as String? ?? 'mp4';
+      final ext = _nullIfEmpty(movieData['container_extension'] as String?) ?? 'mp4';
       return VodItem(
         id:                 id,
         name:               _nullIfEmpty(info['name'] as String?) ?? '',
@@ -223,7 +223,7 @@ class XtreamApi {
       for (final ep in epList) {
         final e      = ep as Map<String, dynamic>;
         final id     = int.parse(e['id'].toString());
-        final ext    = e['container_extension'] as String? ?? 'mp4';
+        final ext    = _nullIfEmpty(e['container_extension'] as String?) ?? 'mp4';
         final epInfo = _infoMap(e['info']);
         result.add(Episode(
           id:                 id,

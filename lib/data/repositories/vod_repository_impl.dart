@@ -43,14 +43,40 @@ class VodRepositoryImpl implements VodRepository {
         items = await _dao.getVodByCategory(categoryId);
       }
     }
-    return items;
+    // Rebuild stream URLs from current API credentials.
+    // Fixes stale URLs from old syncs and empty container_extension values.
+    return items.map(_withFreshUrl).toList();
+  }
+
+  VodItem _withFreshUrl(VodItem v) {
+    final ext = (v.containerExtension?.isNotEmpty == true) ? v.containerExtension! : 'mp4';
+    final url = _api.getVodStreamUrl(v.id, ext);
+    if (url == v.streamUrl) return v;
+    return VodItem(
+      id:                 v.id,
+      name:               v.name,
+      streamUrl:          url,
+      categoryId:         v.categoryId,
+      posterUrl:          v.posterUrl,
+      backdropUrl:        v.backdropUrl,
+      plot:               v.plot,
+      genre:              v.genre,
+      releaseDate:        v.releaseDate,
+      rating:             v.rating,
+      durationSecs:       v.durationSecs,
+      containerExtension: v.containerExtension,
+      isFavourite:        v.isFavourite,
+    );
   }
 
   @override
   Future<VodItem?> getVodById(int id) => _dao.getVodById(id);
 
   @override
-  Future<List<VodItem>> searchVod(String query) => _dao.searchVod(query);
+  Future<List<VodItem>> searchVod(String query) async {
+    final items = await _dao.searchVod(query);
+    return items.map(_withFreshUrl).toList();
+  }
 
   @override
   Future<void> syncVod() async {
