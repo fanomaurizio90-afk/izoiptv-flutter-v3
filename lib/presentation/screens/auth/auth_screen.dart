@@ -113,7 +113,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     String? error = _m3uError;
     if (error == null && auth is AuthError) error = auth.message;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
@@ -263,6 +265,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

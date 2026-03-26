@@ -196,7 +196,10 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
                           focusNode:    _playNode,
                           autofocus:    true,
                           borderRadius: AppSpacing.radiusCard,
-                          onTap:        () => context.push('/movies/player', extra: vod),
+                          onTap:        () => context.push('/movies/player', extra: {
+                            'vod':      vod,
+                            'backPath': '/movies/${vod.id}',
+                          }),
                           child: Container(
                             width:   double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 14),

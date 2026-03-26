@@ -2,25 +2,9 @@ import 'dart:math';
 
 import '../../domain/entities/vod.dart';
 import '../../domain/repositories/vod_repository.dart';
+import '../../core/utils/retry.dart';
 import '../local/database/daos/vod_dao.dart';
 import '../remote/api/xtream_api.dart';
-
-/// Retries [fn] up to [maxAttempts] times with [delay] between attempts.
-/// Returns null silently if all attempts fail.
-Future<T?> _withRetry<T>(
-  Future<T> Function() fn, {
-  int      maxAttempts = 3,
-  Duration delay       = const Duration(seconds: 2),
-}) async {
-  for (var attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (_) {
-      if (attempt < maxAttempts - 1) await Future.delayed(delay);
-    }
-  }
-  return null;
-}
 
 class VodRepositoryImpl implements VodRepository {
   VodRepositoryImpl(this._api, this._dao);
@@ -35,7 +19,7 @@ class VodRepositoryImpl implements VodRepository {
     var items = await _dao.getVodByCategory(categoryId);
     if (items.isEmpty) {
       // Fetch only this category from the server on demand
-      final fresh = await _withRetry(
+      final fresh = await withRetry(
         () => _api.getVodStreams(categoryId: categoryId),
       );
       if (fresh != null && fresh.isNotEmpty) {
@@ -70,7 +54,10 @@ class VodRepositoryImpl implements VodRepository {
   }
 
   @override
-  Future<VodItem?> getVodById(int id) => _dao.getVodById(id);
+  Future<VodItem?> getVodById(int id) async {
+    final item = await _dao.getVodById(id);
+    return item == null ? null : _withFreshUrl(item);
+  }
 
   @override
   Future<List<VodItem>> searchVod(String query) async {
@@ -101,7 +88,7 @@ class VodRepositoryImpl implements VodRepository {
     for (var i = 0; i < ids.length; i += concurrency) {
       final batch = ids.sublist(i, min(i + concurrency, ids.length));
       await Future.wait(batch.map((id) async {
-        final meta = await _withRetry(() => _api.getVodInfo(id));
+        final meta = await withRetry(() => _api.getVodInfo(id));
         if (meta != null) await _dao.updateVodMeta(id, meta);
         done++;
         onProgress?.call(done, total);

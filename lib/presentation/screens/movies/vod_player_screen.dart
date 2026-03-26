@@ -142,28 +142,15 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
 
   void _playNextEpisode() {
     if (!_hasNextEpisode) return;
-    final nextEp  = widget.episodes![_currentEpIndex + 1];
-    final nextVod = VodItem(
-      id:          nextEp.id,
-      name:        nextEp.title,
-      streamUrl:   nextEp.streamUrl,
-      categoryId:  0,
-      durationSecs: nextEp.durationSecs,
-    );
-    // Replace current screen with next episode
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ProviderScope(
-          parent: ProviderScope.containerOf(context),
-          child: VodPlayerScreen(
-            vod:          nextVod,
-            backPath:     widget.backPath,
-            episodes:     widget.episodes,
-            episodeIndex: _currentEpIndex + 1,
-          ),
-        ),
-      ),
-    );
+    final nextEp    = widget.episodes![_currentEpIndex + 1];
+    final nextIndex = _currentEpIndex + 1;
+    // Use go_router to keep the back stack consistent
+    context.pushReplacement('/series/player', extra: {
+      'episode':  nextEp,
+      'episodes': widget.episodes!,
+      'index':    nextIndex,
+      'seriesId': nextEp.seriesId,
+    });
   }
 
   @override
@@ -228,10 +215,23 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                             padding: const EdgeInsets.all(AppSpacing.lg),
                             child: Row(
                               children: [
-                                GestureDetector(
-                                  onTap: () => context.go(widget.backPath),
-                                  child: const Icon(Icons.arrow_back,
-                                      color: AppColors.textPrimary, size: 18),
+                                Focus(
+                                  onKeyEvent: (_, event) {
+                                    if (event is KeyDownEvent &&
+                                        (event.logicalKey == LogicalKeyboardKey.select ||
+                                         event.logicalKey == LogicalKeyboardKey.enter ||
+                                         event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+                                         event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
+                                      context.go(widget.backPath);
+                                      return KeyEventResult.handled;
+                                    }
+                                    return KeyEventResult.ignored;
+                                  },
+                                  child: GestureDetector(
+                                    onTap: () => context.go(widget.backPath),
+                                    child: const Icon(Icons.arrow_back,
+                                        color: AppColors.textPrimary, size: 18),
+                                  ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(

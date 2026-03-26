@@ -99,16 +99,15 @@ class ChannelDao {
   ChannelCategory _rowToCategory(Map<String, dynamic> r) =>
       ChannelCategory(id: r['id'] as int, name: r['name'] as String);
 
-  Channel _rowToChannel(Map<String, dynamic> r) {
-    final logo = r['logo_url'] as String?;
-    return Channel(
-      id:          r['id'] as int,
-      name:        r['name'] as String,
-      streamUrl:   r['stream_url'] as String,
-      categoryId:  r['category_id'] as int,
-      logoUrl:     (logo == null || logo.isEmpty) ? null : logo,
-      isFavourite: (r['is_favourite'] as int) == 1,
-      sortOrder:   r['sort_order'] as int? ?? 0,
-    );
-  }
+  Channel _rowToChannel(Map<String, dynamic> r) => Channel(
+    id:          r['id'] as int,
+    name:        r['name'] as String,
+    streamUrl:   r['stream_url'] as String,
+    categoryId:  r['category_id'] as int,
+    logoUrl:     _nullIfEmpty(r['logo_url'] as String?),
+    isFavourite: (r['is_favourite'] as int) == 1,
+    sortOrder:   r['sort_order'] as int? ?? 0,
+  );
+
+  String? _nullIfEmpty(String? s) => (s == null || s.isEmpty) ? null : s;
 }

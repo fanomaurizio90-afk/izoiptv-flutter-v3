@@ -99,7 +99,9 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
@@ -217,6 +219,7 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
           ),
         ),
       ),
+    ),
     );
   }
 }

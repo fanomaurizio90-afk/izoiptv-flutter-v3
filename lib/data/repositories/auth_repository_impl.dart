@@ -29,6 +29,14 @@ class AuthRepositoryImpl implements AuthRepository {
 
       _xtream.configure(serverUrl: serverUrl, username: username, password: password);
 
+      // Restore persisted output formats — avoids black screen on providers that
+      // don't support ts/mp4 without needing a fresh auth call.
+      final liveFormat = await _storage.read(key: AppConstants.keyLiveFormat);
+      final vodFormat  = await _storage.read(key: AppConstants.keyVodFormat);
+      if (liveFormat != null && vodFormat != null) {
+        _xtream.restoreFormats(liveFormat: liveFormat, vodFormat: vodFormat);
+      }
+
       final expDate = await _storage.read(key: AppConstants.keyExpDate);
       return UserInfo(
         username:   username,
@@ -98,6 +106,18 @@ class AuthRepositoryImpl implements AuthRepository {
       if (auth == 0 || auth == '0' || auth == false) {
         throw const AuthException('Invalid username or password.');
       }
+
+      // Read server-supported formats and apply to API (persisted for session restore)
+      final rawFormats = data['server_info']?['allowed_output_formats'];
+      if (rawFormats is List && rawFormats.isNotEmpty) {
+        final formats = rawFormats.whereType<String>().toList();
+        if (formats.isNotEmpty) {
+          _xtream.setOutputFormats(formats);
+          await _storage.write(key: AppConstants.keyLiveFormat, value: _xtream.preferredLiveFormat);
+          await _storage.write(key: AppConstants.keyVodFormat,  value: _xtream.preferredVodFormat);
+        }
+      }
+
       return UserInfo(
         username:       username,
         status:         userInfo['status'] as String? ?? 'Active',

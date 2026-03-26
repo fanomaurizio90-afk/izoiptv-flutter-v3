@@ -137,11 +137,13 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                   controls:   NoVideoControls,
                 ),
               ),
-              // Controls overlay
-              if (_showControls)
-                AnimatedOpacity(
-                  opacity:  _showControls ? 1.0 : 0.0,
-                  duration: AppDurations.fast,
+              // Controls overlay — AnimatedOpacity lives outside the if-guard
+              // so the fade-out animation actually plays when hiding
+              AnimatedOpacity(
+                opacity:  _showControls ? 1.0 : 0.0,
+                duration: AppDurations.fast,
+                child: IgnorePointer(
+                  ignoring: !_showControls,
                   child: _ControlsOverlay(
                     channel:   ch,
                     onPrev:    _previousChannel,
@@ -149,6 +151,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     onBack:    () => context.go('/live'),
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -187,9 +190,22 @@ class _ControlsOverlay extends ConsumerWidget {
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: onBack,
-                    child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                  Focus(
+                    onKeyEvent: (_, event) {
+                      if (event is KeyDownEvent &&
+                          (event.logicalKey == LogicalKeyboardKey.select ||
+                           event.logicalKey == LogicalKeyboardKey.enter ||
+                           event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+                           event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
+                        onBack();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: GestureDetector(
+                      onTap: onBack,
+                      child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   if (channel != null)

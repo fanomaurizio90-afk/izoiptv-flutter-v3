@@ -73,9 +73,21 @@ GoRouter buildRouter(Ref ref) {
           // player MUST be declared BEFORE :id
           GoRoute(
             path: 'player',
-            pageBuilder: (_, state) => NoTransitionPage(
-              child: VodPlayerScreen(vod: state.extra as VodItem, backPath: '/movies'),
-            ),
+            pageBuilder: (_, state) {
+              final extra = state.extra;
+              final VodItem vod;
+              String backPath;
+              if (extra is Map<String, dynamic>) {
+                vod      = extra['vod'] as VodItem;
+                backPath = extra['backPath'] as String? ?? '/movies';
+              } else {
+                vod      = extra as VodItem;
+                backPath = '/movies';
+              }
+              return NoTransitionPage(
+                child: VodPlayerScreen(vod: vod, backPath: backPath),
+              );
+            },
           ),
           GoRoute(
             path: ':id',

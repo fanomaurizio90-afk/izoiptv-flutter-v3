@@ -2,25 +2,9 @@ import 'dart:math';
 
 import '../../domain/entities/series.dart';
 import '../../domain/repositories/series_repository.dart';
+import '../../core/utils/retry.dart';
 import '../local/database/daos/vod_dao.dart';
 import '../remote/api/xtream_api.dart';
-
-/// Retries [fn] up to [maxAttempts] times with [delay] between attempts.
-/// Returns null silently if all attempts fail.
-Future<T?> _withRetry<T>(
-  Future<T> Function() fn, {
-  int      maxAttempts = 3,
-  Duration delay       = const Duration(seconds: 2),
-}) async {
-  for (var attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (_) {
-      if (attempt < maxAttempts - 1) await Future.delayed(delay);
-    }
-  }
-  return null;
-}
 
 class SeriesRepositoryImpl implements SeriesRepository {
   SeriesRepositoryImpl(this._api, this._dao);
@@ -35,7 +19,7 @@ class SeriesRepositoryImpl implements SeriesRepository {
     var items = await _dao.getSeriesByCategory(categoryId);
     if (items.isEmpty) {
       // Fetch only this category from the server on demand
-      final fresh = await _withRetry(
+      final fresh = await withRetry(
         () => _api.getSeries(categoryId: categoryId),
       );
       if (fresh != null && fresh.isNotEmpty) {
@@ -48,6 +32,9 @@ class SeriesRepositoryImpl implements SeriesRepository {
 
   @override
   Future<SeriesItem?> getSeriesById(int id) => _dao.getSeriesById(id);
+
+  @override
+  Future<Episode?> getEpisodeById(int id) => _dao.getEpisodeById(id);
 
   @override
   Future<List<SeriesItem>> searchSeries(String query) => _dao.searchSeries(query);
@@ -89,13 +76,18 @@ class SeriesRepositoryImpl implements SeriesRepository {
     for (var i = 0; i < ids.length; i += concurrency) {
       final batch = ids.sublist(i, min(i + concurrency, ids.length));
       await Future.wait(batch.map((id) async {
-        final result = await _withRetry(() => _api.getSeriesInfo(id));
+        final result = await withRetry(() => _api.getSeriesInfo(id));
         if (result != null) {
           final (meta, episodes) = result;
           if (meta != null) {
             try { await _dao.updateSeriesMeta(id, meta); } catch (_) {}
           }
-          if (episodes.isNotEmpty) await _dao.insertEpisodes(id, episodes);
+          // Skip episode insertion if they're already in DB — avoids redundant
+          // writes when enrichAll is called more than once for the same series.
+          if (episodes.isNotEmpty) {
+            final existing = await _dao.getEpisodesBySeries(id);
+            if (existing.isEmpty) await _dao.insertEpisodes(id, episodes);
+          }
         }
         done++;
         onProgress?.call(done, total);

@@ -23,6 +23,11 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Migration pattern:
+    //   if (oldVersion < N) { await db.execute('ALTER TABLE foo ADD COLUMN bar TEXT'); }
+    // Keep migrations additive — never drop columns in the ALTER TABLE path,
+    // only in a full table-recreate migration like v1→v2 below.
+
     // v1 → v2: drop is_watched column from episodes (recreate table)
     if (oldVersion < 2) {
       await db.execute('''
@@ -149,6 +154,10 @@ class AppDatabase {
         episode_id    INTEGER,
         thumbnail_url TEXT,
         updated_at    TEXT NOT NULL,
+        -- UNIQUE keeps only the latest watch position per piece of content.
+        -- episode_id IS NULL rows for movies deduplicate correctly because
+        -- SQLite treats two NULLs as distinct in a UNIQUE index — but we use
+        -- ConflictAlgorithm.replace on insert, so the old row is replaced.
         UNIQUE(content_id, content_type, episode_id)
       )
     ''');

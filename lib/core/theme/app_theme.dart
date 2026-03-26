@@ -20,7 +20,6 @@ abstract final class AppColors {
 
   // Focus: 1px white border only — no glow
   static const focusBorder   = Color(0xFFFFFFFF);
-  static const focusGlow     = Colors.transparent;  // no glow
 
   static const error         = Color(0xFFF87171);
   static const errorSurface  = Color(0x33F87171);
@@ -61,9 +60,7 @@ abstract final class AppDurations {
   static const medium            = Duration(milliseconds: 150);
   static const slow              = Duration(milliseconds: 250);
   static const press             = Duration(milliseconds: 100);
-  static const controlsAutoHide = Duration(seconds: 3);
-  static const volumeFadeDelay  = Duration(milliseconds: 800);
-  static const reconnectBase    = Duration(seconds: 2);
+  static const controlsAutoHide  = Duration(seconds: 3);
   static const historyFlushPeriod = Duration(seconds: 10);
 }
 

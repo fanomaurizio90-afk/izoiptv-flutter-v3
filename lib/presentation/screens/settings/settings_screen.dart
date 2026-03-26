@@ -48,7 +48,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/home');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -64,7 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   FocusableWidget(
                     focusNode: _backNode,
                     autofocus: true,
-                    onTap:     () => context.pop(),
+                    onTap:     () => context.go('/home'),
                     child: const Padding(
                       padding: EdgeInsets.all(4),
                       child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
@@ -126,7 +131,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
 
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '2.3.0'),
+                  const _SettingsRow(label: 'Version', value: '2.4.0'),
                   const SizedBox(height: AppSpacing.xl6),
 
                   // Sign Out
@@ -143,6 +148,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

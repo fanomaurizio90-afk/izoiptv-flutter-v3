@@ -9,6 +9,8 @@ class XtreamApi {
   String? _serverUrl;
   String? _username;
   String? _password;
+  String  _liveFormat = 'ts';  // default; overridden by allowed_output_formats
+  String  _vodFormat  = 'mp4'; // default; overridden by allowed_output_formats
 
   void configure({
     required String serverUrl,
@@ -25,6 +27,25 @@ class XtreamApi {
 
   bool get isConfigured =>
       _serverUrl != null && _username != null && _password != null;
+
+  /// Called after auth to apply server-reported format preferences.
+  /// Prefer ts for live (lower latency), mp4 for VOD (wider compatibility).
+  void setOutputFormats(List<String> formats) {
+    if (formats.isEmpty) return;
+    _liveFormat = formats.contains('ts')   ? 'ts'   : formats.first;
+    _vodFormat  = formats.contains('mp4')  ? 'mp4'
+                : formats.contains('mkv')  ? 'mkv'
+                : formats.first;
+  }
+
+  /// Restore persisted formats when loading a saved session (no new auth call).
+  void restoreFormats({required String liveFormat, required String vodFormat}) {
+    _liveFormat = liveFormat;
+    _vodFormat  = vodFormat;
+  }
+
+  String get preferredLiveFormat => _liveFormat;
+  String get preferredVodFormat  => _vodFormat;
 
   String get _base =>
       '$_serverUrl/player_api.php?username=$_username&password=$_password';
@@ -43,8 +64,8 @@ class XtreamApi {
     return (response.data ?? []).map((e) {
       final m = e as Map<String, dynamic>;
       return ChannelCategory(
-        id:   int.parse(m['category_id'].toString()),
-        name: m['category_name'] as String,
+        id:   int.tryParse(m['category_id']?.toString() ?? '') ?? 0,
+        name: m['category_name'] as String? ?? '',
       );
     }).toList();
   }
@@ -53,8 +74,8 @@ class XtreamApi {
     final response = await _dio.get<List<dynamic>>('$_base&action=get_live_streams');
     return (response.data ?? []).map((e) {
       final m   = e as Map<String, dynamic>;
-      final id  = int.parse(m['stream_id'].toString());
-      final ext = _nullIfEmpty(m['container_extension'] as String?) ?? 'ts';
+      final id  = int.tryParse(m['stream_id']?.toString() ?? '') ?? 0;
+      final ext = _nullIfEmpty(m['container_extension'] as String?) ?? _liveFormat;
       return Channel(
         id:         id,
         name:       m['name'] as String? ?? '',
@@ -73,8 +94,8 @@ class XtreamApi {
     return (response.data ?? []).map((e) {
       final m = e as Map<String, dynamic>;
       return VodCategory(
-        id:   int.parse(m['category_id'].toString()),
-        name: m['category_name'] as String,
+        id:   int.tryParse(m['category_id']?.toString() ?? '') ?? 0,
+        name: m['category_name'] as String? ?? '',
       );
     }).toList();
   }
@@ -86,8 +107,8 @@ class XtreamApi {
     final response = await _dio.get<List<dynamic>>(url);
     return (response.data ?? []).map((e) {
       final m    = e as Map<String, dynamic>;
-      final id   = int.parse(m['stream_id'].toString());
-      final ext  = _nullIfEmpty(m['container_extension'] as String?) ?? 'mp4';
+      final id   = int.tryParse(m['stream_id']?.toString() ?? '') ?? 0;
+      final ext  = _nullIfEmpty(m['container_extension'] as String?) ?? _vodFormat;
       final info = _infoMap(m['info']);
       return VodItem(
         id:                 id,
@@ -120,7 +141,7 @@ class XtreamApi {
       if (info.isEmpty) return null;
 
       final id  = int.tryParse(movieData['stream_id']?.toString() ?? vodId.toString()) ?? vodId;
-      final ext = _nullIfEmpty(movieData['container_extension'] as String?) ?? 'mp4';
+      final ext = _nullIfEmpty(movieData['container_extension'] as String?) ?? _vodFormat;
       return VodItem(
         id:                 id,
         name:               _nullIfEmpty(info['name'] as String?) ?? '',
@@ -148,8 +169,8 @@ class XtreamApi {
     return (response.data ?? []).map((e) {
       final m = e as Map<String, dynamic>;
       return SeriesCategory(
-        id:   int.parse(m['category_id'].toString()),
-        name: m['category_name'] as String,
+        id:   int.tryParse(m['category_id']?.toString() ?? '') ?? 0,
+        name: m['category_name'] as String? ?? '',
       );
     }).toList();
   }
@@ -163,7 +184,7 @@ class XtreamApi {
       final m    = e as Map<String, dynamic>;
       final info = _infoMap(m['info']);
       return SeriesItem(
-        id:          int.parse(m['series_id'].toString()),
+        id:          int.tryParse(m['series_id']?.toString() ?? '') ?? 0,
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:   _nullIfEmpty(m['cover']?.toString()),
@@ -222,7 +243,7 @@ class XtreamApi {
       final epList    = episodes[seasonKey] as List;
       for (final ep in epList) {
         final e      = ep as Map<String, dynamic>;
-        final id     = int.parse(e['id'].toString());
+        final id     = int.tryParse(e['id']?.toString() ?? '') ?? 0;
         final ext    = _nullIfEmpty(e['container_extension'] as String?) ?? 'mp4';
         final epInfo = _infoMap(e['info']);
         result.add(Episode(
@@ -245,7 +266,7 @@ class XtreamApi {
   // ─── Stream URL builders ──────────────────────────────────────────────────────
 
   String getLiveStreamUrl(int streamId) =>
-      '$_serverUrl/live/$_username/$_password/$streamId.ts';
+      '$_serverUrl/live/$_username/$_password/$streamId.$_liveFormat';
 
   String getVodStreamUrl(int streamId, String extension) =>
       '$_serverUrl/movie/$_username/$_password/$streamId.$extension';

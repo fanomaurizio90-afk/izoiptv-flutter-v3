@@ -53,7 +53,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = AuthAuthenticated(user);
       }
     } catch (e) {
-      state = const AuthInitial();
+      // Network/transient error — show retry instead of clearing session
+      state = AuthError(e.toString());
     }
   }
 
@@ -139,11 +140,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   /// Returns true if the Xtream exp_date Unix timestamp is in the past.
-  /// Null exp_date means unlimited — never expired.
+  /// null, "0", "-1" all mean unlimited per Xtream API docs — never expired.
   static bool _isExpired(String? expDate) {
     if (expDate == null) return false;
     final secs = int.tryParse(expDate);
-    if (secs == null) return false;
+    if (secs == null || secs <= 0) return false;
     return DateTime.fromMillisecondsSinceEpoch(secs * 1000).isBefore(DateTime.now());
   }
 
@@ -151,7 +152,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   static int? daysUntilExpiry(String? expDate) {
     if (expDate == null) return null;
     final secs = int.tryParse(expDate);
-    if (secs == null) return null;
+    if (secs == null || secs <= 0) return null;
     return DateTime.fromMillisecondsSinceEpoch(secs * 1000)
         .difference(DateTime.now())
         .inDays;

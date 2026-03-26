@@ -78,20 +78,25 @@ class SyncNotifier extends StateNotifier<SyncState> {
     });
   }
 
-  /// Downloads all catalogues and marks the sync timestamp.
+  /// Downloads all catalogues with retry (max 3 attempts, 5s delay).
   /// Returns true on success, false on failure (state is reset to Idle on failure).
   Future<bool> _runSync() async {
-    try {
-      state = const SyncDownloading();
-      await _vod.syncVod();
-      await _series.syncSeries();
-      await _channels.syncChannels();
-      await _markSynced();
-      return true;
-    } catch (_) {
-      if (mounted) state = const SyncIdle();
-      return false;
+    state = const SyncDownloading();
+    const maxAttempts = 3;
+    const retryDelay  = Duration(seconds: 5);
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await _vod.syncVod();
+        await _series.syncSeries();
+        await _channels.syncChannels();
+        await _markSynced();
+        return true;
+      } catch (_) {
+        if (attempt < maxAttempts - 1) await Future.delayed(retryDelay);
+      }
     }
+    if (mounted) state = const SyncIdle();
+    return false;
   }
 
   Future<void> _doEnrich() async {

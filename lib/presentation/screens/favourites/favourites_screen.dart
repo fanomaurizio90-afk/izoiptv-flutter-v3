@@ -44,7 +44,12 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/home');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -60,7 +65,7 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
                   FocusableWidget(
                     focusNode: _backNode,
                     autofocus: true,
-                    onTap:     () => context.pop(),
+                    onTap:     () => context.go('/home'),
                     child: const Padding(
                       padding: EdgeInsets.all(4),
                       child: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
@@ -112,6 +117,7 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

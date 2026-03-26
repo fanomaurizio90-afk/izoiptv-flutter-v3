@@ -9,10 +9,12 @@ abstract final class AppConstants {
   static const keyUsername  = 'username';
   static const keyPassword  = 'password';
   static const keyM3uUrl    = 'm3u_url';
-  static const keyExpDate   = 'exp_date';   // Unix-timestamp string from Xtream
+  static const keyExpDate        = 'exp_date';         // Unix-timestamp string from Xtream
+  static const keyLiveFormat     = 'live_format';       // Preferred live stream format (ts/m3u8)
+  static const keyVodFormat      = 'vod_format';        // Preferred VOD format (mp4/mkv/ts)
 
   // Layout
-  static const double channelRowHeight    = 56.0;
+  static const double channelRowHeight    = 72.0;
   static const double posterAspectRatio   = 2 / 3;
   static const double homeTopBarHeight    = 56.0;
   static const double homeSafeAreaPadding = 32.0;

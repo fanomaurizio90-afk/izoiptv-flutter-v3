@@ -230,6 +230,13 @@ class VodDao {
 
   // ─── Episodes ────────────────────────────────────────────────────────────────
 
+  Future<Episode?> getEpisodeById(int id) async {
+    final db   = await _db;
+    final rows = await db.query('episodes', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return null;
+    return _rowToEpisode(rows.first);
+  }
+
   Future<List<Episode>> getEpisodesBySeries(int seriesId) async {
     final db   = await _db;
     final rows = await db.query(

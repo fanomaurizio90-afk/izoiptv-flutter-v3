@@ -48,7 +48,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         currentIndex: state.currentIndex,
       );
     });
-    // Throttle position to 2x/sec — 10x/sec is unnecessary and burns CPU
+    // Throttle position to 2x/sec — 10x/sec is unnecessary and burns CPU.
+    // _lastPos is a closure variable intentionally — it resets to epoch each time
+    // setupListeners is called, which is the desired behaviour on stream switch.
     DateTime _lastPos = DateTime.fromMillisecondsSinceEpoch(0);
     _player.stream.position.listen((v) {
       final now = DateTime.now();

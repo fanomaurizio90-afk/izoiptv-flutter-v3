@@ -10,7 +10,9 @@ class ExpiredScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
@@ -52,6 +54,7 @@ class ExpiredScreen extends ConsumerWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }

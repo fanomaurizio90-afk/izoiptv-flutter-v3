@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/channel.dart';
@@ -198,8 +199,6 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   }
 }
 
-const double kChannelRowHeight = 72.0;
-
 // ── Search Bar ────────────────────────────────────────────────────────────────
 
 class _SearchBar extends StatelessWidget {
@@ -337,8 +336,8 @@ class _ChannelListState extends State<_ChannelList> {
 
   void _ensureVisible(int idx) {
     if (!_scrollCtrl.hasClients) return;
-    final itemTop    = idx * kChannelRowHeight;
-    final itemBottom = itemTop + kChannelRowHeight;
+    final itemTop    = idx * AppConstants.channelRowHeight;
+    final itemBottom = itemTop + AppConstants.channelRowHeight;
     final viewport   = _scrollCtrl.position.viewportDimension;
     final offset     = _scrollCtrl.offset;
     double? target;
@@ -390,7 +389,7 @@ class _ChannelListState extends State<_ChannelList> {
         child: ListView.builder(
           controller: _scrollCtrl,
           itemCount:  widget.channels.length,
-          itemExtent: kChannelRowHeight,
+          itemExtent: AppConstants.channelRowHeight,
           itemBuilder: (_, i) {
             final ch = widget.channels[i];
             return _ChannelRow(
@@ -441,7 +440,7 @@ class _ChannelRowState extends State<_ChannelRow> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
-          height:  kChannelRowHeight,
+          height:  AppConstants.channelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
           decoration: BoxDecoration(
             color: _focused ? const Color(0x0FFFFFFF) : Colors.transparent,

@@ -445,7 +445,7 @@ class _TopBar extends StatelessWidget {
         children: [
           FocusableWidget(
             focusNode: backFocusNode,
-            onTap:     () => context.pop(),
+            onTap:     () => context.go('/home'),
             child: const Padding(
               padding: EdgeInsets.all(4),
               child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),

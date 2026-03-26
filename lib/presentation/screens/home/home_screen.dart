@@ -39,9 +39,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _confirmExit(BuildContext context) async {
+    final exit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(
+          'Exit IZO IPTV?',
+          style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: GoogleFonts.dmSans(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Exit', style: GoogleFonts.dmSans(color: const Color(0xFFE57373))),
+          ),
+        ],
+      ),
+    );
+    if (exit == true) SystemNavigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit(context);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
@@ -75,6 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -172,11 +202,8 @@ class _TopBar extends StatelessWidget {
 // ── Section Label ──────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text, {this.trailing, this.onTrailingTap, this.trailingNode});
-  final String        text;
-  final String?       trailing;
-  final VoidCallback? onTrailingTap;
-  final FocusNode?    trailingNode;
+  const _SectionLabel(this.text);
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -191,20 +218,6 @@ class _SectionLabel extends StatelessWidget {
             letterSpacing: 1.5,
           ),
         ),
-        if (trailing != null) ...[
-          const Spacer(),
-          FocusableWidget(
-            focusNode: trailingNode,
-            onTap:     onTrailingTap ?? () {},
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Text(
-                trailing!,
-                style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 11),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -480,8 +493,34 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
     if (contentId == null || contentType == null) return;
 
     if (contentType == 'vod') {
+      // Try vod table first; if null it may be a series episode saved under old format
       final vod = await ref.read(vodRepositoryProvider).getVodById(contentId);
-      if (vod != null && mounted) context.push('/movies/player', extra: vod);
+      if (vod != null && mounted) {
+        context.push('/movies/player', extra: vod);
+        return;
+      }
+      // Fall back: look up as episode
+      final episode = await ref.read(seriesRepositoryProvider).getEpisodeById(contentId);
+      if (episode != null && mounted) {
+        context.push('/series/player', extra: {
+          'episode':  episode,
+          'episodes': [episode],
+          'index':    0,
+          'seriesId': episode.seriesId,
+        });
+      }
+    } else if (contentType == 'series') {
+      final episodeId = item['episode_id'] as int?;
+      if (episodeId == null) return;
+      final episode = await ref.read(seriesRepositoryProvider).getEpisodeById(episodeId);
+      if (episode != null && mounted) {
+        context.push('/series/player', extra: {
+          'episode':  episode,
+          'episodes': [episode],
+          'index':    0,
+          'seriesId': episode.seriesId,
+        });
+      }
     }
   }
 
@@ -587,31 +626,3 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
   }
 }
 
-// ── Favourites Row ─────────────────────────────────────────────────────────────
-
-class _FavouritesRow extends StatelessWidget {
-  const _FavouritesRow({this.onUpArrow, required this.seeAllNode});
-  final VoidCallback? onUpArrow;
-  final FocusNode     seeAllNode;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      skipTraversal: true,
-      onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-          onUpArrow?.call();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: _SectionLabel(
-        'FAVOURITES',
-        trailing:      'See all',
-        trailingNode:  seeAllNode,
-        onTrailingTap: () => context.push('/favourites'),
-      ),
-    );
-  }
-}
