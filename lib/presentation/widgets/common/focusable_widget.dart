@@ -70,8 +70,12 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         onTapUp:     (_) { if (mounted) setState(() => _pressed = false); },
         onTapCancel: ()  { if (mounted) setState(() => _pressed = false); },
         child: AnimatedScale(
-          scale:    _pressed ? 0.97 : 1.0,
-          duration: AppDurations.press,
+          scale:    (_focused && widget.scaleOnFocus) ? 1.05
+                  : _pressed                         ? 0.97
+                  : 1.0,
+          duration: (_focused && widget.scaleOnFocus)
+                  ? AppDurations.fast
+                  : AppDurations.press,
           child: AnimatedContainer(
             duration: AppDurations.fast,
             decoration: BoxDecoration(

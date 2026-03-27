@@ -352,6 +352,7 @@ class _ContentListState extends State<_ContentList> {
               focusNode:    _nodeFor(i),
               autofocus:    i == 0,
               borderRadius: AppSpacing.radiusCard,
+              scaleOnFocus: true,
               onTap:        () => widget.onTap(widget.items[i]),
               child:        _PosterCard(vod: widget.items[i]),
             ),

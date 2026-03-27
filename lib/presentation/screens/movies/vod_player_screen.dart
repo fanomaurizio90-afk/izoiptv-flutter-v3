@@ -193,7 +193,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) context.go(widget.backPath);
+        if (!didPop) context.pop();
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -256,13 +256,13 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                                   Focus(
                                     onKeyEvent: (_, event) {
                                       if (event is KeyDownEvent && _isActivateKey(event)) {
-                                        context.go(widget.backPath);
+                                        context.pop();
                                         return KeyEventResult.handled;
                                       }
                                       return KeyEventResult.ignored;
                                     },
                                     child: GestureDetector(
-                                      onTap: () => context.go(widget.backPath),
+                                      onTap: () => context.pop(),
                                       child: const Icon(Icons.arrow_back,
                                           color: AppColors.textPrimary, size: 18),
                                     ),

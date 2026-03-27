@@ -98,7 +98,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) context.go('/live');
+        if (!didPop) context.pop();
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -120,7 +120,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
             case LogicalKeyboardKey.escape:
             case LogicalKeyboardKey.arrowLeft:
             case LogicalKeyboardKey.numpadEnter:
-              context.go('/live');
+              context.pop();
               return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
@@ -153,7 +153,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     channel:   ch,
                     onPrev:    _previousChannel,
                     onNext:    _nextChannel,
-                    onBack:    () => context.go('/live'),
+                    onBack:    () => context.pop(),
                   ),
                 ),
               ),

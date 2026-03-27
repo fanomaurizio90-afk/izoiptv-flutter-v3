@@ -444,11 +444,11 @@ class _ChannelRowState extends State<_ChannelRow> {
           height:  AppConstants.channelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x0FFFFFFF) : Colors.transparent,
+            color: _focused ? const Color(0x1AFFFFFF) : Colors.transparent,
             border: Border(
               left: BorderSide(
                 color: _focused ? AppColors.textPrimary : Colors.transparent,
-                width: 2.5,
+                width: _focused ? 3.0 : 2.5,
               ),
               bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
             ),
@@ -483,8 +483,8 @@ class _ChannelRowState extends State<_ChannelRow> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color:      AppColors.textPrimary,
-                    fontSize:   13,
-                    fontWeight: FontWeight.w400,
+                    fontSize:   _focused ? 14 : 13,
+                    fontWeight: _focused ? FontWeight.w500 : FontWeight.w400,
                     height:     1.4,
                   ),
                 ),
