@@ -71,6 +71,17 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         position:     state.position,
         duration:     v,
         currentIndex: state.currentIndex,
+        error:       null,
+      );
+    });
+    _player.stream.error.listen((e) {
+      if (mounted) state = PlayerState(
+        isPlaying:    state.isPlaying,
+        isBuffering:  state.isBuffering,
+        position:     state.position,
+        duration:     state.duration,
+        currentIndex: state.currentIndex,
+        error:       e.toString(),
       );
     });
   }

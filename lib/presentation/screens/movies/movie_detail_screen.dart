@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
 import '../../providers/providers.dart';
@@ -52,13 +51,13 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
         data: (vod) {
           if (vod == null) {
             return Center(child: Text('Movie not found',
-              style: GoogleFonts.dmSans(color: AppColors.textSecondary)));
+              style: TextStyle(color: AppColors.textSecondary)));
           }
           return _MovieDetailBody(vod: vod);
         },
         loading: () => const SkeletonDetailBackdrop(),
         error:   (e, _) => Center(child: Text(e.toString(),
-          style: GoogleFonts.dmSans(color: AppColors.error, fontSize: 12))),
+          style: TextStyle(color: AppColors.error, fontSize: 12))),
       ),
     );
   }
@@ -130,7 +129,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
           left: AppSpacing.tvH,
           child: FocusableWidget(
             focusNode: _backNode,
-            onTap:     () => context.pop(),
+            onTap:     () => context.go('/movies'),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
@@ -153,7 +152,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
                     children: [
                       Text(
                         vod.name,
-                        style: GoogleFonts.dmSans(
+                        style: TextStyle(
                           color:         AppColors.textPrimary,
                           fontSize:      22,
                           fontWeight:    FontWeight.w500,
@@ -173,7 +172,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
                         const SizedBox(height: AppSpacing.lg),
                         Text(
                           vod.plot!,
-                          style: GoogleFonts.dmSans(
+                          style: TextStyle(
                             color:      AppColors.textSecondary,
                             fontSize:   13,
                             fontWeight: FontWeight.w300,
@@ -215,7 +214,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
                                 const SizedBox(width: 6),
                                 Text(
                                   'Play',
-                                  style: GoogleFonts.dmSans(
+                                  style: TextStyle(
                                     color:      const Color(0xFF080808),
                                     fontSize:   14,
                                     fontWeight: FontWeight.w500,
@@ -252,7 +251,7 @@ class _MetaRow extends StatelessWidget {
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
       parts.join('  ·  '),
-      style: GoogleFonts.dmSans(
+      style: TextStyle(
         color:         AppColors.textMuted,
         fontSize:      12,
         fontWeight:    FontWeight.w300,
@@ -283,7 +282,7 @@ class _StarRating extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           rating.toStringAsFixed(1),
-          style: GoogleFonts.dmSans(
+          style: TextStyle(
             color:    AppColors.textMuted,
             fontSize: 11,
           ),

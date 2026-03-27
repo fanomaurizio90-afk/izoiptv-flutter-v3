@@ -117,6 +117,11 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
             case LogicalKeyboardKey.enter:
               ref.read(playerProvider.notifier).togglePlay();
               return KeyEventResult.handled;
+            case LogicalKeyboardKey.escape:
+            case LogicalKeyboardKey.arrowLeft:
+            case LogicalKeyboardKey.numpadEnter:
+              context.go('/live');
+              return KeyEventResult.handled;
             case LogicalKeyboardKey.contextMenu:
               _showControlsTemporarily();
               return KeyEventResult.handled;

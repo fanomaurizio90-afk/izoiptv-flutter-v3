@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
@@ -108,6 +107,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
 
   Future<void> _selectCategory(int catId) async {
     setState(() { _selectedCatId = catId; _loading = true; });
+    // Clear stale channel node reference before rebuilding the list
+    _firstChannelNode = null;
     try {
       final channels = await ref.read(channelRepositoryProvider).getChannelsByCategory(catId);
       if (!mounted) return;
@@ -170,7 +171,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
         GestureDetector(onTap: _load,
-          child: Text('Retry', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13))),
+          child: Text('Retry', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
     if (_filtered.isEmpty) {
@@ -244,10 +245,10 @@ class _SearchBar extends StatelessWidget {
               child: TextField(
                 controller: controller,
                 focusNode:  focusNode,
-                style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13),
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
                 decoration: InputDecoration(
                   hintText:       'Search channels',
-                  hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+                  hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 13),
                   border:         InputBorder.none,
                   enabledBorder:  InputBorder.none,
                   focusedBorder:  InputBorder.none,
@@ -480,7 +481,7 @@ class _ChannelRowState extends State<_ChannelRow> {
                   widget.channel.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.dmSans(
+                  style: TextStyle(
                     color:      AppColors.textPrimary,
                     fontSize:   13,
                     fontWeight: FontWeight.w400,
@@ -509,7 +510,7 @@ class _FirstLetterPlaceholder extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: GoogleFonts.dmSans(
+        style: TextStyle(
           color:      AppColors.textSecondary,
           fontSize:   18,
           fontWeight: FontWeight.w500,
@@ -650,7 +651,7 @@ class _CategorySidebarState extends State<_CategorySidebar> {
                     cat.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.dmSans(
+                    style: TextStyle(
                       color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
                       fontSize:   12,
                       fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,

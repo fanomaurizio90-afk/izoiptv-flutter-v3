@@ -361,6 +361,7 @@ class _VodControls extends ConsumerWidget {
             child: Slider(
               value: progress.toDouble(),
               onChanged: (v) {
+                if (dur.inMilliseconds <= 0) return;
                 final seekTo = Duration(
                     milliseconds: (v * dur.inMilliseconds).round());
                 ref.read(playerProvider.notifier).seek(seekTo);

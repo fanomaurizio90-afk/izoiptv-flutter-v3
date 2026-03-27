@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/vod.dart';
 import '../../../core/theme/app_theme.dart';
@@ -47,16 +46,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: AppColors.surface,
         title: Text(
           'Exit IZO IPTV?',
-          style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: GoogleFonts.dmSans(color: AppColors.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Exit', style: GoogleFonts.dmSans(color: const Color(0xFFE57373))),
+            child: Text('Exit', style: TextStyle(color: const Color(0xFFE57373))),
           ),
         ],
       ),
@@ -212,7 +211,7 @@ class _SectionLabel extends StatelessWidget {
       children: [
         Text(
           text,
-          style: GoogleFonts.dmSans(
+          style: TextStyle(
             color:         AppColors.textMuted,
             fontSize:      10,
             fontWeight:    FontWeight.w500,
@@ -351,7 +350,7 @@ class _HeroTile extends StatelessWidget {
                 ),
                 child: Text(
                   tile.tag,
-                  style: GoogleFonts.dmSans(
+                  style: TextStyle(
                     color:         AppColors.textMuted,
                     fontSize:      8,
                     fontWeight:    FontWeight.w500,
@@ -366,7 +365,7 @@ class _HeroTile extends StatelessWidget {
               bottom: AppSpacing.lg,
               child: Text(
                 tile.label,
-                style: GoogleFonts.dmSans(
+                style: TextStyle(
                   color:         AppColors.textPrimary,
                   fontSize:      22,
                   fontWeight:    FontWeight.w500,
@@ -589,7 +588,7 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
                                 item['content_name'] as String? ?? '',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.dmSans(
+                                style: TextStyle(
                                   color:      AppColors.textPrimary,
                                   fontSize:   12,
                                   fontWeight: FontWeight.w400,

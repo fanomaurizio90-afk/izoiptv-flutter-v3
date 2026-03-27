@@ -17,9 +17,8 @@
 -keepclassmembers class kotlin.Metadata { public <methods>; }
 
 # ── media_kit (libmpv JNI bridge) ─────────────────────────────────────────────
--keep class com.alexmercerind.** { *; }
--keep class media.kit.** { *; }
--dontwarn com.alexmercerind.**
+-keep class com.alexmercerind.media_kit.** { *; }
+-dontwarn com.alexmercerind.media_kit.**
 
 # ── flutter_secure_storage (Android Keystore) ────────────────────────────────
 -keep class com.it_nomads.fluttersecurestorage.** { *; }

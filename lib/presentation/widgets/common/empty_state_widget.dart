@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 
 enum EmptyStateType { channels, movies, series, favourites, search }
@@ -24,7 +23,7 @@ class EmptyStateWidget extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             cfg.$1,
-            style: GoogleFonts.dmSans(
+            style: const TextStyle(
               color:      AppColors.textPrimary,
               fontSize:   14,
               fontWeight: FontWeight.w500,
@@ -34,7 +33,7 @@ class EmptyStateWidget extends StatelessWidget {
           Text(
             cfg.$2,
             textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(
+            style: const TextStyle(
               color:    AppColors.textMuted,
               fontSize: 12,
               height:   1.5,

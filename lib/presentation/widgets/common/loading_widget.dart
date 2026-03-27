@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
-import 'skeleton_widget.dart';
 
 class LoadingWidget extends StatelessWidget {
   const LoadingWidget({super.key, this.message});
@@ -25,7 +23,7 @@ class LoadingWidget extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               message!,
-              style: GoogleFonts.dmSans(
+              style: const TextStyle(
                 color:         AppColors.textMuted,
                 fontSize:      12,
                 fontWeight:    FontWeight.w300,

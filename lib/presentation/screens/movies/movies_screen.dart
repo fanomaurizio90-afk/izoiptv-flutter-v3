@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/vod.dart';
@@ -161,7 +160,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
         GestureDetector(onTap: _load,
-          child: Text('Retry', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13))),
+          child: Text('Retry', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
     final display = _searching ? _searchResults : _items;
@@ -403,7 +402,7 @@ class _PosterCard extends StatelessWidget {
                 maxLines:  2,
                 overflow:  TextOverflow.ellipsis,
                 textAlign: TextAlign.left,
-                style: GoogleFonts.dmSans(
+                style: TextStyle(
                   color:      AppColors.textPrimary,
                   fontSize:   10,
                   fontWeight: FontWeight.w400,
@@ -452,7 +451,7 @@ class _TopBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Text(
             'Movies',
-            style: GoogleFonts.dmSans(
+            style: TextStyle(
               color:      AppColors.textPrimary,
               fontSize:   14,
               fontWeight: FontWeight.w500,
@@ -472,10 +471,10 @@ class _TopBar extends StatelessWidget {
               },
               child: TextField(
                 controller: searchCtrl,
-                style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
                 decoration: InputDecoration(
                   hintText:       'Search in this category...',
-                  hintStyle:      GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12),
+                  hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
                   border:         InputBorder.none,
                   enabledBorder:  InputBorder.none,
                   focusedBorder:  InputBorder.none,
@@ -610,7 +609,7 @@ class _CategoryBarState extends State<_CategoryBar> {
                     children: [
                       Text(
                         cat.name,
-                        style: GoogleFonts.dmSans(
+                        style: TextStyle(
                           color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
                           fontSize:   12,
                           fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,

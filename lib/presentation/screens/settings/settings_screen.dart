@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/providers.dart';
@@ -78,7 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(width: AppSpacing.md),
                   Text(
                     'Settings',
-                    style: GoogleFonts.dmSans(
+                    style: const TextStyle(
                       color:      AppColors.textPrimary,
                       fontSize:   16,
                       fontWeight: FontWeight.w500,
@@ -131,7 +131,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
 
                   _SectionHeader('App'),
-                  const _SettingsRow(label: 'Version', value: '2.4.2'),
+                  _SettingsRow(label: 'Version', value: AppConstants.appVersion),
                   const SizedBox(height: AppSpacing.xl6),
 
                   // Sign Out
@@ -231,7 +231,7 @@ class _SettingsRowState extends State<_SettingsRow> {
         children: [
           Text(
             widget.label,
-            style: GoogleFonts.dmSans(
+            style: const TextStyle(
               color:      AppColors.textPrimary,
               fontSize:   13,
               fontWeight: FontWeight.w400,
@@ -241,7 +241,7 @@ class _SettingsRowState extends State<_SettingsRow> {
           if (widget.value != null)
             Text(
               widget.value!,
-              style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           if (widget.showArrow) ...[
             const SizedBox(width: 6),
@@ -315,8 +315,8 @@ class _SignOutRowState extends State<_SignOutRow> {
           child: Center(
             child: Text(
               'Sign Out',
-              style: GoogleFonts.dmSans(
-                color:      const Color(0xFFE57373),
+              style: const TextStyle(
+                color:      Color(0xFFE57373),
                 fontSize:   13,
                 fontWeight: FontWeight.w400,
               ),
@@ -393,7 +393,7 @@ class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
         children: [
           Text(
             rowLabel,
-            style: GoogleFonts.dmSans(
+            style: const TextStyle(
               color:      AppColors.textPrimary,
               fontSize:   13,
               fontWeight: FontWeight.w400,
@@ -412,7 +412,7 @@ class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
           ],
           Text(
             value,
-            style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
           ),
         ],
       ),
@@ -434,7 +434,7 @@ class _SectionHeader extends StatelessWidget {
       ),
       child: Text(
         title.toUpperCase(),
-        style: GoogleFonts.dmSans(
+        style: const TextStyle(
           color:         AppColors.textMuted,
           fontSize:      10,
           fontWeight:    FontWeight.w500,
@@ -513,7 +513,7 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
             children: [
               Text(
                 'Device ID',
-                style: GoogleFonts.dmSans(
+                style: const TextStyle(
                   color:      AppColors.textPrimary,
                   fontSize:   13,
                   fontWeight: FontWeight.w400,

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/series.dart';
 import '../../../domain/entities/vod.dart';
@@ -68,13 +67,13 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         data: (series) {
           if (series == null) {
             return Center(child: Text('Series not found',
-              style: GoogleFonts.dmSans(color: AppColors.textSecondary)));
+              style: TextStyle(color: AppColors.textSecondary)));
           }
           return _SeriesDetailBody(series: series);
         },
         loading: () => const SkeletonDetailBackdrop(),
         error:   (e, _) => Center(child: Text(e.toString(),
-          style: GoogleFonts.dmSans(color: AppColors.error, fontSize: 12))),
+          style: TextStyle(color: AppColors.error, fontSize: 12))),
       ),
       ), // Scaffold
     ); // PopScope
@@ -109,6 +108,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   void dispose() {
     _backNode.dispose();
     for (final n in _seasonNodes) n.dispose();
+    _firstEpisodeNode?.dispose();
     super.dispose();
   }
 
@@ -225,7 +225,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                     children: [
                       Text(
                         _displaySeries.name,
-                        style: GoogleFonts.dmSans(
+                        style: TextStyle(
                           color:         AppColors.textPrimary,
                           fontSize:      22,
                           fontWeight:    FontWeight.w500,
@@ -237,7 +237,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                         const SizedBox(height: 6),
                         Text(
                           _displaySeries.genre!,
-                          style: GoogleFonts.dmSans(
+                          style: TextStyle(
                             color:    AppColors.textMuted,
                             fontSize: 12,
                             height:   1.4,
@@ -248,7 +248,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           _displaySeries.plot!,
-                          style: GoogleFonts.dmSans(
+                          style: TextStyle(
                             color:      AppColors.textSecondary,
                             fontSize:   13,
                             fontWeight: FontWeight.w300,
@@ -267,7 +267,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                       return Padding(
                         padding: const EdgeInsets.all(AppSpacing.xl2),
                         child: Text('No episodes',
-                          style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13)),
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
                       );
                     }
                     _rebuildSeasonNodes(seasons.length);
@@ -298,7 +298,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                                     child: Center(
                                       child: Text(
                                         'Season ${s.number}',
-                                        style: GoogleFonts.dmSans(
+                                        style: TextStyle(
                                           color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
                                           fontSize:   13,
                                           fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
@@ -333,7 +333,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                   error: (e, _) => Padding(
                     padding: const EdgeInsets.all(AppSpacing.xl2),
                     child: Text(e.toString(),
-                      style: GoogleFonts.dmSans(color: AppColors.error, fontSize: 12)),
+                      style: TextStyle(color: AppColors.error, fontSize: 12)),
                   ),
                 ),
               ],
@@ -623,7 +623,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                       '${widget.episode.episodeNumber}. ${widget.episode.title}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.dmSans(
+                      style: TextStyle(
                         color:      titleColor,
                         fontSize:   13,
                         fontWeight: FontWeight.w400,
@@ -636,7 +636,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                         widget.episode.plot!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.dmSans(
+                        style: TextStyle(
                           color:      AppColors.textMuted,
                           fontSize:   11,
                           fontWeight: FontWeight.w300,
@@ -666,7 +666,7 @@ class _ThumbnailPlaceholder extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         '$number',
-        style: GoogleFonts.dmSans(
+        style: TextStyle(
           color:      AppColors.textMuted,
           fontSize:   18,
           fontWeight: FontWeight.w300,
