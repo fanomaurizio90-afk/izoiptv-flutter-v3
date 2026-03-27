@@ -543,7 +543,12 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 
   void _onFirstFocus() {
-    if (widget.firstItemFocusNode?.hasFocus == true && mounted) {
+    if (widget.firstItemFocusNode?.hasFocus != true || !mounted) return;
+    // Return focus to the currently selected category, not always index 0.
+    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
+    if (selIdx > 0 && selIdx <= _nodes.length) {
+      _nodes[selIdx - 1].requestFocus();
+    } else {
       _scrollToKey(_keys[0]);
     }
   }
@@ -590,9 +595,20 @@ class _CategoryBarState extends State<_CategoryBar> {
           return Focus(
             key: _keys[i],
             onKeyEvent: (_, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.arrowRight &&
-                  i == widget.categories.length - 1) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                if (i < widget.categories.length - 1) {
+                  _nodes[i].requestFocus(); // focus item i+1
+                } else {
+                  widget.onRightArrow();
+                }
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft && i > 0) {
+                (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                 widget.onRightArrow();
                 return KeyEventResult.handled;
               }

@@ -571,7 +571,13 @@ class _CategorySidebarState extends State<_CategorySidebar> {
   }
 
   void _onFirstNodeFocus() {
-    if (widget.firstItemNode?.hasFocus == true && mounted) _ensureVisible(0);
+    if (widget.firstItemNode?.hasFocus != true || !mounted) return;
+    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
+    if (selIdx > 0 && selIdx <= _nodes.length) {
+      _nodes[selIdx - 1].requestFocus();
+    } else {
+      _ensureVisible(0);
+    }
   }
 
   void _rebuildNodes() {
@@ -623,9 +629,18 @@ class _CategorySidebarState extends State<_CategorySidebar> {
             final node       = i == 0 ? widget.firstItemNode : _nodes[i - 1];
             return Focus(
               onKeyEvent: (_, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                   widget.onRightArrow();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+                    i < widget.categories.length - 1) {
+                  _nodes[i].requestFocus(); // focus item i+1
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp && i > 0) {
+                  (i == 1 ? widget.firstItemNode : _nodes[i - 2])?.requestFocus();
                   return KeyEventResult.handled;
                 }
                 return KeyEventResult.ignored;
