@@ -123,7 +123,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/home');
       },
       child: Scaffold(
@@ -495,6 +495,103 @@ class _TopBar extends StatelessWidget {
 
 // ── Category Bar ──────────────────────────────────────────────────────────────
 
+// ── Category Tab Item ─────────────────────────────────────────────────────────
+
+class _CategoryTabItem extends StatefulWidget {
+  const _CategoryTabItem({
+    required this.category,
+    required this.isSelected,
+    required this.focusNode,
+  });
+  final VodCategory category;
+  final bool        isSelected;
+  final FocusNode?  focusNode;
+
+  @override
+  State<_CategoryTabItem> createState() => _CategoryTabItemState();
+}
+
+class _CategoryTabItemState extends State<_CategoryTabItem> {
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode?.addListener(_onChange);
+  }
+
+  @override
+  void didUpdateWidget(_CategoryTabItem old) {
+    super.didUpdateWidget(old);
+    if (widget.focusNode != old.focusNode) {
+      old.focusNode?.removeListener(_onChange);
+      widget.focusNode?.addListener(_onChange);
+      _focused = widget.focusNode?.hasFocus ?? false;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode?.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    if (mounted) setState(() => _focused = widget.focusNode?.hasFocus ?? false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSel = widget.isSelected;
+    final isFoc = _focused;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: AppSpacing.xl2),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isFoc ? const Color(0x0CFFFFFF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: isFoc
+              ? Border.all(
+                  color: isSel ? const Color(0x44FFFFFF) : const Color(0x22FFFFFF),
+                  width: 0.75,
+                )
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.category.name,
+              style: TextStyle(
+                color: isSel
+                    ? AppColors.textPrimary
+                    : isFoc
+                        ? const Color(0xCCFFFFFF)
+                        : AppColors.textMuted,
+                fontSize:   12,
+                fontWeight: isSel ? FontWeight.w500 : FontWeight.w300,
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              margin: const EdgeInsets.only(top: 3),
+              height: 1.5,
+              width:  isSel ? 14.0 : 0.0,
+              decoration: const BoxDecoration(
+                color:        AppColors.textPrimary,
+                borderRadius: BorderRadius.all(Radius.circular(1)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CategoryBar extends StatefulWidget {
   const _CategoryBar({
     required this.categories,
@@ -618,30 +715,10 @@ class _CategoryBarState extends State<_CategoryBar> {
               autofocus: i == 0,
               focusNode: node,
               onTap:     () => widget.onSelect(cat.id),
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.xl2),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        cat.name,
-                        style: TextStyle(
-                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                          fontSize:   12,
-                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-                        ),
-                      ),
-                      AnimatedContainer(
-                        duration: AppDurations.fast,
-                        margin: const EdgeInsets.only(top: 3),
-                        height: 1,
-                        width:  isSelected ? 20 : 0,
-                        color:  AppColors.textPrimary,
-                      ),
-                    ],
-                  ),
-                ),
+              child: _CategoryTabItem(
+                category:   cat,
+                isSelected: isSelected,
+                focusNode:  node,
               ),
             ),
           );
