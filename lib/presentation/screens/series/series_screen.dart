@@ -142,7 +142,8 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
               selectedId:         _selectedCatId,
               onSelect:           _selectCategory,
               firstItemFocusNode: _firstCategoryFocusNode,
-              onRightArrow:       () => _firstGridFocusNode?.requestFocus(),
+              onDownArrow:        () => _firstGridFocusNode?.requestFocus(),
+              onUpArrow:          () => _backFocusNode.requestFocus(),
             ),
             Expanded(child: _buildContent()),
           ],
@@ -296,14 +297,14 @@ class _ContentListState extends State<_ContentList> {
     final col = idx % widget.columns;
 
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      _move(idx + 1);
+      if (col < widget.columns - 1 && idx + 1 < widget.items.length) {
+        _move(idx + 1);
+      }
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       if (col > 0) {
         _move(idx - 1);
-      } else {
-        widget.categoryFocusNode?.requestFocus();
       }
       return KeyEventResult.handled;
     }
@@ -494,13 +495,15 @@ class _CategoryBar extends StatefulWidget {
     required this.categories,
     required this.selectedId,
     required this.onSelect,
-    required this.onRightArrow,
+    required this.onDownArrow,
+    required this.onUpArrow,
     this.firstItemFocusNode,
   });
   final List<SeriesCategory> categories;
   final int?                 selectedId;
   final void Function(int)   onSelect;
-  final VoidCallback         onRightArrow;
+  final VoidCallback         onDownArrow;
+  final VoidCallback         onUpArrow;
   final FocusNode?           firstItemFocusNode;
 
   @override
@@ -591,17 +594,21 @@ class _CategoryBarState extends State<_CategoryBar> {
               if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                 if (i < widget.categories.length - 1) {
                   _nodes[i].requestFocus();
-                } else {
-                  widget.onRightArrow();
                 }
                 return KeyEventResult.handled;
               }
-              if (event.logicalKey == LogicalKeyboardKey.arrowLeft && i > 0) {
-                (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
+              if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                if (i > 0) {
+                  (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
+                }
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.onRightArrow();
+                widget.onDownArrow();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                widget.onUpArrow();
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
