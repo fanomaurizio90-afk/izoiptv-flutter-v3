@@ -26,6 +26,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
   final _searchFocusNode        = FocusNode();
   final _backFocusNode          = FocusNode();
   FocusNode? _firstGridFocusNode;
+  VoidCallback? _jumpToSelectedCategory;
 
   List<SeriesCategory> _categories    = [];
   int?                 _selectedCatId;
@@ -143,6 +144,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
               onSelect:           _selectCategory,
               firstItemFocusNode: _firstCategoryFocusNode,
               onRightArrow:       () => _firstGridFocusNode?.requestFocus(),
+              onRegisterJump:     (cb) { _jumpToSelectedCategory = cb; },
             ),
             Expanded(child: _buildContent()),
           ],
@@ -171,11 +173,11 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       );
     }
     return _ContentList(
-      items:             display,
-      columns:           cols,
-      categories:        _categories,
-      categoryFocusNode: _firstCategoryFocusNode,
-      onFirstNodeReady:  (node) { _firstGridFocusNode = node; },
+      items:                  display,
+      columns:                cols,
+      categories:             _categories,
+      onNavigateToCategories: () => _jumpToSelectedCategory?.call(),
+      onFirstNodeReady:       (node) { _firstGridFocusNode = node; },
       onTap:             (s) async {
         final cat = _categories.firstWhere(
           (c) => c.id == s.categoryId,
@@ -198,14 +200,14 @@ class _ContentList extends StatefulWidget {
     required this.categories,
     required this.onTap,
     required this.onFirstNodeReady,
-    this.categoryFocusNode,
+    this.onNavigateToCategories,
   });
   final List<SeriesItem>          items;
   final int                       columns;
   final List<SeriesCategory>      categories;
   final void Function(SeriesItem) onTap;
   final void Function(FocusNode)  onFirstNodeReady;
-  final FocusNode?                categoryFocusNode;
+  final VoidCallback?             onNavigateToCategories;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -303,7 +305,7 @@ class _ContentListState extends State<_ContentList> {
       if (col > 0) {
         _move(idx - 1);
       } else {
-        widget.categoryFocusNode?.requestFocus();
+        widget.onNavigateToCategories?.call();
       }
       return KeyEventResult.handled;
     }
@@ -315,7 +317,7 @@ class _ContentListState extends State<_ContentList> {
       if (idx - widget.columns >= 0) {
         _move(idx - widget.columns);
       } else {
-        widget.categoryFocusNode?.requestFocus();
+        widget.onNavigateToCategories?.call();
       }
       return KeyEventResult.handled;
     }
@@ -496,12 +498,14 @@ class _CategoryBar extends StatefulWidget {
     required this.onSelect,
     required this.onRightArrow,
     this.firstItemFocusNode,
+    this.onRegisterJump,
   });
-  final List<SeriesCategory> categories;
-  final int?                 selectedId;
-  final void Function(int)   onSelect;
-  final VoidCallback         onRightArrow;
-  final FocusNode?           firstItemFocusNode;
+  final List<SeriesCategory>           categories;
+  final int?                           selectedId;
+  final void Function(int)             onSelect;
+  final VoidCallback                   onRightArrow;
+  final FocusNode?                     firstItemFocusNode;
+  final void Function(VoidCallback)?   onRegisterJump;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
@@ -515,34 +519,33 @@ class _CategoryBarState extends State<_CategoryBar> {
   void initState() {
     super.initState();
     _rebuild();
-    widget.firstItemFocusNode?.addListener(_onFirstFocus);
+    widget.onRegisterJump?.call(_jumpToSelected);
   }
 
   @override
   void didUpdateWidget(_CategoryBar old) {
     super.didUpdateWidget(old);
     if (widget.categories.length != _nodes.length + 1) _rebuild();
-    if (widget.firstItemFocusNode != old.firstItemFocusNode) {
-      old.firstItemFocusNode?.removeListener(_onFirstFocus);
-      widget.firstItemFocusNode?.addListener(_onFirstFocus);
-    }
   }
 
   @override
   void dispose() {
-    widget.firstItemFocusNode?.removeListener(_onFirstFocus);
     for (final n in _nodes) n.dispose();
     super.dispose();
   }
 
-  void _onFirstFocus() {
-    if (widget.firstItemFocusNode?.hasFocus != true || !mounted) return;
+  void _jumpToSelected() {
+    if (!mounted) return;
     final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
-    } else {
-      _scrollToKey(_keys[0]);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (selIdx <= 0) {
+        widget.firstItemFocusNode?.requestFocus();
+        if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
+      } else if (selIdx <= _nodes.length) {
+        _nodes[selIdx - 1].requestFocus();
+      }
+    });
   }
 
   void _rebuild() {

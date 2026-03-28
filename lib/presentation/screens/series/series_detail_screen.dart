@@ -47,7 +47,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
       return PopScope(
         canPop: false,
         onPopInvoked: (didPop) {
-          if (!didPop) context.go('/series');
+          if (!didPop) context.pop();
         },
         child: Scaffold(
           backgroundColor: const Color(0xFF080808),
@@ -59,7 +59,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) context.go('/series');
+        if (!didPop) context.pop();
       },
       child: Scaffold(
       backgroundColor: const Color(0xFF080808),
@@ -204,7 +204,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
           child: FocusableWidget(
             focusNode: _backNode,
             autofocus: true,
-            onTap: () => context.go('/series'),
+            onTap: () => context.pop(),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),

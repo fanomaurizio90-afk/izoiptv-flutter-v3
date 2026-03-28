@@ -38,6 +38,10 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   final _firstSidebarNode  = FocusNode();
   // First channel row focus — set via callback from _ChannelList
   FocusNode? _firstChannelNode;
+  // Callback registered by _CategorySidebar to jump to selected category
+  VoidCallback? _jumpToSelectedCategory;
+
+  static const int _favCatId = -1;
 
   @override
   void initState() {
@@ -89,11 +93,19 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
-      final catId    = _selectedCatId ?? cats.first.id;
-      final channels = await repo.getChannelsByCategory(catId);
+      // Prepend Favorites as the first category (sentinel id = -1)
+      final allCats = [
+        const ChannelCategory(id: _favCatId, name: 'Favourites'),
+        ...cats,
+      ];
+      // Default to first real category on initial load (avoids empty favourites on first open)
+      final catId = _selectedCatId ?? cats.first.id;
+      final channels = catId == _favCatId
+          ? await repo.getFavourites()
+          : await repo.getChannelsByCategory(catId);
       if (!mounted) return;
       setState(() {
-        _categories    = cats;
+        _categories    = allCats;
         _selectedCatId = catId;
         _channels      = channels;
         _filtered      = channels;
@@ -110,7 +122,10 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     // Clear stale channel node reference before rebuilding the list
     _firstChannelNode = null;
     try {
-      final channels = await ref.read(channelRepositoryProvider).getChannelsByCategory(catId);
+      final repo     = ref.read(channelRepositoryProvider);
+      final channels = catId == _favCatId
+          ? await repo.getFavourites()
+          : await repo.getChannelsByCategory(catId);
       if (!mounted) return;
       setState(() {
         _channels = channels;
@@ -121,6 +136,13 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _onToggleFavourite(Channel ch) async {
+    await ref.read(channelRepositoryProvider).toggleFavourite(ch.id, !ch.isFavourite);
+    if (!mounted) return;
+    // Reload current list to reflect the updated favourite state
+    await _selectCategory(_selectedCatId ?? _favCatId);
   }
 
   @override
@@ -140,8 +162,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
               selectedId:     _selectedCatId,
               onSelect:       _selectCategory,
               firstItemNode:  _firstSidebarNode,
-              // Right arrow on sidebar → search bar or first channel
               onRightArrow:   () => (_firstChannelNode ?? _searchFocusNode).requestFocus(),
+              onRegisterJump: (cb) { _jumpToSelectedCategory = cb; },
             ),
             Container(width: 0.5, color: AppColors.border),
             Expanded(
@@ -175,14 +197,24 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       ]));
     }
     if (_filtered.isEmpty) {
+      if (_selectedCatId == _favCatId) {
+        return const Center(
+          child: Text(
+            'No favourites yet.\nLong press any channel to add.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.6),
+          ),
+        );
+      }
       return const EmptyStateWidget(type: EmptyStateType.channels);
     }
     return _ChannelList(
-      channels:        _filtered,
-      categories:      _categories,
-      sidebarNode:     _firstSidebarNode,
-      onFirstNodeReady: (node) { _firstChannelNode = node; },
-      onChannelTap:    (ch, i) async {
+      channels:             _filtered,
+      categories:           _categories,
+      onFirstNodeReady:     (node) { _firstChannelNode = node; },
+      onNavigateToSidebar:  () => _jumpToSelectedCategory?.call(),
+      onToggleFavourite:    _onToggleFavourite,
+      onChannelTap:         (ch, i) async {
         final cat = _categories.firstWhere(
           (c) => c.id == ch.categoryId,
           orElse: () => const ChannelCategory(id: 0, name: ''),
@@ -272,15 +304,17 @@ class _ChannelList extends StatefulWidget {
   const _ChannelList({
     required this.channels,
     required this.categories,
-    required this.sidebarNode,
     required this.onFirstNodeReady,
     required this.onChannelTap,
+    required this.onNavigateToSidebar,
+    this.onToggleFavourite,
   });
-  final List<Channel>                channels;
-  final List<ChannelCategory>        categories;
-  final FocusNode                    sidebarNode;
-  final void Function(FocusNode)     onFirstNodeReady;
-  final void Function(Channel, int)  onChannelTap;
+  final List<Channel>                    channels;
+  final List<ChannelCategory>            categories;
+  final void Function(FocusNode)         onFirstNodeReady;
+  final void Function(Channel, int)      onChannelTap;
+  final VoidCallback                     onNavigateToSidebar;
+  final Future<void> Function(Channel)?  onToggleFavourite;
 
   @override
   State<_ChannelList> createState() => _ChannelListState();
@@ -374,7 +408,7 @@ class _ChannelListState extends State<_ChannelList> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.sidebarNode.requestFocus();
+      widget.onNavigateToSidebar();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -394,9 +428,12 @@ class _ChannelListState extends State<_ChannelList> {
           itemBuilder: (_, i) {
             final ch = widget.channels[i];
             return _ChannelRow(
-              channel:   ch,
-              focusNode: _nodes[i],
-              onTap:     () => widget.onChannelTap(ch, i),
+              channel:           ch,
+              focusNode:         _nodes[i],
+              onTap:             () => widget.onChannelTap(ch, i),
+              onToggleFavourite: widget.onToggleFavourite != null
+                  ? () { widget.onToggleFavourite!(ch); }
+                  : null,
             );
           },
         ),
@@ -412,10 +449,12 @@ class _ChannelRow extends StatefulWidget {
     required this.channel,
     required this.onTap,
     required this.focusNode,
+    this.onToggleFavourite,
   });
   final Channel      channel;
   final VoidCallback onTap;
   final FocusNode    focusNode;
+  final VoidCallback? onToggleFavourite;
 
   @override
   State<_ChannelRow> createState() => _ChannelRowState();
@@ -436,10 +475,16 @@ class _ChannelRowState extends State<_ChannelRow> {
           widget.onTap();
           return KeyEventResult.handled;
         }
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.contextMenu) {
+          widget.onToggleFavourite?.call();
+          return KeyEventResult.handled;
+        }
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap:       widget.onTap,
+        onLongPress: widget.onToggleFavourite,
         child: Container(
           height:  AppConstants.channelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
@@ -489,7 +534,10 @@ class _ChannelRowState extends State<_ChannelRow> {
                   ),
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
+              if (widget.channel.isFavourite)
+                const Icon(Icons.star, color: AppColors.textMuted, size: 14)
+              else
+                const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
             ],
           ),
         ),
@@ -529,12 +577,14 @@ class _CategorySidebar extends StatefulWidget {
     required this.onSelect,
     required this.onRightArrow,
     this.firstItemNode,
+    this.onRegisterJump,
   });
-  final List<ChannelCategory> categories;
-  final int?                  selectedId;
-  final void Function(int)    onSelect;
-  final VoidCallback          onRightArrow;
-  final FocusNode?            firstItemNode;
+  final List<ChannelCategory>          categories;
+  final int?                           selectedId;
+  final void Function(int)             onSelect;
+  final VoidCallback                   onRightArrow;
+  final FocusNode?                     firstItemNode;
+  final void Function(VoidCallback)?   onRegisterJump;
 
   @override
   State<_CategorySidebar> createState() => _CategorySidebarState();
@@ -549,35 +599,34 @@ class _CategorySidebarState extends State<_CategorySidebar> {
   void initState() {
     super.initState();
     _rebuildNodes();
-    widget.firstItemNode?.addListener(_onFirstNodeFocus);
+    widget.onRegisterJump?.call(_jumpToSelected);
   }
 
   @override
   void didUpdateWidget(_CategorySidebar old) {
     super.didUpdateWidget(old);
     if (widget.categories.length - 1 != _nodes.length) _rebuildNodes();
-    if (widget.firstItemNode != old.firstItemNode) {
-      old.firstItemNode?.removeListener(_onFirstNodeFocus);
-      widget.firstItemNode?.addListener(_onFirstNodeFocus);
-    }
   }
 
   @override
   void dispose() {
-    widget.firstItemNode?.removeListener(_onFirstNodeFocus);
     for (final n in _nodes) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  void _onFirstNodeFocus() {
-    if (widget.firstItemNode?.hasFocus != true || !mounted) return;
+  void _jumpToSelected() {
+    if (!mounted) return;
     final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
-    } else {
-      _ensureVisible(0);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (selIdx <= 0) {
+        widget.firstItemNode?.requestFocus();
+        _ensureVisible(0);
+      } else if (selIdx <= _nodes.length) {
+        _nodes[selIdx - 1].requestFocus();
+      }
+    });
   }
 
   void _rebuildNodes() {

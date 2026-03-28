@@ -129,7 +129,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
           left: AppSpacing.tvH,
           child: FocusableWidget(
             focusNode: _backNode,
-            onTap:     () => context.go('/movies'),
+            onTap:     () => context.pop(),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),

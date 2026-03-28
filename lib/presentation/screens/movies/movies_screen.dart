@@ -27,6 +27,8 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   final _backFocusNode          = FocusNode();
   // First grid item focus node — set by _ContentList via callback
   FocusNode? _firstGridFocusNode;
+  // Callback registered by _CategoryBar to jump to the selected category
+  VoidCallback? _jumpToSelectedCategory;
 
   List<VodCategory> _categories    = [];
   int?              _selectedCatId;
@@ -143,6 +145,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
               onSelect:           _selectCategory,
               firstItemFocusNode: _firstCategoryFocusNode,
               onRightArrow:       () => _firstGridFocusNode?.requestFocus(),
+              onRegisterJump:     (cb) { _jumpToSelectedCategory = cb; },
             ),
             Expanded(child: _buildContent()),
           ],
@@ -171,11 +174,11 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       );
     }
     return _ContentList(
-      items:              display,
-      columns:            cols,
-      categories:         _categories,
-      categoryFocusNode:  _firstCategoryFocusNode,
-      onFirstNodeReady:   (node) { _firstGridFocusNode = node; },
+      items:                  display,
+      columns:                cols,
+      categories:             _categories,
+      onNavigateToCategories: () => _jumpToSelectedCategory?.call(),
+      onFirstNodeReady:       (node) { _firstGridFocusNode = node; },
       onTap:              (vod) async {
         final cat = _categories.firstWhere(
           (c) => c.id == vod.categoryId,
@@ -201,14 +204,14 @@ class _ContentList extends StatefulWidget {
     required this.categories,
     required this.onTap,
     required this.onFirstNodeReady,
-    this.categoryFocusNode,
+    this.onNavigateToCategories,
   });
   final List<VodItem>          items;
   final int                    columns;
   final List<VodCategory>      categories;
   final void Function(VodItem) onTap;
   final void Function(FocusNode) onFirstNodeReady;
-  final FocusNode?             categoryFocusNode;
+  final VoidCallback?          onNavigateToCategories;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -309,7 +312,7 @@ class _ContentListState extends State<_ContentList> {
       if (col > 0) {
         _move(idx - 1);
       } else {
-        widget.categoryFocusNode?.requestFocus();
+        widget.onNavigateToCategories?.call();
       }
       return KeyEventResult.handled;
     }
@@ -321,7 +324,7 @@ class _ContentListState extends State<_ContentList> {
       if (idx - widget.columns >= 0) {
         _move(idx - widget.columns);
       } else {
-        widget.categoryFocusNode?.requestFocus();
+        widget.onNavigateToCategories?.call();
       }
       return KeyEventResult.handled;
     }
@@ -502,12 +505,14 @@ class _CategoryBar extends StatefulWidget {
     required this.onSelect,
     required this.onRightArrow,
     this.firstItemFocusNode,
+    this.onRegisterJump,
   });
-  final List<VodCategory>  categories;
-  final int?               selectedId;
-  final void Function(int) onSelect;
-  final VoidCallback       onRightArrow;
-  final FocusNode?         firstItemFocusNode;
+  final List<VodCategory>              categories;
+  final int?                           selectedId;
+  final void Function(int)             onSelect;
+  final VoidCallback                   onRightArrow;
+  final FocusNode?                     firstItemFocusNode;
+  final void Function(VoidCallback)?   onRegisterJump;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
@@ -522,35 +527,36 @@ class _CategoryBarState extends State<_CategoryBar> {
   void initState() {
     super.initState();
     _rebuild();
-    widget.firstItemFocusNode?.addListener(_onFirstFocus);
+    widget.onRegisterJump?.call(_jumpToSelected);
   }
 
   @override
   void didUpdateWidget(_CategoryBar old) {
     super.didUpdateWidget(old);
     if (widget.categories.length != _nodes.length + 1) _rebuild();
-    if (widget.firstItemFocusNode != old.firstItemFocusNode) {
-      old.firstItemFocusNode?.removeListener(_onFirstFocus);
-      widget.firstItemFocusNode?.addListener(_onFirstFocus);
-    }
   }
 
   @override
   void dispose() {
-    widget.firstItemFocusNode?.removeListener(_onFirstFocus);
     for (final n in _nodes) n.dispose();
     super.dispose();
   }
 
-  void _onFirstFocus() {
-    if (widget.firstItemFocusNode?.hasFocus != true || !mounted) return;
-    // Return focus to the currently selected category, not always index 0.
+  // Called by the grid when navigating up/left to the category bar.
+  // Focuses the selected category item directly, with postframe to avoid
+  // re-entrancy issues when called from within a key event handler.
+  void _jumpToSelected() {
+    if (!mounted) return;
     final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
-    } else {
-      _scrollToKey(_keys[0]);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (selIdx <= 0) {
+        widget.firstItemFocusNode?.requestFocus();
+        if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
+      } else if (selIdx <= _nodes.length) {
+        _nodes[selIdx - 1].requestFocus();
+      }
+    });
   }
 
   void _rebuild() {

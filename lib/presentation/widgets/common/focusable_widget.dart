@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Handles D-pad focus (TV remote), touch, and focus effects.
-/// Focus: 1px white border only — no glow, no fill, no animation.
+/// Focus: subtle white fill — no border ring.
 class FocusableWidget extends StatefulWidget {
   const FocusableWidget({
     super.key,
@@ -80,9 +80,7 @@ class _FocusableWidgetState extends State<FocusableWidget> {
             duration: AppDurations.fast,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(widget.borderRadius),
-              border: _focused
-                  ? Border.all(color: AppColors.focusBorder, width: 1.0)
-                  : Border.all(color: Colors.transparent, width: 1.0),
+              color: _focused ? const Color(0x1AFFFFFF) : Colors.transparent,
             ),
             child: widget.child,
           ),
