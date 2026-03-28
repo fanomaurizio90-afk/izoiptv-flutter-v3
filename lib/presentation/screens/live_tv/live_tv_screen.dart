@@ -25,6 +25,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   final _searchCtrl = TextEditingController();
   final _debounce   = Debounce(duration: const Duration(milliseconds: 250));
 
+  static const _favouritesCatId = -1;
+
   List<ChannelCategory> _categories    = [];
   int?                  _selectedCatId;
   List<Channel>         _channels      = [];
@@ -32,6 +34,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   bool                  _loading       = true;
   bool                  _syncing       = false;
   String?               _error;
+  int                   _favouriteCount = 0;
 
   // Focus nodes for cross-panel navigation
   final _searchFocusNode   = FocusNode();
@@ -89,8 +92,15 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
+      final favs = await repo.getFavourites();
+      _favouriteCount = favs.length;
+      if (_favouriteCount > 0) {
+        cats.insert(0, const ChannelCategory(id: _favouritesCatId, name: 'Favourites'));
+      }
       final catId    = _selectedCatId ?? cats.first.id;
-      final channels = await repo.getChannelsByCategory(catId);
+      final channels = catId == _favouritesCatId
+          ? favs
+          : await repo.getChannelsByCategory(catId);
       if (!mounted) return;
       setState(() {
         _categories    = cats;
@@ -110,7 +120,10 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     // Clear stale channel node reference before rebuilding the list
     _firstChannelNode = null;
     try {
-      final channels = await ref.read(channelRepositoryProvider).getChannelsByCategory(catId);
+      final repo = ref.read(channelRepositoryProvider);
+      final channels = catId == _favouritesCatId
+          ? await repo.getFavourites()
+          : await repo.getChannelsByCategory(catId);
       if (!mounted) return;
       setState(() {
         _channels = channels;
@@ -120,6 +133,49 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       _searchCtrl.clear();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleFavourite(Channel ch) async {
+    final repo   = ref.read(channelRepositoryProvider);
+    final newVal = !ch.isFavourite;
+    await repo.toggleFavourite(ch.id, newVal);
+
+    // Update the in-memory lists
+    Channel update(Channel c) => c.id == ch.id ? c.copyWith(isFavourite: newVal) : c;
+    _channels = _channels.map(update).toList();
+    _filtered = _filtered.map(update).toList();
+
+    // If viewing favourites and we just un-favourited, remove it
+    if (_selectedCatId == _favouritesCatId && !newVal) {
+      _channels.removeWhere((c) => c.id == ch.id);
+      _filtered.removeWhere((c) => c.id == ch.id);
+    }
+
+    // Update favourite count and categories list
+    final favs = await repo.getFavourites();
+    _favouriteCount = favs.length;
+    final hasFavCat = _categories.any((c) => c.id == _favouritesCatId);
+    if (_favouriteCount > 0 && !hasFavCat) {
+      _categories.insert(0, const ChannelCategory(id: _favouritesCatId, name: 'Favourites'));
+    } else if (_favouriteCount == 0 && hasFavCat) {
+      _categories.removeWhere((c) => c.id == _favouritesCatId);
+      // If we were viewing favourites, switch to first real category
+      if (_selectedCatId == _favouritesCatId && _categories.isNotEmpty) {
+        _selectCategory(_categories.first.id);
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {});
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(newVal ? '${ch.name} added to Favourites' : '${ch.name} removed from Favourites'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF1A1A1A),
+      ));
     }
   }
 
@@ -178,11 +234,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       return const EmptyStateWidget(type: EmptyStateType.channels);
     }
     return _ChannelList(
-      channels:        _filtered,
-      categories:      _categories,
-      sidebarNode:     _firstSidebarNode,
-      onFirstNodeReady: (node) { _firstChannelNode = node; },
-      onChannelTap:    (ch, i) async {
+      channels:           _filtered,
+      categories:         _categories,
+      sidebarNode:        _firstSidebarNode,
+      onFirstNodeReady:   (node) { _firstChannelNode = node; },
+      onToggleFavourite:  _toggleFavourite,
+      onChannelTap:       (ch, i) async {
         final cat = _categories.firstWhere(
           (c) => c.id == ch.categoryId,
           orElse: () => const ChannelCategory(id: 0, name: ''),
@@ -275,12 +332,14 @@ class _ChannelList extends StatefulWidget {
     required this.sidebarNode,
     required this.onFirstNodeReady,
     required this.onChannelTap,
+    required this.onToggleFavourite,
   });
   final List<Channel>                channels;
   final List<ChannelCategory>        categories;
   final FocusNode                    sidebarNode;
   final void Function(FocusNode)     onFirstNodeReady;
   final void Function(Channel, int)  onChannelTap;
+  final void Function(Channel)       onToggleFavourite;
 
   @override
   State<_ChannelList> createState() => _ChannelListState();
@@ -377,6 +436,12 @@ class _ChannelListState extends State<_ChannelList> {
       widget.sidebarNode.requestFocus();
       return KeyEventResult.handled;
     }
+    if (event.logicalKey == LogicalKeyboardKey.contextMenu) {
+      if (idx >= 0 && idx < widget.channels.length) {
+        widget.onToggleFavourite(widget.channels[idx]);
+        return KeyEventResult.handled;
+      }
+    }
     return KeyEventResult.ignored;
   }
 
@@ -394,9 +459,10 @@ class _ChannelListState extends State<_ChannelList> {
           itemBuilder: (_, i) {
             final ch = widget.channels[i];
             return _ChannelRow(
-              channel:   ch,
-              focusNode: _nodes[i],
-              onTap:     () => widget.onChannelTap(ch, i),
+              channel:            ch,
+              focusNode:          _nodes[i],
+              onTap:              () => widget.onChannelTap(ch, i),
+              onToggleFavourite:  () => widget.onToggleFavourite(ch),
             );
           },
         ),
@@ -412,10 +478,12 @@ class _ChannelRow extends StatefulWidget {
     required this.channel,
     required this.onTap,
     required this.focusNode,
+    required this.onToggleFavourite,
   });
   final Channel      channel;
   final VoidCallback onTap;
   final FocusNode    focusNode;
+  final VoidCallback onToggleFavourite;
 
   @override
   State<_ChannelRow> createState() => _ChannelRowState();
@@ -439,7 +507,8 @@ class _ChannelRowState extends State<_ChannelRow> {
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap:      widget.onTap,
+        onLongPress: widget.onToggleFavourite,
         child: Container(
           height:  AppConstants.channelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
@@ -489,6 +558,11 @@ class _ChannelRowState extends State<_ChannelRow> {
                   ),
                 ),
               ),
+              if (widget.channel.isFavourite)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.favorite, color: Colors.white, size: 14),
+                ),
               const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
             ],
           ),
