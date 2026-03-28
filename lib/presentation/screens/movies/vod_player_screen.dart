@@ -193,7 +193,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
-        if (!didPop) context.pop();
+        if (!didPop) context.go(widget.backPath);
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
