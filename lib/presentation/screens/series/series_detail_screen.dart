@@ -10,17 +10,21 @@ import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
 
-// CRITICAL: autoDispose — must not persist stale episode data between series
-final _seriesDetailProvider = FutureProvider.family<SeriesItem?, int>((ref, id) async {
+// ── Providers ────────────────────────────────────────────────────────────────
+
+final _seriesDetailProvider =
+    FutureProvider.family<SeriesItem?, int>((ref, id) async {
   return ref.watch(seriesRepositoryProvider).getSeriesById(id);
 });
 
-final seasonsProvider = FutureProvider.autoDispose.family<List<Season>, int>((ref, seriesId) async {
+final seasonsProvider =
+    FutureProvider.autoDispose.family<List<Season>, int>((ref, seriesId) async {
   return ref.watch(seriesRepositoryProvider).getSeasons(seriesId);
 });
 
-// Global season selector — MUST reset to 1 on every series open
 final selectedSeasonProvider = StateProvider<int>((ref) => 1);
+
+// ── Screen ───────────────────────────────────────────────────────────────────
 
 class SeriesDetailScreen extends ConsumerStatefulWidget {
   const SeriesDetailScreen({super.key, required this.seriesId, this.series});
@@ -35,7 +39,6 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // CRITICAL: reset season selection every time a series opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(selectedSeasonProvider.notifier).state = 1;
     });
@@ -62,23 +65,25 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         if (!didPop) context.go('/series');
       },
       child: Scaffold(
-      backgroundColor: const Color(0xFF080808),
-      body: seriesAsync.when(
-        data: (series) {
-          if (series == null) {
-            return Center(child: Text('Series not found',
-              style: TextStyle(color: AppColors.textSecondary)));
-          }
-          return _SeriesDetailBody(series: series);
-        },
-        loading: () => const SkeletonDetailBackdrop(),
-        error:   (e, _) => Center(child: Text(e.toString(),
-          style: TextStyle(color: AppColors.error, fontSize: 12))),
+        backgroundColor: const Color(0xFF080808),
+        body: seriesAsync.when(
+          data: (series) {
+            if (series == null) {
+              return Center(child: Text('Series not found',
+                style: TextStyle(color: AppColors.textSecondary)));
+            }
+            return _SeriesDetailBody(series: series);
+          },
+          loading: () => const SkeletonDetailBackdrop(),
+          error:   (e, _) => Center(child: Text(e.toString(),
+            style: TextStyle(color: AppColors.error, fontSize: 12))),
+        ),
       ),
-      ), // Scaffold
-    ); // PopScope
+    );
   }
 }
+
+// ── Body ─────────────────────────────────────────────────────────────────────
 
 class _SeriesDetailBody extends ConsumerStatefulWidget {
   const _SeriesDetailBody({required this.series});
@@ -88,27 +93,39 @@ class _SeriesDetailBody extends ConsumerStatefulWidget {
   ConsumerState<_SeriesDetailBody> createState() => _SeriesDetailBodyState();
 }
 
-class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
+class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
+    with SingleTickerProviderStateMixin {
   late SeriesItem _displaySeries;
 
-  // Focus nodes
   final _backNode = FocusNode();
   List<FocusNode> _seasonNodes = [];
-  // Link: season tabs → first episode (set by _EpisodeList callback)
   FocusNode? _firstEpisodeNode;
+
+  late final AnimationController _entranceCtrl;
+  late final Animation<double>   _fadeIn;
+  late final Animation<Offset>   _slideUp;
 
   @override
   void initState() {
     super.initState();
     _displaySeries = widget.series;
     ref.read(selectedSeasonProvider.notifier).state = 1;
+
+    _entranceCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 600),
+    );
+    _fadeIn  = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _slideUp = Tween<Offset>(
+      begin: const Offset(0, 0.06), end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+    _entranceCtrl.forward();
   }
 
   @override
   void dispose() {
+    _entranceCtrl.dispose();
     _backNode.dispose();
     for (final n in _seasonNodes) n.dispose();
-    _firstEpisodeNode?.dispose();
     super.dispose();
   }
 
@@ -130,11 +147,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      if (i < total - 1) {
-        _seasonNodes[i + 1].requestFocus();
-      } else {
-        _firstEpisodeNode?.requestFocus();
-      }
+      if (i < total - 1) _seasonNodes[i + 1].requestFocus();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -144,16 +157,17 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     return KeyEventResult.ignored;
   }
 
-  /// Called after seasons finish loading — DB may have richer metadata
   Future<void> _refreshMetadataFromDb() async {
-    final fresh = await ref.read(seriesRepositoryProvider).getSeriesById(widget.series.id);
+    final fresh =
+        await ref.read(seriesRepositoryProvider).getSeriesById(widget.series.id);
     if (fresh != null && mounted) setState(() => _displaySeries = fresh);
   }
 
   @override
   Widget build(BuildContext context) {
-    final topPad         = MediaQuery.of(context).padding.top;
     final screenH        = MediaQuery.of(context).size.height;
+    final screenW        = MediaQuery.of(context).size.width;
+    final topPad         = MediaQuery.of(context).padding.top;
     final selectedSeason = ref.watch(selectedSeasonProvider);
     final seasonsAsync   = ref.watch(seasonsProvider(widget.series.id));
 
@@ -165,178 +179,195 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
 
     return Stack(
       children: [
-        // Full bleed backdrop
+        // ── Backdrop ────────────────────────────────────────────────────
         Positioned(
           top: 0, left: 0, right: 0,
-          height: screenH * 0.42,
+          height: screenH * 0.55,
           child: _displaySeries.posterUrl != null
               ? CachedNetworkImage(
                   imageUrl:    _displaySeries.posterUrl!,
                   fit:         BoxFit.cover,
+                  width:       screenW,
                   errorWidget: (_, __, ___) => Container(color: AppColors.card),
                 )
               : Container(color: AppColors.card),
         ),
-        // Gradient fade
+
+        // ── Multi-stop gradient ─────────────────────────────────────────
         Positioned(
-          top:    screenH * 0.18,
-          left:   0, right: 0,
-          height: screenH * 0.28,
+          top: 0, left: 0, right: 0,
+          height: screenH * 0.55,
           child: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin:  Alignment.topCenter,
                 end:    Alignment.bottomCenter,
-                colors: [Colors.transparent, Color(0xFF080808)],
+                stops:  [0.0, 0.25, 0.6, 1.0],
+                colors: [
+                  Color(0x30080808),
+                  Color(0x10080808),
+                  Color(0xAA080808),
+                  Color(0xFF080808),
+                ],
               ),
             ),
           ),
         ),
+
+        // ── Solid below ─────────────────────────────────────────────────
         Positioned(
-          top:    screenH * 0.42,
-          left:   0, right: 0, bottom: 0,
-          child:  Container(color: const Color(0xFF080808)),
+          top: screenH * 0.55, left: 0, right: 0, bottom: 0,
+          child: Container(color: const Color(0xFF080808)),
         ),
-        // Back button
+
+        // ── Back button ─────────────────────────────────────────────────
         Positioned(
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
           child: FocusableWidget(
-            focusNode: _backNode,
-            autofocus: true,
+            focusNode:    _backNode,
+            autofocus:    true,
+            borderRadius: 20,
             onTap: () => context.go('/series'),
             child: Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0x33000000),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.arrow_back,
+                color: AppColors.textPrimary, size: 18),
             ),
           ),
         ),
-        // Scrollable content
+
+        // ── Scrollable content ──────────────────────────────────────────
         Positioned.fill(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: screenH * 0.30),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _displaySeries.name,
-                        style: TextStyle(
-                          color:         AppColors.textPrimary,
-                          fontSize:      22,
-                          fontWeight:    FontWeight.w500,
-                          letterSpacing: -0.3,
-                          height:        1.2,
-                        ),
+          child: FadeTransition(
+            opacity: _fadeIn,
+            child: SlideTransition(
+              position: _slideUp,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: screenH * 0.35),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.tvH,
                       ),
-                      if (_displaySeries.genre != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          _displaySeries.genre!,
-                          style: TextStyle(
-                            color:    AppColors.textMuted,
-                            fontSize: 12,
-                            height:   1.4,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Title ─────────────────────────────────────
+                          Text(
+                            _displaySeries.name,
+                            style: const TextStyle(
+                              color:         AppColors.textPrimary,
+                              fontSize:      28,
+                              fontWeight:    FontWeight.w600,
+                              letterSpacing: -0.5,
+                              height:        1.15,
+                            ),
                           ),
-                        ),
-                      ],
-                      if (_displaySeries.plot != null) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          _displaySeries.plot!,
-                          style: TextStyle(
-                            color:      AppColors.textSecondary,
-                            fontSize:   13,
-                            fontWeight: FontWeight.w300,
-                            height:     1.6,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.xl2),
-                    ],
-                  ),
-                ),
-                // Season tabs + episodes
-                seasonsAsync.when(
-                  data: (seasons) {
-                    if (seasons.isEmpty) {
-                      return Padding(
+                          const SizedBox(height: 10),
+
+                          // ── Meta ──────────────────────────────────────
+                          _SeriesMeta(series: _displaySeries),
+
+                          if (_displaySeries.plot != null) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              _displaySeries.plot!,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color:      AppColors.textSecondary,
+                                fontSize:   13,
+                                fontWeight: FontWeight.w300,
+                                height:     1.65,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
+
+                    // ── Season tabs + episodes ──────────────────────────
+                    seasonsAsync.when(
+                      data: (seasons) {
+                        if (seasons.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.all(AppSpacing.xl2),
+                            child: Text('No episodes available',
+                              style: TextStyle(
+                                color: AppColors.textMuted, fontSize: 13)),
+                          );
+                        }
+                        _rebuildSeasonNodes(seasons.length);
+                        final season = seasons.firstWhere(
+                          (s) => s.number == selectedSeason,
+                          orElse: () => seasons.first,
+                        );
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── Season pills ────────────────────────────
+                            _SeasonSelector(
+                              seasons:        seasons,
+                              selectedNumber: selectedSeason,
+                              nodes:          _seasonNodes,
+                              onSelect: (num) => ref
+                                  .read(selectedSeasonProvider.notifier)
+                                  .state = num,
+                              onKey: _handleSeasonKey,
+                            ),
+                            const SizedBox(height: 6),
+
+                            // ── Divider ─────────────────────────────────
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.tvH,
+                              ),
+                              child: Container(
+                                height: 0.5,
+                                color: const Color(0x1AFFFFFF),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+
+                            // ── Episodes ────────────────────────────────
+                            _EpisodeList(
+                              key: ValueKey(
+                                '${widget.series.id}_$selectedSeason'),
+                              seriesId:  widget.series.id,
+                              episodes:  season.episodes,
+                              firstSeasonNode: _seasonNodes.isNotEmpty
+                                  ? _seasonNodes[0]
+                                  : null,
+                              onFirstNodeReady: (node) {
+                                _firstEpisodeNode = node;
+                              },
+                            ),
+                            const SizedBox(height: AppSpacing.xl3),
+                          ],
+                        );
+                      },
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(AppSpacing.xl2),
+                        child: SkeletonChannelList(count: 5),
+                      ),
+                      error: (e, _) => Padding(
                         padding: const EdgeInsets.all(AppSpacing.xl2),
-                        child: Text('No episodes',
-                          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                      );
-                    }
-                    _rebuildSeasonNodes(seasons.length);
-                    final season = seasons.firstWhere(
-                      (s) => s.number == selectedSeason,
-                      orElse: () => seasons.first,
-                    );
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Season tabs
-                        SizedBox(
-                          height: 40,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-                            itemCount:       seasons.length,
-                            itemBuilder:     (_, i) {
-                              final s          = seasons[i];
-                              final isSelected = s.number == selectedSeason;
-                              return Focus(
-                                onKeyEvent: (_, e) => _handleSeasonKey(i, seasons.length, e),
-                                child: FocusableWidget(
-                                  focusNode: _seasonNodes[i],
-                                  onTap: () => ref.read(selectedSeasonProvider.notifier).state = s.number,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: AppSpacing.xl2),
-                                    child: Center(
-                                      child: Text(
-                                        'Season ${s.number}',
-                                        style: TextStyle(
-                                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                                          fontSize:   13,
-                                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        // Episode list with explicit up/down navigation
-                        _EpisodeList(
-                          key:            ValueKey('${widget.series.id}_$selectedSeason'),
-                          seriesId:       widget.series.id,
-                          episodes:       season.episodes,
-                          firstSeasonNode: _seasonNodes.isNotEmpty ? _seasonNodes[0] : null,
-                          onFirstNodeReady: (node) {
-                            _firstEpisodeNode = node;
-                          },
-                        ),
-                        const SizedBox(height: AppSpacing.xl3),
-                      ],
-                    );
-                  },
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(AppSpacing.xl2),
-                    child: SkeletonChannelList(count: 5),
-                  ),
-                  error: (e, _) => Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl2),
-                    child: Text(e.toString(),
-                      style: TextStyle(color: AppColors.error, fontSize: 12)),
-                  ),
+                        child: Text(e.toString(),
+                          style: TextStyle(
+                            color: AppColors.error, fontSize: 12)),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -345,7 +376,133 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   }
 }
 
-// ── Episode List ───────────────────────────────────────────────────────────────
+// ── Series Meta ──────────────────────────────────────────────────────────────
+
+class _SeriesMeta extends StatelessWidget {
+  const _SeriesMeta({required this.series});
+  final SeriesItem series;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <String>[
+      if (series.releaseDate != null) series.releaseDate!,
+      if (series.genre != null)       series.genre!,
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing:    8,
+      runSpacing: 6,
+      children: chips.map((label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          border:       Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color:         AppColors.textSecondary,
+            fontSize:      11,
+            fontWeight:    FontWeight.w400,
+            letterSpacing: 0.4,
+          ),
+        ),
+      )).toList(),
+    );
+  }
+}
+
+// ── Season Selector ──────────────────────────────────────────────────────────
+
+class _SeasonSelector extends StatelessWidget {
+  const _SeasonSelector({
+    required this.seasons,
+    required this.selectedNumber,
+    required this.nodes,
+    required this.onSelect,
+    required this.onKey,
+  });
+  final List<Season>    seasons;
+  final int             selectedNumber;
+  final List<FocusNode> nodes;
+  final void Function(int)                            onSelect;
+  final KeyEventResult Function(int, int, KeyEvent)   onKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+        itemCount:       seasons.length,
+        itemBuilder: (_, i) {
+          final s          = seasons[i];
+          final isSelected = s.number == selectedNumber;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Focus(
+              onKeyEvent: (_, e) => onKey(i, seasons.length, e),
+              child: FocusableWidget(
+                focusNode:    nodes[i],
+                borderRadius: AppSpacing.radiusPill,
+                onTap:        () => onSelect(s.number),
+                child: AnimatedContainer(
+                  duration: AppDurations.fast,
+                  padding:  const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.textPrimary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.textPrimary
+                          : const Color(0x33FFFFFF),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Season ${s.number}',
+                        style: TextStyle(
+                          color: isSelected
+                              ? const Color(0xFF080808)
+                              : AppColors.textSecondary,
+                          fontSize:   12,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${s.episodes.length}',
+                        style: TextStyle(
+                          color: isSelected
+                              ? const Color(0x88080808)
+                              : AppColors.textMuted,
+                          fontSize:   11,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ── Episode List ─────────────────────────────────────────────────────────────
 
 class _EpisodeList extends ConsumerStatefulWidget {
   const _EpisodeList({
@@ -365,9 +522,8 @@ class _EpisodeList extends ConsumerStatefulWidget {
 }
 
 class _EpisodeListState extends ConsumerState<_EpisodeList> {
-  List<FocusNode>  _nodes   = [];
-  List<GlobalKey>  _rowKeys = [];
-  // episode.id → {position_secs, duration_secs}
+  List<FocusNode> _nodes   = [];
+  List<GlobalKey> _rowKeys = [];
   Map<int, Map<String, dynamic>> _history = {};
 
   @override
@@ -397,7 +553,8 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     final repo   = ref.read(historyRepositoryProvider);
     final result = <int, Map<String, dynamic>>{};
     for (final ep in widget.episodes) {
-      final record = await repo.getPosition(ep.seriesId, 'episode', episodeId: ep.id);
+      final record =
+          await repo.getPosition(ep.seriesId, 'episode', episodeId: ep.id);
       if (record != null) result[ep.id] = record;
     }
     if (mounted) setState(() => _history = result);
@@ -430,7 +587,8 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+        idx + 1 < _nodes.length) {
       _nodes[idx + 1].requestFocus();
       _scrollTo(idx + 1, goingDown: true);
       return KeyEventResult.handled;
@@ -467,7 +625,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
   }
 }
 
-// ── Episode Row ────────────────────────────────────────────────────────────────
+// ── Episode Row ──────────────────────────────────────────────────────────────
 
 class _EpisodeRow extends StatefulWidget {
   const _EpisodeRow({
@@ -479,12 +637,12 @@ class _EpisodeRow extends StatefulWidget {
     required this.focusNode,
     this.history,
   });
-  final int                      seriesId;
-  final Episode                  episode;
-  final List<Episode>            episodes;
-  final int                      index;
-  final FocusNode                focusNode;
-  final Map<String, dynamic>?    history;  // from watch_history table
+  final int                   seriesId;
+  final Episode               episode;
+  final List<Episode>         episodes;
+  final int                   index;
+  final FocusNode             focusNode;
+  final Map<String, dynamic>? history;
 
   @override
   State<_EpisodeRow> createState() => _EpisodeRowState();
@@ -507,7 +665,6 @@ class _EpisodeRowState extends State<_EpisodeRow> {
     'episodeIndex': widget.index,
   });
 
-  // 0.0 = never watched, 0.0–0.9 = in-progress, ≥0.9 = watched
   double get _progress {
     final h = widget.history;
     if (h == null) return 0.0;
@@ -521,12 +678,8 @@ class _EpisodeRowState extends State<_EpisodeRow> {
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = _isWatched
-        ? const Color(0xFF888888)
-        : AppColors.textPrimary;
-
     return Focus(
-      focusNode: widget.focusNode,
+      focusNode:     widget.focusNode,
       onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
       onKeyEvent: (_, event) {
         if (event is KeyDownEvent &&
@@ -539,121 +692,191 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       },
       child: GestureDetector(
         onTap: () => _play(context),
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.tvH,
-            vertical:   AppSpacing.md,
+            vertical:   12,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x12FFFFFF) : Colors.transparent,
+            color: _focused ? const Color(0x14FFFFFF) : Colors.transparent,
             border: Border(
               left: BorderSide(
                 color: _focused ? AppColors.textPrimary : Colors.transparent,
                 width: 2.5,
               ),
-              bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
+              bottom: const BorderSide(
+                color: AppColors.borderSubtle, width: 0.5),
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Thumbnail with watch-state overlays
+              // ── Episode number ────────────────────────────────────────
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${widget.episode.episodeNumber}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color:      _isWatched
+                        ? AppColors.textMuted
+                        : _focused
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                    fontSize:   14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // ── Thumbnail ─────────────────────────────────────────────
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: SizedBox(
-                  width:  96,
-                  height: 54,
+                  width:  120,
+                  height: 68,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Base image
                       widget.episode.thumbnailUrl != null
                           ? CachedNetworkImage(
                               imageUrl:    widget.episode.thumbnailUrl!,
                               fit:         BoxFit.cover,
                               errorWidget: (_, __, ___) =>
-                                  _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                                  _ThumbnailPlaceholder(
+                                    number: widget.episode.episodeNumber),
                             )
-                          : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
+                          : _ThumbnailPlaceholder(
+                              number: widget.episode.episodeNumber),
 
-                      // Watched: dim overlay + checkmark bottom-right
+                      // Watched overlay
                       if (_isWatched) ...[
-                        Container(color: const Color(0x55000000)),
-                        const Positioned(
-                          right: 4, bottom: 4,
-                          child: Icon(Icons.check_circle, color: Colors.white, size: 16),
+                        Container(color: const Color(0x66000000)),
+                        const Center(
+                          child: Icon(Icons.check_circle_rounded,
+                            color: Colors.white, size: 22),
                         ),
                       ],
 
-                      // In-progress: thin progress bar at very bottom
-                      if (_isInProgress)
-                        Positioned(
-                          left: 0, right: 0, bottom: 0,
-                          child: LinearProgressIndicator(
-                            value:           _progress,
-                            minHeight:       3,
-                            backgroundColor: Colors.white24,
-                            valueColor:      const AlwaysStoppedAnimation(Colors.white),
+                      // Play icon on focus (unwatched/in-progress)
+                      if (_focused && !_isWatched)
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xBB000000),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded,
+                              color: Colors.white, size: 18),
                           ),
                         ),
 
-                      // Unwatched: small white dot top-right
-                      if (!_isWatched && !_isInProgress)
-                        const Positioned(
-                          right: 5, top: 5,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color:  Colors.white,
-                              shape:  BoxShape.circle,
+                      // Progress bar
+                      if (_isInProgress)
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: Container(
+                            height: 3,
+                            decoration: const BoxDecoration(
+                              borderRadius: BorderRadius.only(
+                                bottomLeft:  Radius.circular(6),
+                                bottomRight: Radius.circular(6),
+                              ),
                             ),
-                            child: SizedBox(width: 5, height: 5),
+                            clipBehavior: Clip.hardEdge,
+                            child: LinearProgressIndicator(
+                              value:           _progress,
+                              minHeight:       3,
+                              backgroundColor: const Color(0x33FFFFFF),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Colors.white),
+                            ),
                           ),
                         ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              // Info
+              const SizedBox(width: 16),
+
+              // ── Info ──────────────────────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment:  MainAxisAlignment.center,
                   children: [
                     Text(
-                      '${widget.episode.episodeNumber}. ${widget.episode.title}',
+                      widget.episode.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color:      titleColor,
-                        fontSize:   13,
-                        fontWeight: FontWeight.w400,
-                        height:     1.4,
+                        color: _isWatched
+                            ? AppColors.textMuted
+                            : AppColors.textPrimary,
+                        fontSize:   14,
+                        fontWeight: _focused ? FontWeight.w500 : FontWeight.w400,
+                        height:     1.3,
                       ),
                     ),
                     if (widget.episode.plot != null) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
                         widget.episode.plot!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color:      AppColors.textMuted,
                           fontSize:   11,
                           fontWeight: FontWeight.w300,
-                          height:     1.4,
+                          height:     1.45,
+                        ),
+                      ),
+                    ],
+                    if (_isInProgress) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_progress * 100).round()}% watched',
+                        style: const TextStyle(
+                          color:    AppColors.textMuted,
+                          fontSize: 10,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
+
+              // ── Duration ──────────────────────────────────────────────
+              if (widget.episode.durationSecs != null &&
+                  widget.episode.durationSecs! > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    _formatDuration(widget.episode.durationSecs!),
+                    style: const TextStyle(
+                      color:    AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+
+  String _formatDuration(int secs) {
+    final m = secs ~/ 60;
+    if (m >= 60) return '${m ~/ 60}h ${m % 60}m';
+    return '${m}m';
+  }
 }
+
+// ── Thumbnail Placeholder ────────────────────────────────────────────────────
 
 class _ThumbnailPlaceholder extends StatelessWidget {
   const _ThumbnailPlaceholder({required this.number});
@@ -662,11 +885,11 @@ class _ThumbnailPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.card,
+      color:     AppColors.card,
       alignment: Alignment.center,
       child: Text(
         '$number',
-        style: TextStyle(
+        style: const TextStyle(
           color:      AppColors.textMuted,
           fontSize:   18,
           fontWeight: FontWeight.w300,
