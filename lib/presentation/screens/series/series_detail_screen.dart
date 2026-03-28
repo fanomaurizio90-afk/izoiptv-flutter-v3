@@ -46,7 +46,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     if (widget.series != null) {
       return PopScope(
         canPop: false,
-        onPopInvoked: (didPop) {
+        onPopInvokedWithResult: (didPop, _) {
           if (!didPop) context.go('/series');
         },
         child: Scaffold(
@@ -58,7 +58,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/series');
       },
       child: Scaffold(
@@ -90,6 +90,7 @@ class _SeriesDetailBody extends ConsumerStatefulWidget {
 
 class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
   late SeriesItem _displaySeries;
+  bool _visible = false;
 
   // Focus nodes
   final _backNode = FocusNode();
@@ -102,6 +103,9 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
     super.initState();
     _displaySeries = widget.series;
     ref.read(selectedSeasonProvider.notifier).state = 1;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _visible = true);
+    });
   }
 
   @override
@@ -165,39 +169,57 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
 
     return Stack(
       children: [
-        // Full bleed backdrop
+        // ── Backdrop — 48% height, fades in on open ───────────────────────────
         Positioned(
           top: 0, left: 0, right: 0,
-          height: screenH * 0.42,
-          child: _displaySeries.posterUrl != null
-              ? CachedNetworkImage(
-                  imageUrl:    _displaySeries.posterUrl!,
-                  fit:         BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(color: AppColors.card),
-                )
-              : Container(color: AppColors.card),
+          height: screenH * 0.48,
+          child: AnimatedOpacity(
+            opacity:  _visible ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
+            child: _displaySeries.posterUrl != null
+                ? CachedNetworkImage(
+                    imageUrl:    _displaySeries.posterUrl!,
+                    fit:         BoxFit.cover,
+                    errorWidget: (_, __, ___) => Container(color: AppColors.card),
+                  )
+                : Container(color: AppColors.card),
+          ),
         ),
-        // Gradient fade
+        // ── Left vignette ─────────────────────────────────────────────────────
         Positioned(
-          top:    screenH * 0.18,
+          top: 0, left: 0, bottom: 0,
+          width: screenH * 0.22,
+          child: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin:  Alignment.centerLeft,
+                end:    Alignment.centerRight,
+                colors: [Color(0xFF080808), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        // ── Bottom gradient melt ──────────────────────────────────────────────
+        Positioned(
+          top:    screenH * 0.20,
           left:   0, right: 0,
-          height: screenH * 0.28,
+          height: screenH * 0.33,
           child: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin:  Alignment.topCenter,
                 end:    Alignment.bottomCenter,
                 colors: [Colors.transparent, Color(0xFF080808)],
+                stops:  [0.0, 0.88],
               ),
             ),
           ),
         ),
         Positioned(
-          top:    screenH * 0.42,
-          left:   0, right: 0, bottom: 0,
-          child:  Container(color: const Color(0xFF080808)),
+          top: screenH * 0.48, left: 0, right: 0, bottom: 0,
+          child: Container(color: const Color(0xFF080808)),
         ),
-        // Back button
+        // ── Back button ───────────────────────────────────────────────────────
         Positioned(
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
@@ -211,7 +233,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
             ),
           ),
         ),
-        // Scrollable content
+        // ── Scrollable content ────────────────────────────────────────────────
         Positioned.fill(
           child: SingleChildScrollView(
             child: Column(
@@ -223,36 +245,56 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _displaySeries.name,
-                        style: TextStyle(
-                          color:         AppColors.textPrimary,
-                          fontSize:      22,
-                          fontWeight:    FontWeight.w500,
-                          letterSpacing: -0.3,
-                          height:        1.2,
+                      // Title — slides up on open
+                      AnimatedSlide(
+                        offset:   _visible ? Offset.zero : const Offset(0, 0.2),
+                        duration: const Duration(milliseconds: 350),
+                        curve:    Curves.easeOutCubic,
+                        child: AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 300),
+                          child: Text(
+                            _displaySeries.name,
+                            style: const TextStyle(
+                              color:         Colors.white,
+                              fontSize:      28,
+                              fontWeight:    FontWeight.w700,
+                              letterSpacing: -0.6,
+                              height:        1.15,
+                            ),
+                          ),
                         ),
                       ),
                       if (_displaySeries.genre != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          _displaySeries.genre!,
-                          style: TextStyle(
-                            color:    AppColors.textMuted,
-                            fontSize: 12,
-                            height:   1.4,
+                        const SizedBox(height: 8),
+                        AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 400),
+                          child: Text(
+                            _displaySeries.genre!,
+                            style: const TextStyle(
+                              color:         Color(0xFF555555),
+                              fontSize:      12,
+                              fontWeight:    FontWeight.w300,
+                              letterSpacing: 0.5,
+                              height:        1.4,
+                            ),
                           ),
                         ),
                       ],
                       if (_displaySeries.plot != null) ...[
                         const SizedBox(height: AppSpacing.md),
-                        Text(
-                          _displaySeries.plot!,
-                          style: TextStyle(
-                            color:      AppColors.textSecondary,
-                            fontSize:   13,
-                            fontWeight: FontWeight.w300,
-                            height:     1.6,
+                        AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 450),
+                          child: Text(
+                            _displaySeries.plot!,
+                            style: const TextStyle(
+                              color:      Color(0xFF999999),
+                              fontSize:   13,
+                              fontWeight: FontWeight.w300,
+                              height:     1.6,
+                            ),
                           ),
                         ),
                       ],
@@ -278,9 +320,9 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Season tabs
+                        // Season tabs — bold numbered, animated white underline
                         SizedBox(
-                          height: 40,
+                          height: 48,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
@@ -293,15 +335,31 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
                                 child: FocusableWidget(
                                   focusNode: _seasonNodes[i],
                                   onTap: () => ref.read(selectedSeasonProvider.notifier).state = s.number,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: AppSpacing.xl2),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 150),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: isSelected ? Colors.white : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
                                     child: Center(
                                       child: Text(
-                                        'Season ${s.number}',
+                                        seasons.length > 8
+                                            ? '${s.number}'
+                                            : 'S${s.number}',
                                         style: TextStyle(
-                                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                                          fontSize:   13,
-                                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                                          color:      isSelected
+                                              ? Colors.white
+                                              : const Color(0xFF444444),
+                                          fontSize:   isSelected ? 18 : 15,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w300,
+                                          letterSpacing: -0.3,
                                         ),
                                       ),
                                     ),
@@ -519,11 +577,23 @@ class _EpisodeRowState extends State<_EpisodeRow> {
   bool get _isWatched    => _progress >= 0.9;
   bool get _isInProgress => widget.history != null && !_isWatched;
 
+  String _fmtResume() {
+    final pos = (widget.history?['position_secs'] as int?) ?? 0;
+    final m = pos ~/ 60;
+    final s = pos % 60;
+    return '${m}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _fmtDuration(int secs) {
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    if (h > 0) return '${h}h ${m}m';
+    return '${m}m';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final titleColor = _isWatched
-        ? const Color(0xFF888888)
-        : AppColors.textPrimary;
+    final titleColor = _isWatched ? const Color(0xFF666666) : Colors.white;
 
     return Focus(
       focusNode: widget.focusNode,
@@ -539,16 +609,17 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       },
       child: GestureDetector(
         onTap: () => _play(context),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.tvH,
-            vertical:   AppSpacing.md,
+            vertical:   14,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x12FFFFFF) : Colors.transparent,
+            color: _focused ? const Color(0xFF1A1A1A) : Colors.transparent,
             border: Border(
               left: BorderSide(
-                color: _focused ? AppColors.textPrimary : Colors.transparent,
+                color: _focused ? Colors.white : Colors.transparent,
                 width: 2.5,
               ),
               bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
@@ -561,8 +632,8 @@ class _EpisodeRowState extends State<_EpisodeRow> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: SizedBox(
-                  width:  96,
-                  height: 54,
+                  width:  112,
+                  height: 63,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -576,16 +647,37 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                             )
                           : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
 
-                      // Watched: dim overlay + checkmark bottom-right
+                      // Episode number overlay — always shown, bottom-left
+                      Positioned(
+                        left: 6, bottom: 5,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:        const Color(0xAA000000),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            '${widget.episode.episodeNumber}',
+                            style: const TextStyle(
+                              color:      Colors.white,
+                              fontSize:   9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Watched: dim overlay + checkmark
                       if (_isWatched) ...[
-                        Container(color: const Color(0x55000000)),
+                        Container(color: const Color(0x66000000)),
                         const Positioned(
-                          right: 4, bottom: 4,
-                          child: Icon(Icons.check_circle, color: Colors.white, size: 16),
+                          right: 5, bottom: 5,
+                          child: Icon(Icons.check_circle_rounded,
+                              color: Colors.white, size: 16),
                         ),
                       ],
 
-                      // In-progress: thin progress bar at very bottom
+                      // In-progress: progress bar at bottom
                       if (_isInProgress)
                         Positioned(
                           left: 0, right: 0, bottom: 0,
@@ -614,30 +706,67 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              // Info
+              // Info column
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${widget.episode.episodeNumber}. ${widget.episode.title}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color:      titleColor,
-                        fontSize:   13,
-                        fontWeight: FontWeight.w400,
-                        height:     1.4,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.episode.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color:      titleColor,
+                              fontSize:   13,
+                              fontWeight: FontWeight.w500,
+                              height:     1.35,
+                            ),
+                          ),
+                        ),
+                        if (widget.episode.durationSecs != null &&
+                            widget.episode.durationSecs! > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _fmtDuration(widget.episode.durationSecs!),
+                            style: const TextStyle(
+                              color:    Color(0xFF555555),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (widget.episode.plot != null) ...[
-                      const SizedBox(height: 3),
+                    // Resume pill — shown when in progress
+                    if (_isInProgress) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color:        const Color(0xFF2A2A2A),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Resume ${_fmtResume()}',
+                          style: const TextStyle(
+                            color:    Color(0xFFAAAAAA),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
+                    // Description — shown when not in progress
+                    if (widget.episode.plot != null && !_isInProgress) ...[
+                      const SizedBox(height: 4),
                       Text(
                         widget.episode.plot!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color:      AppColors.textMuted,
+                        style: const TextStyle(
+                          color:      Color(0xFF555555),
                           fontSize:   11,
                           fontWeight: FontWeight.w300,
                           height:     1.4,

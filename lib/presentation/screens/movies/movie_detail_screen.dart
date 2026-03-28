@@ -63,23 +63,61 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
   }
 }
 
-class _MovieDetailBody extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Body
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MovieDetailBody extends ConsumerStatefulWidget {
   const _MovieDetailBody({required this.vod});
   final VodItem vod;
 
   @override
-  State<_MovieDetailBody> createState() => _MovieDetailBodyState();
+  ConsumerState<_MovieDetailBody> createState() => _MovieDetailBodyState();
 }
 
-class _MovieDetailBodyState extends State<_MovieDetailBody> {
+class _MovieDetailBodyState extends ConsumerState<_MovieDetailBody> {
   final _backNode = FocusNode();
   final _playNode = FocusNode();
+  Map<String, dynamic>? _history;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
 
   @override
   void dispose() {
     _backNode.dispose();
     _playNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    final h = await ref.read(historyRepositoryProvider).getPosition(widget.vod.id, 'movie');
+    if (mounted) setState(() => _history = h);
+  }
+
+  double get _progress {
+    final h = _history;
+    if (h == null) return 0.0;
+    final pos = (h['position_secs'] as int? ?? 0).toDouble();
+    final dur = (h['duration_secs'] as int? ?? 1).toDouble();
+    return dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0;
+  }
+
+  bool get _isInProgress => _history != null && _progress < 0.9;
+
+  String _fmtPos(int secs) {
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    final s = secs % 60;
+    if (h > 0) return '${h}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    return '${m}:${s.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -90,40 +128,58 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
 
     return Stack(
       children: [
-        // Full bleed backdrop — top 45%
+        // ── Backdrop — 50% height, fades in on open ───────────────────────────
         Positioned(
           top: 0, left: 0, right: 0,
-          height: screenH * 0.45,
-          child: vod.posterUrl != null
-              ? CachedNetworkImage(
-                  imageUrl:    vod.posterUrl!,
-                  fit:         BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(color: AppColors.card),
-                )
-              : Container(color: AppColors.card),
+          height: screenH * 0.50,
+          child: AnimatedOpacity(
+            opacity:  _visible ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
+            child: vod.posterUrl != null
+                ? CachedNetworkImage(
+                    imageUrl:    vod.posterUrl!,
+                    fit:         BoxFit.cover,
+                    errorWidget: (_, __, ___) => Container(color: AppColors.card),
+                  )
+                : Container(color: AppColors.card),
+          ),
         ),
-        // Gradient fade: backdrop → #080808
+        // ── Left edge vignette — depth without blocking image ─────────────────
+        Positioned(
+          top: 0, left: 0, bottom: 0,
+          width: screenH * 0.22,
+          child: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin:  Alignment.centerLeft,
+                end:    Alignment.centerRight,
+                colors: [Color(0xFF080808), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        // ── Bottom gradient melt — dramatic fade into #080808 ─────────────────
         Positioned(
           top:    screenH * 0.20,
           left:   0, right: 0,
-          height: screenH * 0.30,
+          height: screenH * 0.35,
           child: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin:  Alignment.topCenter,
                 end:    Alignment.bottomCenter,
                 colors: [Colors.transparent, Color(0xFF080808)],
+                stops:  [0.0, 0.88],
               ),
             ),
           ),
         ),
-        // Solid background below backdrop
+        // ── Solid base below backdrop ─────────────────────────────────────────
         Positioned(
-          top:    screenH * 0.45,
-          left:   0, right: 0, bottom: 0,
-          child:  Container(color: const Color(0xFF080808)),
+          top: screenH * 0.50, left: 0, right: 0, bottom: 0,
+          child: Container(color: const Color(0xFF080808)),
         ),
-        // Back button
+        // ── Back button ───────────────────────────────────────────────────────
         Positioned(
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
@@ -136,91 +192,153 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
             ),
           ),
         ),
-        // Scrollable content — starts at top 0, content has padding to clear backdrop
+        // ── Scrollable content ────────────────────────────────────────────────
         Positioned.fill(
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Spacer to clear backdrop
                 SizedBox(height: screenH * 0.32),
-                // Title + meta on top of the fade
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        vod.name,
-                        style: TextStyle(
-                          color:         AppColors.textPrimary,
-                          fontSize:      22,
-                          fontWeight:    FontWeight.w500,
-                          letterSpacing: -0.3,
-                          height:        1.2,
+                      // Title — slides up on screen open
+                      AnimatedSlide(
+                        offset:   _visible ? Offset.zero : const Offset(0, 0.2),
+                        duration: const Duration(milliseconds: 350),
+                        curve:    Curves.easeOutCubic,
+                        child: AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 300),
+                          child: Text(
+                            vod.name,
+                            style: const TextStyle(
+                              color:         Colors.white,
+                              fontSize:      28,
+                              fontWeight:    FontWeight.w700,
+                              letterSpacing: -0.6,
+                              height:        1.15,
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      // Meta row: year · genre · duration
-                      _MetaRow(vod: vod),
-                      // Rating
+                      const SizedBox(height: 10),
+                      // Metadata — year · genre · duration
+                      AnimatedOpacity(
+                        opacity:  _visible ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 400),
+                        child:    _MetaRow(vod: vod),
+                      ),
                       if (vod.rating != null) ...[
                         const SizedBox(height: 8),
-                        _StarRating(rating: vod.rating!),
+                        AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 450),
+                          child:    _RatingBadge(rating: vod.rating!),
+                        ),
                       ],
                       if (vod.plot != null) ...[
                         const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          vod.plot!,
-                          style: TextStyle(
-                            color:      AppColors.textSecondary,
-                            fontSize:   13,
-                            fontWeight: FontWeight.w300,
-                            height:     1.6,
+                        AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 500),
+                          child: Text(
+                            vod.plot!,
+                            style: const TextStyle(
+                              color:      Color(0xFF999999),
+                              fontSize:   13,
+                              fontWeight: FontWeight.w300,
+                              height:     1.6,
+                            ),
                           ),
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xl3),
-                      // Play button — full width, white bg, dark text, unmissable
-                      Focus(
-                        onKeyEvent: (_, event) {
-                          if (event is KeyDownEvent &&
-                              event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                            _backNode.requestFocus();
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        },
-                        child: FocusableWidget(
-                          focusNode:    _playNode,
-                          autofocus:    true,
-                          borderRadius: AppSpacing.radiusCard,
-                          onTap:        () => context.push('/movies/player', extra: {
-                            'vod':      vod,
-                            'backPath': '/movies/${vod.id}',
-                          }),
-                          child: Container(
-                            width:   double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color:        AppColors.textPrimary,
-                              borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                            ),
-                            alignment: Alignment.center,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.play_arrow, color: Color(0xFF080808), size: 20),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Play',
-                                  style: TextStyle(
-                                    color:      const Color(0xFF080808),
-                                    fontSize:   14,
-                                    fontWeight: FontWeight.w500,
+                      // Resume progress — only shown if partially watched
+                      if (_isInProgress) ...[
+                        AnimatedOpacity(
+                          opacity:  _visible ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 500),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.history,
+                                      color: Color(0xFF555555), size: 11),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Resume from ${_fmtPos(_history!['position_secs'] as int? ?? 0)}',
+                                    style: const TextStyle(
+                                      color:    Color(0xFF666666),
+                                      fontSize: 11,
+                                    ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(1),
+                                child: LinearProgressIndicator(
+                                  value:           _progress,
+                                  minHeight:       2,
+                                  backgroundColor: const Color(0xFF2A2A2A),
+                                  valueColor:      const AlwaysStoppedAnimation(Colors.white),
                                 ),
-                              ],
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                            ],
+                          ),
+                        ),
+                      ],
+                      // Play / Resume button — full width hero CTA
+                      AnimatedOpacity(
+                        opacity:  _visible ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 550),
+                        child: Focus(
+                          onKeyEvent: (_, event) {
+                            if (event is KeyDownEvent &&
+                                event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                              _backNode.requestFocus();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: FocusableWidget(
+                            focusNode:    _playNode,
+                            autofocus:    true,
+                            borderRadius: AppSpacing.radiusCard,
+                            onTap:        () => context.push('/movies/player', extra: {
+                              'vod':      vod,
+                              'backPath': '/movies/${vod.id}',
+                            }),
+                            child: Container(
+                              width:   double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              decoration: BoxDecoration(
+                                color:        Colors.white,
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.play_arrow_rounded,
+                                      color: Color(0xFF080808), size: 22),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _isInProgress ? 'Resume' : 'Play',
+                                    style: const TextStyle(
+                                      color:         Color(0xFF080808),
+                                      fontSize:      15,
+                                      fontWeight:    FontWeight.w600,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -238,6 +356,10 @@ class _MovieDetailBodyState extends State<_MovieDetailBody> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.vod});
   final VodItem vod;
@@ -251,41 +373,39 @@ class _MetaRow extends StatelessWidget {
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(
       parts.join('  ·  '),
-      style: TextStyle(
-        color:         AppColors.textMuted,
+      style: const TextStyle(
+        color:         Color(0xFF555555),
         fontSize:      12,
         fontWeight:    FontWeight.w300,
-        letterSpacing: 0.3,
+        letterSpacing: 0.5,
         height:        1.4,
       ),
     );
   }
 }
 
-class _StarRating extends StatelessWidget {
-  const _StarRating({required this.rating});
+class _RatingBadge extends StatelessWidget {
+  const _RatingBadge({required this.rating});
   final double rating;
 
   @override
   Widget build(BuildContext context) {
-    final filled = (rating / 2).round().clamp(0, 5);
     return Row(
       children: [
-        ...List.generate(5, (i) => Padding(
-          padding: const EdgeInsets.only(right: 2),
-          child: Icon(
-            i < filled ? Icons.star : Icons.star_border,
-            color: i < filled ? AppColors.textPrimary : AppColors.textMuted,
-            size:  12,
-          ),
-        )),
-        const SizedBox(width: 6),
+        const Icon(Icons.star_rounded, color: Color(0xFFFFBB33), size: 13),
+        const SizedBox(width: 4),
         Text(
           rating.toStringAsFixed(1),
-          style: TextStyle(
-            color:    AppColors.textMuted,
-            fontSize: 11,
+          style: const TextStyle(
+            color:      Color(0xFFCCCCCC),
+            fontSize:   12,
+            fontWeight: FontWeight.w400,
           ),
+        ),
+        const SizedBox(width: 3),
+        const Text(
+          '/ 10',
+          style: TextStyle(color: Color(0xFF444444), fontSize: 11),
         ),
       ],
     );
