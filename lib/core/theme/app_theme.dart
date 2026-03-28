@@ -64,20 +64,22 @@ abstract final class AppDurations {
 }
 
 abstract final class AppTheme {
+  static const _fontFamily = 'DMSans';
+
   static ThemeData get dark {
     final base = ThemeData.dark();
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
       textTheme: base.textTheme.copyWith(
-        bodyLarge:   base.textTheme.bodyLarge?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 14, height: 1.5),
-        bodyMedium:  base.textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 13, height: 1.5),
-        bodySmall:   base.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w300, fontSize: 11, height: 1.4),
-        labelLarge:  base.textTheme.labelLarge?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
-        labelMedium: base.textTheme.labelMedium?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
-        labelSmall:  base.textTheme.labelSmall?.copyWith(color: AppColors.textMuted,   fontWeight: FontWeight.w400, fontSize: 11, letterSpacing: 0.5),
-        titleLarge:  base.textTheme.titleLarge?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 16),
-        titleMedium: base.textTheme.titleMedium?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
-        titleSmall:  base.textTheme.titleSmall?.copyWith(color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 13),
+        bodyLarge:   base.textTheme.bodyLarge?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 14, height: 1.5),
+        bodyMedium:  base.textTheme.bodyMedium?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 13, height: 1.5),
+        bodySmall:   base.textTheme.bodySmall?.copyWith(fontFamily: _fontFamily, color: AppColors.textSecondary, fontWeight: FontWeight.w300, fontSize: 11, height: 1.4),
+        labelLarge:  base.textTheme.labelLarge?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
+        labelMedium: base.textTheme.labelMedium?.copyWith(fontFamily: _fontFamily, color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
+        labelSmall:  base.textTheme.labelSmall?.copyWith(fontFamily: _fontFamily, color: AppColors.textMuted,   fontWeight: FontWeight.w400, fontSize: 11, letterSpacing: 0.5),
+        titleLarge:  base.textTheme.titleLarge?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 16),
+        titleMedium: base.textTheme.titleMedium?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
+        titleSmall:  base.textTheme.titleSmall?.copyWith(fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 13),
       ),
       colorScheme: const ColorScheme.dark(
         surface:   AppColors.surface,
@@ -90,6 +92,7 @@ abstract final class AppTheme {
         elevation:        0,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: base.textTheme.titleMedium?.copyWith(
+          fontFamily: _fontFamily,
           color:      AppColors.textPrimary,
           fontWeight: FontWeight.w500,
           fontSize:   14,
@@ -110,7 +113,7 @@ abstract final class AppTheme {
         border:      const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border, width: 0.5)),
         enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.border, width: 0.5)),
         focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.textPrimary, width: 1)),
-        hintStyle:   base.textTheme.bodyMedium?.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w300, fontSize: 13),
+        hintStyle:   base.textTheme.bodyMedium?.copyWith(fontFamily: _fontFamily, color: AppColors.textMuted, fontWeight: FontWeight.w300, fontSize: 13),
       ),
       dividerTheme: const DividerThemeData(
         color:     AppColors.border,

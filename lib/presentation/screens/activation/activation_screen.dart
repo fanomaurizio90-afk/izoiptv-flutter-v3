@@ -160,6 +160,7 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           FocusableWidget(
+                            autofocus: true,
                             borderRadius: 6,
                             onTap: () {
                               if (_deviceId != null) {

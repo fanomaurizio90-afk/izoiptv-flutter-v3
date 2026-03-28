@@ -1,7 +1,7 @@
 name: izo_iptv
 description: IZO IPTV Player
 publish_to: none
-version: 2.9.3+16
+version: 3.0.0+17
 
 environment:
   sdk: '>=3.6.0 <4.0.0'
@@ -31,3 +31,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans-Light.ttf
+          weight: 300
+        - asset: assets/fonts/DMSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500

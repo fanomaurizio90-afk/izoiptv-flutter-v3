@@ -10,6 +10,7 @@ import '../../providers/history_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/common/focusable_widget.dart';
+import '../../widgets/common/staggered_list.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -46,16 +47,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: AppColors.surface,
         title: Text(
           'Exit IZO IPTV?',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          FocusableWidget(
+            autofocus:    true,
+            borderRadius: AppSpacing.radiusCard,
+            onTap: () => Navigator.of(ctx).pop(false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Exit', style: TextStyle(color: const Color(0xFFE57373))),
+          const SizedBox(width: 8),
+          FocusableWidget(
+            borderRadius: AppSpacing.radiusCard,
+            onTap: () => Navigator.of(ctx).pop(true),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text('Exit', style: TextStyle(color: const Color(0xFFE57373))),
+            ),
           ),
         ],
       ),
@@ -83,20 +94,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.xl3,
                 ),
                 children: [
-                  _ExpiryBanner(),
-                  FocusScope(
-                    node: _heroScope,
-                    child: _HeroTiles(
-                      onUpArrow:   () => _settingsNode.requestFocus(),
-                      onDownArrow: () => _continueScope.requestFocus(),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl3),
-                  FocusScope(
-                    node: _continueScope,
-                    child: _ContinueWatchingRow(
-                      onUpArrow: () => _heroScope.requestFocus(),
-                    ),
+                  StaggeredList(
+                    children: [
+                      _ExpiryBanner(),
+                      FocusScope(
+                        node: _heroScope,
+                        child: _HeroTiles(
+                          onUpArrow:    () => _settingsNode.requestFocus(),
+                          onDownArrow:  () => _continueScope.requestFocus(),
+                          settingsNode: _settingsNode,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl3),
+                      FocusScope(
+                        node: _continueScope,
+                        child: _ContinueWatchingRow(
+                          onUpArrow: () => _heroScope.requestFocus(),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -155,7 +171,7 @@ class _ExpiryBannerState extends ConsumerState<_ExpiryBanner> {
                 style: const TextStyle(color: AppColors.error, fontSize: 12),
               ),
             ),
-            GestureDetector(
+            FocusableWidget(
               onTap: () => setState(() => _dismissed = true),
               child: const Icon(Icons.close, color: AppColors.error, size: 16),
             ),
@@ -215,7 +231,7 @@ class _SectionLabel extends StatelessWidget {
             color:         AppColors.textMuted,
             fontSize:      10,
             fontWeight:    FontWeight.w500,
-            letterSpacing: 1.5,
+            letterSpacing: 0.5,
           ),
         ),
       ],
@@ -240,10 +256,37 @@ class _TileData {
   final String      tag;
 }
 
-class _HeroTiles extends StatelessWidget {
-  const _HeroTiles({this.onUpArrow, this.onDownArrow});
+class _HeroTiles extends StatefulWidget {
+  const _HeroTiles({this.onUpArrow, this.onDownArrow, this.settingsNode});
   final VoidCallback? onUpArrow;
   final VoidCallback? onDownArrow;
+  final FocusNode?    settingsNode;
+
+  @override
+  State<_HeroTiles> createState() => _HeroTilesState();
+}
+
+class _HeroTilesState extends State<_HeroTiles> {
+  static const _tiles = [
+    _TileData(label: 'Live TV', route: '/live',   gradient: [Color(0xFF0A1628), Color(0xFF080808)], textureColor: Color(0x0800F0FF), tag: 'LIVE'),
+    _TileData(label: 'Movies',  route: '/movies',  gradient: [Color(0xFF140A1E), Color(0xFF080808)], textureColor: Color(0x08A855F7), tag: 'VOD'),
+    _TileData(label: 'Series',  route: '/series',  gradient: [Color(0xFF0A1420), Color(0xFF080808)], textureColor: Color(0x087DD3FC), tag: 'TV'),
+  ];
+
+  final List<FocusNode> _nodes = List.generate(_tiles.length, (_) => FocusNode());
+
+  @override
+  void dispose() {
+    for (final n in _nodes) n.dispose();
+    super.dispose();
+  }
+
+  int get _focusedIndex {
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i;
+    }
+    return -1;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -251,55 +294,50 @@ class _HeroTiles extends StatelessWidget {
     final tileHeight = (screenH - AppConstants.homeTopBarHeight - AppConstants.homeSafeAreaPadding)
         .clamp(200.0, 500.0) * 0.60;
 
-    final tiles = const [
-      _TileData(
-        label:        'Live TV',
-        route:        '/live',
-        gradient:     [Color(0xFF0A1628), Color(0xFF080808)],
-        textureColor: Color(0x0800F0FF),
-        tag:          'LIVE',
-      ),
-      _TileData(
-        label:        'Movies',
-        route:        '/movies',
-        gradient:     [Color(0xFF140A1E), Color(0xFF080808)],
-        textureColor: Color(0x08A855F7),
-        tag:          'VOD',
-      ),
-      _TileData(
-        label:        'Series',
-        route:        '/series',
-        gradient:     [Color(0xFF0A1420), Color(0xFF080808)],
-        textureColor: Color(0x087DD3FC),
-        tag:          'TV',
-      ),
-    ];
-
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-          onUpArrow?.call();
+          widget.onUpArrow?.call();
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          onDownArrow?.call();
+          widget.onDownArrow?.call();
           return KeyEventResult.handled;
+        }
+        final idx = _focusedIndex;
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          if (idx >= 0 && idx < _tiles.length - 1) {
+            _nodes[idx + 1].requestFocus();
+            return KeyEventResult.handled;
+          }
+          // Right from last tile → settings gear
+          if (idx == _tiles.length - 1) {
+            widget.settingsNode?.requestFocus();
+            return KeyEventResult.handled;
+          }
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          if (idx > 0) {
+            _nodes[idx - 1].requestFocus();
+            return KeyEventResult.handled;
+          }
         }
         return KeyEventResult.ignored;
       },
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: tiles.asMap().entries.map((e) {
+        children: _tiles.asMap().entries.map((e) {
           final t = e.value;
           return Expanded(
             child: Padding(
               padding: EdgeInsets.only(
-                left:  e.key == 0               ? 0 : 6,
-                right: e.key == tiles.length - 1 ? 0 : 6,
+                left:  e.key == 0                ? 0 : 6,
+                right: e.key == _tiles.length - 1 ? 0 : 6,
               ),
               child: FocusableWidget(
+                focusNode:    _nodes[e.key],
                 autofocus:    e.key == 0,
                 borderRadius: AppSpacing.radiusCard,
                 onTap:        () => context.push(t.route),
@@ -354,7 +392,7 @@ class _HeroTile extends StatelessWidget {
                     color:         AppColors.textMuted,
                     fontSize:      8,
                     fontWeight:    FontWeight.w500,
-                    letterSpacing: 1.5,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),

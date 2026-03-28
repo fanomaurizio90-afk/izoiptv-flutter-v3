@@ -10,6 +10,7 @@ import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
 import '../../widgets/common/empty_state_widget.dart';
+import '../../../core/services/focus_memory_service.dart';
 import '../../widgets/common/pin_dialog.dart';
 import '../../../core/utils/parental_control.dart';
 
@@ -160,7 +161,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
-        GestureDetector(onTap: _load,
+        FocusableWidget(onTap: _load,
           child: Text('Retry', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
@@ -176,6 +177,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       columns:           cols,
       categories:        _categories,
       categoryFocusNode: _firstCategoryFocusNode,
+      focusMemoryKey:    'series',
       onFirstNodeReady:  (node) { _firstGridFocusNode = node; },
       onTap:             (s) async {
         final cat = _categories.firstWhere(
@@ -200,6 +202,7 @@ class _ContentList extends StatefulWidget {
     required this.onTap,
     required this.onFirstNodeReady,
     this.categoryFocusNode,
+    this.focusMemoryKey,
   });
   final List<SeriesItem>          items;
   final int                       columns;
@@ -207,6 +210,7 @@ class _ContentList extends StatefulWidget {
   final void Function(SeriesItem) onTap;
   final void Function(FocusNode)  onFirstNodeReady;
   final FocusNode?                categoryFocusNode;
+  final String?                   focusMemoryKey;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -216,10 +220,15 @@ class _ContentListState extends State<_ContentList> {
   final Map<int, FocusNode> _nodes     = {};
   final ScrollController    _scrollCtrl = ScrollController();
   double _availableWidth               = 0.0;
+  int    _restoreIndex                 = 0;
 
   @override
   void initState() {
     super.initState();
+    if (widget.focusMemoryKey != null) {
+      _restoreIndex = FocusMemoryService.instance.restore(widget.focusMemoryKey!) ?? 0;
+      if (_restoreIndex >= widget.items.length) _restoreIndex = 0;
+    }
     _notifyFirstNode();
   }
 
@@ -345,10 +354,14 @@ class _ContentListState extends State<_ContentList> {
             itemCount:   widget.items.length,
             itemBuilder: (_, i) => FocusableWidget(
               focusNode:    _nodeFor(i),
-              autofocus:    i == 0,
+              autofocus:    i == _restoreIndex,
               borderRadius: AppSpacing.radiusCard,
-              scaleOnFocus: true,
-              onTap:        () => widget.onTap(widget.items[i]),
+              onTap:        () {
+                if (widget.focusMemoryKey != null) {
+                  FocusMemoryService.instance.save(widget.focusMemoryKey!, i);
+                }
+                widget.onTap(widget.items[i]);
+              },
               child:        _PosterCard(series: widget.items[i]),
             ),
           ),

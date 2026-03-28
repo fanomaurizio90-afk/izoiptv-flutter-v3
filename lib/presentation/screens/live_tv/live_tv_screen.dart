@@ -13,6 +13,7 @@ import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/pin_dialog.dart';
+import '../../../core/services/focus_memory_service.dart';
 import '../../../core/utils/parental_control.dart';
 
 class LiveTvScreen extends ConsumerStatefulWidget {
@@ -226,7 +227,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
-        GestureDetector(onTap: _load,
+        FocusableWidget(onTap: _load,
           child: Text('Retry', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
@@ -248,6 +249,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
           final ok = await showPinDialog(context);
           if (!ok || !mounted) return;
         }
+        FocusMemoryService.instance.save('live_tv', i);
         ref.read(selectedChannelProvider.notifier).state     = ch;
         ref.read(currentChannelListProvider.notifier).state  = _filtered;
         ref.read(currentChannelIndexProvider.notifier).state = i;
@@ -348,12 +350,23 @@ class _ChannelList extends StatefulWidget {
 class _ChannelListState extends State<_ChannelList> {
   List<FocusNode>        _nodes     = [];
   final ScrollController _scrollCtrl = ScrollController();
+  int _restoreIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _restoreIndex = FocusMemoryService.instance.restore('live_tv') ?? 0;
+    if (_restoreIndex >= widget.channels.length) _restoreIndex = 0;
     _nodes = List.generate(widget.channels.length, (_) => FocusNode());
     _notifyFirst();
+    if (_restoreIndex > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _restoreIndex < _nodes.length) {
+          _nodes[_restoreIndex].requestFocus();
+          _ensureVisible(_restoreIndex);
+        }
+      });
+    }
   }
 
   @override
@@ -493,23 +506,37 @@ class _ChannelRowState extends State<_ChannelRow> {
   bool _focused = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_ChannelRow old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      old.focusNode.removeListener(_onFocusChange);
+      widget.focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode:     widget.focusNode,
-      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
-      onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.select ||
-             event.logicalKey == LogicalKeyboardKey.enter)) {
-          widget.onTap();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: GestureDetector(
-        onTap:      widget.onTap,
-        onLongPress: widget.onToggleFavourite,
-        child: Container(
+    return FocusableWidget(
+      focusNode:   widget.focusNode,
+      onTap:       widget.onTap,
+      onLongPress: widget.onToggleFavourite,
+      child: Container(
           height:  AppConstants.channelRowHeight,
           padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
           decoration: BoxDecoration(
@@ -567,10 +594,11 @@ class _ChannelRowState extends State<_ChannelRow> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
+
+
 
 class _FirstLetterPlaceholder extends StatelessWidget {
   const _FirstLetterPlaceholder({required this.name});

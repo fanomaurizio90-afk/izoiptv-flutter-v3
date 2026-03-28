@@ -51,11 +51,27 @@ GoRouter buildRouter(Ref ref) {
       return loc == '/auth' ? null : '/auth';
     },
     routes: [
-      GoRoute(path: '/splash',     builder: (_, __) => const SplashScreen()),
+      GoRoute(
+        path: '/splash',
+        pageBuilder: (_, __) => CustomTransitionPage(
+          child: const SplashScreen(),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
       GoRoute(path: '/auth',       builder: (_, __) => const AuthScreen()),
       GoRoute(path: '/activation', builder: (_, __) => const IzoActivationScreen()),
       GoRoute(path: '/expired',    builder: (_, __) => const ExpiredScreen()),
-      GoRoute(path: '/home',       builder: (_, __) => const HomeScreen()),
+      GoRoute(
+        path: '/home',
+        pageBuilder: (_, __) => CustomTransitionPage(
+          child: const HomeScreen(),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      ),
       GoRoute(
         path: '/live',
         builder: (_, __) => const LiveTvScreen(),

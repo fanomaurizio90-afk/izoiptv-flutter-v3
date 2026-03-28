@@ -68,11 +68,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  // Key handler for tab buttons — down arrow enters the first field
-  KeyEventResult _tabKeyEvent(KeyEvent event, FocusNode firstField) {
+  // Key handler for tab buttons — L/R switches tabs, down enters first field
+  KeyEventResult _tabKeyEvent(KeyEvent event, FocusNode firstField, {FocusNode? leftTab, FocusNode? rightTab}) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       firstField.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft && leftTab != null) {
+      leftTab.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight && rightTab != null) {
+      rightTab.requestFocus();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -143,7 +151,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Focus(
-                      onKeyEvent: (_, e) => _tabKeyEvent(e, _serverNode),
+                      onKeyEvent: (_, e) => _tabKeyEvent(e, _serverNode, rightTab: _m3uTabNode),
                       child: FocusableWidget(
                         focusNode: _xtreamTabNode,
                         autofocus: true,
@@ -166,7 +174,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                     const SizedBox(width: AppSpacing.lg),
                     Focus(
-                      onKeyEvent: (_, e) => _tabKeyEvent(e, _m3uUrlNode),
+                      onKeyEvent: (_, e) => _tabKeyEvent(e, _m3uUrlNode, leftTab: _xtreamTabNode),
                       child: FocusableWidget(
                         focusNode: _m3uTabNode,
                         onTap: () {

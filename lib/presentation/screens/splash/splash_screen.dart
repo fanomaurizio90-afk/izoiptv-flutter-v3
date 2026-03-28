@@ -4,18 +4,57 @@ import '../../../core/theme/app_theme.dart';
 import '../../../presentation/providers/auth_provider.dart';
 import '../../widgets/common/app_logo.dart';
 
-class SplashScreen extends ConsumerWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(authProvider.notifier).tryAutoLogin();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>  _fade;
+  late final Animation<double>  _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.95, end: 1.0).animate(_fade);
+
+    _ctrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        ref.read(authProvider.notifier).tryAutoLogin();
+      }
     });
 
-    return const Scaffold(
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: AppColors.background,
-      body: Center(child: IzoLogo(size: 80)),
+      body: Center(
+        child: FadeTransition(
+          opacity: _fade,
+          child: ScaleTransition(
+            scale: _scale,
+            child: const IzoLogo(size: 80),
+          ),
+        ),
+      ),
     );
   }
 }

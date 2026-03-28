@@ -9,6 +9,7 @@ import '../../../domain/entities/vod.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
+import '../../widgets/common/staggered_list.dart';
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,14 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
     if (_seasonNodes.length != count) {
       for (final n in _seasonNodes) n.dispose();
       _seasonNodes = List.generate(count, (_) => FocusNode());
+      // Auto-focus first season tab once seasons are loaded
+      if (_seasonNodes.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_backNode.hasFocus) {
+            _seasonNodes[0].requestFocus();
+          }
+        });
+      }
     }
   }
 
@@ -264,8 +273,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                             _displaySeries.name,
                             style: const TextStyle(
                               color:         AppColors.textPrimary,
-                              fontSize:      28,
-                              fontWeight:    FontWeight.w600,
+                              fontSize:      34,
+                              fontWeight:    FontWeight.w500,
                               letterSpacing: -0.5,
                               height:        1.15,
                             ),
@@ -447,47 +456,49 @@ class _SeasonSelector extends StatelessWidget {
                 focusNode:    nodes[i],
                 borderRadius: AppSpacing.radiusPill,
                 onTap:        () => onSelect(s.number),
-                child: AnimatedContainer(
-                  duration: AppDurations.fast,
-                  padding:  const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.textPrimary
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.textPrimary
-                          : const Color(0x33FFFFFF),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Row(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Season ${s.number}',
-                        style: TextStyle(
-                          color: isSelected
-                              ? const Color(0xFF080808)
-                              : AppColors.textSecondary,
-                          fontSize:   12,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Season ${s.number}',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? AppColors.textPrimary
+                                  : AppColors.textMuted,
+                              fontSize:   13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w500
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${s.episodes.length}',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? AppColors.textSecondary
+                                  : AppColors.textMuted,
+                              fontSize:   11,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${s.episodes.length}',
-                        style: TextStyle(
-                          color: isSelected
-                              ? const Color(0x88080808)
-                              : AppColors.textMuted,
-                          fontSize:   11,
-                          fontWeight: FontWeight.w400,
+                      const SizedBox(height: 6),
+                      AnimatedContainer(
+                        duration: AppDurations.medium,
+                        curve:   Curves.easeOut,
+                        height:  2,
+                        width:   isSelected ? 24 : 0,
+                        decoration: BoxDecoration(
+                          color:        AppColors.textPrimary,
+                          borderRadius: BorderRadius.circular(1),
                         ),
                       ),
                     ],
@@ -610,7 +621,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     return Focus(
       onKeyEvent:    _handleKey,
       skipTraversal: true,
-      child: Column(
+      child: StaggeredList(
         children: widget.episodes.asMap().entries.map((e) => _EpisodeRow(
           key:       _rowKeys[e.key],
           seriesId:  widget.seriesId,
@@ -651,6 +662,31 @@ class _EpisodeRow extends StatefulWidget {
 class _EpisodeRowState extends State<_EpisodeRow> {
   bool _focused = false;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_EpisodeRow old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      old.focusNode.removeListener(_onFocusChange);
+      widget.focusNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
   void _play(BuildContext context) => context.push('/series/player', extra: {
     'vod': VodItem(
       id:           widget.episode.id,
@@ -678,21 +714,10 @@ class _EpisodeRowState extends State<_EpisodeRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode:     widget.focusNode,
-      onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
-      onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.select ||
-             event.logicalKey == LogicalKeyboardKey.enter)) {
-          _play(context);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: GestureDetector(
-        onTap: () => _play(context),
-        child: AnimatedContainer(
+    return FocusableWidget(
+      focusNode: widget.focusNode,
+      onTap:     () => _play(context),
+      child: AnimatedContainer(
           duration: AppDurations.fast,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.tvH,
@@ -865,8 +890,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   String _formatDuration(int secs) {

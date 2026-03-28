@@ -159,6 +159,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 //   - up/down arrows move to explicit neighbour nodes
 //   - select/enter triggers the action
 
+bool _isActivateKey(KeyEvent event) {
+  if (event.logicalKey == LogicalKeyboardKey.select) return true;
+  if (event.logicalKey == LogicalKeyboardKey.enter) return true;
+  if (event.logicalKey == LogicalKeyboardKey.numpadEnter) return true;
+  if (event.logicalKey == LogicalKeyboardKey.gameButtonA) return true;
+  if (event.physicalKey.usbHidUsage == 0x00070058) return true;
+  if (event.physicalKey == PhysicalKeyboardKey.select) return true;
+  if (event.physicalKey == PhysicalKeyboardKey.gameButtonA) return true;
+  return false;
+}
+
 KeyEventResult _rowKeyEvent(
   KeyEvent event,
   FocusNode? upNode,
@@ -174,8 +185,7 @@ KeyEventResult _rowKeyEvent(
     downNode.requestFocus();
     return KeyEventResult.handled;
   }
-  if ((event.logicalKey == LogicalKeyboardKey.select ||
-       event.logicalKey == LogicalKeyboardKey.enter) && onTap != null) {
+  if (_isActivateKey(event) && onTap != null) {
     onTap();
     return KeyEventResult.handled;
   }
@@ -438,7 +448,7 @@ class _SectionHeader extends StatelessWidget {
           color:         AppColors.textMuted,
           fontSize:      10,
           fontWeight:    FontWeight.w500,
-          letterSpacing: 1.5,
+          letterSpacing: 0.5,
         ),
       ),
     );

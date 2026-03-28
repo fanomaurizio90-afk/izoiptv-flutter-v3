@@ -211,8 +211,8 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                             vod.name,
                             style: const TextStyle(
                               color:         AppColors.textPrimary,
-                              fontSize:      28,
-                              fontWeight:    FontWeight.w600,
+                              fontSize:      34,
+                              fontWeight:    FontWeight.w500,
                               letterSpacing: -0.5,
                               height:        1.15,
                             ),
@@ -377,7 +377,6 @@ class _PlayButtonState extends State<_PlayButton> {
         focusNode:    widget.focusNode,
         autofocus:    true,
         borderRadius: AppSpacing.radiusPill,
-        scaleOnFocus: true,
         onTap:        widget.onPlay,
         child: Focus(
           canRequestFocus: false,
@@ -405,7 +404,7 @@ class _PlayButtonState extends State<_PlayButton> {
                   style: TextStyle(
                     color:      _focused ? const Color(0xFF080808) : AppColors.textPrimary,
                     fontSize:   15,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     letterSpacing: 0.3,
                   ),
                 ),
