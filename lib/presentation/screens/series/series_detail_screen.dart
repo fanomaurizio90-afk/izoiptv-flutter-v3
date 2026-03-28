@@ -46,7 +46,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     if (widget.series != null) {
       return PopScope(
         canPop: false,
-        onPopInvoked: (didPop) {
+        onPopInvokedWithResult: (didPop, _) {
           if (!didPop) context.go('/series');
         },
         child: Scaffold(
@@ -58,7 +58,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/series');
       },
       child: Scaffold(
@@ -163,7 +163,16 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
       }
     });
 
-    return Stack(
+    return Focus(
+      // Belt-and-suspenders: catch Fire Stick remote back key regardless of focused widget
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+          context.go('/series');
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Stack(
       children: [
         // Full bleed backdrop
         Positioned(
@@ -341,7 +350,8 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody> {
           ),
         ),
       ],
-    );
+      ), // Stack
+    );   // Focus
   }
 }
 
@@ -539,22 +549,42 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       },
       child: GestureDetector(
         onTap: () => _play(context),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.tvH,
-            vertical:   AppSpacing.md,
-          ),
-          decoration: BoxDecoration(
-            color: _focused ? const Color(0x12FFFFFF) : Colors.transparent,
-            border: Border(
-              left: BorderSide(
-                color: _focused ? AppColors.textPrimary : Colors.transparent,
-                width: 2.5,
+        child: Stack(
+          children: [
+            // Gradient wash — fades in on focus (GPU-light: opacity toggle only)
+            Positioned.fill(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: _focused ? 1.0 : 0.0,
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end:   Alignment.centerRight,
+                      colors: [Color(0x14FFFFFF), Color(0x04FFFFFF), Colors.transparent],
+                      stops:  [0.0, 0.35, 1.0],
+                    ),
+                  ),
+                ),
               ),
-              bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
             ),
-          ),
-          child: Row(
+            // Border + content
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.tvH,
+                vertical:   AppSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: _focused ? Colors.white : Colors.transparent,
+                    width: 2.5,
+                  ),
+                  bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
+                ),
+              ),
+              child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Thumbnail with watch-state overlays
@@ -648,10 +678,12 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
+          ),           // Row
+            ),         // AnimatedContainer
+          ],           // Stack children
+        ),             // Stack
+      ),               // GestureDetector
+    );                 // Focus
   }
 }
 
