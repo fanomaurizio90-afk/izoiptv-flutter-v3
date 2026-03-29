@@ -95,9 +95,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
       final favs = await repo.getFavourites();
       _favouriteCount = favs.length;
-      if (_favouriteCount > 0) {
-        cats.insert(0, const ChannelCategory(id: _favouritesCatId, name: 'Favourites'));
-      }
+      cats.insert(0, const ChannelCategory(id: _favouritesCatId, name: 'Favourites'));
       final catId    = _selectedCatId ?? cats.first.id;
       final channels = catId == _favouritesCatId
           ? favs

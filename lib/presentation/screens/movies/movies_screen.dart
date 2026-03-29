@@ -26,6 +26,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   final _firstCategoryFocusNode = FocusNode();
   final _searchFocusNode        = FocusNode();
   final _backFocusNode          = FocusNode();
+  final _contentListKey         = GlobalKey<_ContentListState>();
   // First grid item focus node — set by _ContentList via callback
   FocusNode? _firstGridFocusNode;
 
@@ -124,7 +125,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/home');
       },
       child: Scaffold(
@@ -173,6 +174,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       );
     }
     return _ContentList(
+      key:                _contentListKey,
       items:              display,
       columns:            cols,
       categories:         _categories,
@@ -188,10 +190,12 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
           final ok = await showPinDialog(context);
           if (!ok || !mounted) return;
         }
-        if (mounted) context.push('/movies/player', extra: {
+        if (!mounted) return;
+        await context.push('/movies/player', extra: {
           'vod':      vod,
           'backPath': '/movies',
         });
+        if (mounted) _contentListKey.currentState?.restoreFocus();
       },
     );
   }
@@ -199,6 +203,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
 
 class _ContentList extends StatefulWidget {
   const _ContentList({
+    super.key,
     required this.items,
     required this.columns,
     required this.categories,
@@ -263,6 +268,16 @@ class _ContentListState extends State<_ContentList> {
   }
 
   FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
+
+  void restoreFocus() {
+    if (widget.focusMemoryKey == null) return;
+    final idx = FocusMemoryService.instance.restore(widget.focusMemoryKey!);
+    if (idx == null || idx >= widget.items.length) return;
+    _ensureVisible(idx);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _nodeFor(idx).requestFocus();
+    });
+  }
 
   int get _focusedIndex {
     for (final entry in _nodes.entries) {
