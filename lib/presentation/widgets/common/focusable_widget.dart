@@ -21,9 +21,10 @@ class FocusableWidget extends StatefulWidget {
     required this.onTap,
     this.onLongPress,
     this.focusNode,
-    this.autofocus    = false,
-    this.borderRadius = 0.0,
-    this.enabled      = true,
+    this.autofocus      = false,
+    this.borderRadius   = 0.0,
+    this.enabled        = true,
+    this.showFocusBorder = true,
   });
 
   final Widget        child;
@@ -33,6 +34,7 @@ class FocusableWidget extends StatefulWidget {
   final bool          autofocus;
   final double        borderRadius;
   final bool          enabled;
+  final bool          showFocusBorder;
 
   @override
   State<FocusableWidget> createState() => _FocusableWidgetState();
@@ -154,7 +156,7 @@ class _FocusableWidgetState extends State<FocusableWidget> {
             duration: AppDurations.fast,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(widget.borderRadius),
-              border: _focused
+              border: _focused && widget.showFocusBorder
                   ? Border.all(color: AppColors.focusBorder, width: 1.0)
                   : Border.all(color: Colors.transparent, width: 1.0),
             ),

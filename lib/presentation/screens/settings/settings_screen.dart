@@ -67,12 +67,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Row(
                 children: [
                   FocusableWidget(
-                    focusNode: _backNode,
-                    autofocus: true,
-                    onTap:     () => context.go('/home'),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+                    focusNode:    _backNode,
+                    autofocus:    true,
+                    borderRadius: AppSpacing.radiusPill,
+                    onTap:        () => context.go('/home'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color:        AppColors.card,
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
+                          SizedBox(width: 2),
+                          Text('Back', style: TextStyle(
+                            color:      AppColors.textSecondary,
+                            fontSize:   11,
+                            fontWeight: FontWeight.w400,
+                          )),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),

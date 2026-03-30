@@ -236,16 +236,26 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
           child: FocusableWidget(
             focusNode:    _backNode,
             autofocus:    true,
-            borderRadius: 20,
+            borderRadius: AppSpacing.radiusPill,
             onTap: () => context.go('/series'),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0x33000000),
-                borderRadius: BorderRadius.circular(20),
+                color:        const Color(0x55000000),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
               ),
-              child: const Icon(Icons.arrow_back,
-                color: AppColors.textPrimary, size: 18),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
+                  SizedBox(width: 2),
+                  Text('Back', style: TextStyle(
+                    color:      AppColors.textSecondary,
+                    fontSize:   11,
+                    fontWeight: FontWeight.w400,
+                  )),
+                ],
+              ),
             ),
           ),
         ),
@@ -423,7 +433,7 @@ class _SeriesMeta extends StatelessWidget {
 
 // ── Season Selector ──────────────────────────────────────────────────────────
 
-class _SeasonSelector extends StatelessWidget {
+class _SeasonSelector extends StatefulWidget {
   const _SeasonSelector({
     required this.seasons,
     required this.selectedNumber,
@@ -438,26 +448,70 @@ class _SeasonSelector extends StatelessWidget {
   final KeyEventResult Function(int, int, KeyEvent)   onKey;
 
   @override
+  State<_SeasonSelector> createState() => _SeasonSelectorState();
+}
+
+class _SeasonSelectorState extends State<_SeasonSelector> {
+  int _focusedIdx = -1;
+
+  void _onFocusChange() {
+    if (!mounted) return;
+    setState(() {
+      _focusedIdx = widget.nodes.indexWhere((n) => n.hasFocus);
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    for (final n in widget.nodes) n.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_SeasonSelector old) {
+    super.didUpdateWidget(old);
+    if (old.nodes != widget.nodes) {
+      for (final n in old.nodes) n.removeListener(_onFocusChange);
+      for (final n in widget.nodes) n.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final n in widget.nodes) n.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        itemCount:       seasons.length,
+        itemCount:       widget.seasons.length,
         itemBuilder: (_, i) {
-          final s          = seasons[i];
-          final isSelected = s.number == selectedNumber;
+          final s          = widget.seasons[i];
+          final isSelected = s.number == widget.selectedNumber;
+          final isFocused  = _focusedIdx == i;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Focus(
-              onKeyEvent: (_, e) => onKey(i, seasons.length, e),
+              onKeyEvent: (_, e) => widget.onKey(i, widget.seasons.length, e),
               child: FocusableWidget(
-                focusNode:    nodes[i],
-                borderRadius: AppSpacing.radiusPill,
-                onTap:        () => onSelect(s.number),
-                child: Padding(
+                focusNode:       widget.nodes[i],
+                borderRadius:    AppSpacing.radiusPill,
+                showFocusBorder: false,
+                onTap:           () => widget.onSelect(s.number),
+                child: AnimatedContainer(
+                  duration: AppDurations.fast,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFocused
+                        ? const Color(0x12FFFFFF)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
@@ -468,7 +522,7 @@ class _SeasonSelector extends StatelessWidget {
                           Text(
                             'Season ${s.number}',
                             style: TextStyle(
-                              color: isSelected
+                              color: isSelected || isFocused
                                   ? AppColors.textPrimary
                                   : AppColors.textMuted,
                               fontSize:   13,

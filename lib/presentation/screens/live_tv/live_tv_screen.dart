@@ -675,7 +675,8 @@ class _CategorySidebarState extends State<_CategorySidebar> {
   final ScrollController _scrollCtrl  = ScrollController();
   final _containerKey                 = GlobalKey();
   // _nodes[i] is for item index i+1 (item 0 uses widget.firstItemNode)
-  List<FocusNode> _nodes = [];
+  List<FocusNode> _nodes        = [];
+  int             _focusedIdx   = -1;
 
   @override
   void initState() {
@@ -703,7 +704,10 @@ class _CategorySidebarState extends State<_CategorySidebar> {
   }
 
   void _onFirstNodeFocus() {
-    if (widget.firstItemNode?.hasFocus != true || !mounted) return;
+    if (!mounted) return;
+    final hasFocus = widget.firstItemNode?.hasFocus == true;
+    setState(() => _focusedIdx = hasFocus ? 0 : (_focusedIdx == 0 ? -1 : _focusedIdx));
+    if (!hasFocus) return;
     final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
     if (selIdx > 0 && selIdx <= _nodes.length) {
       _nodes[selIdx - 1].requestFocus();
@@ -718,7 +722,10 @@ class _CategorySidebarState extends State<_CategorySidebar> {
     for (int i = 1; i < widget.categories.length; i++) {
       final idx = i;
       final n   = FocusNode();
-      n.addListener(() { if (n.hasFocus && mounted) _ensureVisible(idx); });
+      n.addListener(() {
+        if (mounted) setState(() => _focusedIdx = n.hasFocus ? idx : (_focusedIdx == idx ? -1 : _focusedIdx));
+        if (n.hasFocus && mounted) _ensureVisible(idx);
+      });
       _nodes.add(n);
     }
   }
@@ -807,17 +814,27 @@ class _CategorySidebarState extends State<_CategorySidebar> {
                 return KeyEventResult.ignored;
               },
               child: FocusableWidget(
-                focusNode: node,
-                autofocus: i == 0,
-                onTap:     () => widget.onSelect(cat.id),
-                child: Container(
+                focusNode:       node,
+                autofocus:       i == 0,
+                showFocusBorder: false,
+                onTap:           () => widget.onSelect(cat.id),
+                child: AnimatedContainer(
+                  duration: AppDurations.fast,
                   height:   56,
                   padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0x14FFFFFF) : Colors.transparent,
+                    color: isSelected
+                        ? const Color(0x14FFFFFF)
+                        : _focusedIdx == i
+                            ? const Color(0x0A00F0FF)
+                            : Colors.transparent,
                     border: Border(
                       left: BorderSide(
-                        color: isSelected ? AppColors.textPrimary : Colors.transparent,
+                        color: isSelected
+                            ? AppColors.textPrimary
+                            : _focusedIdx == i
+                                ? AppColors.accentPrimary
+                                : Colors.transparent,
                         width: 2.5,
                       ),
                     ),
@@ -828,7 +845,7 @@ class _CategorySidebarState extends State<_CategorySidebar> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
+                      color:      (isSelected || _focusedIdx == i) ? AppColors.textPrimary : AppColors.textMuted,
                       fontSize:   12,
                       fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
                     ),

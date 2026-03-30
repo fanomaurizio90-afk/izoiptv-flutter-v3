@@ -479,11 +479,23 @@ class _TopBar extends StatelessWidget {
       child: Row(
         children: [
           FocusableWidget(
-            focusNode: backFocusNode,
-            onTap:     () => context.go('/home'),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+            focusNode:    backFocusNode,
+            borderRadius: AppSpacing.radiusPill,
+            onTap:        () => context.go('/home'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
+                  SizedBox(width: 2),
+                  Text('Back', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w400)),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -557,6 +569,7 @@ class _CategoryBarState extends State<_CategoryBar> {
   // _nodes[i] is for item i+1; item 0 uses widget.firstItemFocusNode
   List<FocusNode> _nodes = [];
   List<GlobalKey> _keys  = [];
+  int _focusedCatIdx     = -1;
 
   @override
   void initState() {
@@ -583,8 +596,10 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 
   void _onFirstFocus() {
-    if (widget.firstItemFocusNode?.hasFocus != true || !mounted) return;
-    // Return focus to the currently selected category, not always index 0.
+    if (!mounted) return;
+    final hasFocus = widget.firstItemFocusNode?.hasFocus == true;
+    setState(() => _focusedCatIdx = hasFocus ? 0 : (_focusedCatIdx == 0 ? -1 : _focusedCatIdx));
+    if (!hasFocus) return;
     final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
     if (selIdx > 0 && selIdx <= _nodes.length) {
       _nodes[selIdx - 1].requestFocus();
@@ -598,9 +613,11 @@ class _CategoryBarState extends State<_CategoryBar> {
     _keys  = List.generate(widget.categories.length, (_) => GlobalKey());
     _nodes = [];
     for (int i = 1; i < widget.categories.length; i++) {
-      final key = _keys[i];
-      final n   = FocusNode();
+      final key  = _keys[i];
+      final idx  = i;
+      final n    = FocusNode();
       n.addListener(() {
+        if (mounted) setState(() => _focusedCatIdx = n.hasFocus ? idx : (_focusedCatIdx == idx ? -1 : _focusedCatIdx));
         if (n.hasFocus && mounted) _scrollToKey(key);
       });
       _nodes.add(n);
@@ -690,32 +707,37 @@ class _CategoryBarState extends State<_CategoryBar> {
               return KeyEventResult.ignored;
             },
             child: FocusableWidget(
-              autofocus: i == 0,
-              focusNode: node,
-              onTap:     () => widget.onSelect(cat.id),
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.xl2),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        cat.name,
-                        style: TextStyle(
-                          color:      isSelected ? AppColors.textPrimary : AppColors.textMuted,
-                          fontSize:   12,
-                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-                        ),
+              autofocus:       i == 0,
+              focusNode:       node,
+              showFocusBorder: false,
+              onTap:           () => widget.onSelect(cat.id),
+              child: AnimatedContainer(
+                duration: AppDurations.fast,
+                margin:   const EdgeInsets.only(right: AppSpacing.xl2),
+                padding:  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color:        _focusedCatIdx == i ? const Color(0x12FFFFFF) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      cat.name,
+                      style: TextStyle(
+                        color:      (isSelected || _focusedCatIdx == i) ? AppColors.textPrimary : AppColors.textMuted,
+                        fontSize:   12,
+                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
                       ),
-                      AnimatedContainer(
-                        duration: AppDurations.fast,
-                        margin: const EdgeInsets.only(top: 3),
-                        height: 1,
-                        width:  isSelected ? 20 : 0,
-                        color:  AppColors.textPrimary,
-                      ),
-                    ],
-                  ),
+                    ),
+                    AnimatedContainer(
+                      duration: AppDurations.fast,
+                      margin: const EdgeInsets.only(top: 3),
+                      height: 1.5,
+                      width:  isSelected ? 20 : 0,
+                      color:  AppColors.textPrimary,
+                    ),
+                  ],
                 ),
               ),
             ),

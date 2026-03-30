@@ -63,12 +63,28 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
               child: Row(
                 children: [
                   FocusableWidget(
-                    focusNode: _backNode,
-                    autofocus: true,
-                    onTap:     () => context.go('/home'),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                    focusNode:    _backNode,
+                    autofocus:    true,
+                    borderRadius: AppSpacing.radiusPill,
+                    onTap:        () => context.go('/home'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color:        AppColors.card,
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
+                          SizedBox(width: 2),
+                          Text('Back', style: TextStyle(
+                            color:      AppColors.textSecondary,
+                            fontSize:   11,
+                            fontWeight: FontWeight.w400,
+                          )),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -155,7 +171,7 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
 
 // ── Tab ────────────────────────────────────────────────────────────────────────
 
-class _Tab extends StatelessWidget {
+class _Tab extends StatefulWidget {
   const _Tab({
     required this.label,
     required this.selected,
@@ -172,33 +188,77 @@ class _Tab extends StatelessWidget {
   final VoidCallback? onRight;
 
   @override
+  State<_Tab> createState() => _TabState();
+}
+
+class _TabState extends State<_Tab> {
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocus);
+  }
+
+  @override
+  void didUpdateWidget(_Tab old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      old.focusNode.removeListener(_onFocus);
+      widget.focusNode.addListener(_onFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocus);
+    super.dispose();
+  }
+
+  void _onFocus() {
+    if (mounted) setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Focus(
       onKeyEvent: (_, event) {
         if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          onLeft();
+          widget.onLeft();
           return KeyEventResult.handled;
         }
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight && onRight != null) {
-          onRight!();
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight && widget.onRight != null) {
+          widget.onRight!();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
       child: FocusableWidget(
-        focusNode: focusNode,
-        onTap:     onTap,
-        child: Padding(
+        focusNode:       widget.focusNode,
+        onTap:           widget.onTap,
+        showFocusBorder: false,
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg, vertical: AppSpacing.md,
           ),
+          decoration: BoxDecoration(
+            color: _focused
+                ? const Color(0x12FFFFFF)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          ),
           child: Text(
-            label,
+            widget.label,
             style: TextStyle(
-              color:      selected ? AppColors.textPrimary : AppColors.textMuted,
+              color: widget.selected
+                  ? AppColors.textPrimary
+                  : _focused
+                      ? AppColors.textSecondary
+                      : AppColors.textMuted,
               fontSize:   13,
-              fontWeight: selected ? FontWeight.w400 : FontWeight.w300,
+              fontWeight: widget.selected ? FontWeight.w400 : FontWeight.w300,
             ),
           ),
         ),
