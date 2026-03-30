@@ -38,10 +38,13 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   int                   _favouriteCount = 0;
 
   // Focus nodes for cross-panel navigation
-  final _searchFocusNode   = FocusNode();
-  final _firstSidebarNode  = FocusNode();
-  // First channel row focus — set via callback from _ChannelList
+  final _searchFocusNode  = FocusNode();
+  final _firstSidebarNode = FocusNode();
+  // First channel row focus — set via callback from _ChannelList (used by search bar DOWN)
   FocusNode? _firstChannelNode;
+  // Keys for position-based closest navigation
+  final _sidebarKey     = GlobalKey<_CategorySidebarState>();
+  final _channelListKey = GlobalKey<_ChannelListState>();
 
   @override
   void initState() {
@@ -191,12 +194,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         child: Row(
           children: [
             _CategorySidebar(
-              categories:     _categories,
-              selectedId:     _selectedCatId,
-              onSelect:       _selectCategory,
-              firstItemNode:  _firstSidebarNode,
-              // Right arrow on sidebar → search bar or first channel
-              onRightArrow:   () => (_firstChannelNode ?? _searchFocusNode).requestFocus(),
+              key:           _sidebarKey,
+              categories:    _categories,
+              selectedId:    _selectedCatId,
+              onSelect:      _selectCategory,
+              firstItemNode: _firstSidebarNode,
+              onRightArrow:  (y) => _channelListKey.currentState?.focusClosestTo(y ?? 0),
             ),
             Container(width: 0.5, color: AppColors.border),
             Expanded(
@@ -233,11 +236,12 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       return const EmptyStateWidget(type: EmptyStateType.channels);
     }
     return _ChannelList(
-      channels:           _filtered,
-      categories:         _categories,
-      sidebarNode:        _firstSidebarNode,
-      onFirstNodeReady:   (node) { _firstChannelNode = node; },
-      onToggleFavourite:  _toggleFavourite,
+      key:               _channelListKey,
+      channels:          _filtered,
+      categories:        _categories,
+      onLeftArrow:       (y) => _sidebarKey.currentState?.focusClosestTo(y ?? 0),
+      onFirstNodeReady:  (node) { _firstChannelNode = node; },
+      onToggleFavourite: _toggleFavourite,
       onChannelTap:       (ch, i) async {
         final cat = _categories.firstWhere(
           (c) => c.id == ch.categoryId,
@@ -327,16 +331,17 @@ class _SearchBar extends StatelessWidget {
 
 class _ChannelList extends StatefulWidget {
   const _ChannelList({
+    super.key,
     required this.channels,
     required this.categories,
-    required this.sidebarNode,
+    required this.onLeftArrow,
     required this.onFirstNodeReady,
     required this.onChannelTap,
     required this.onToggleFavourite,
   });
   final List<Channel>                channels;
   final List<ChannelCategory>        categories;
-  final FocusNode                    sidebarNode;
+  final void Function(double?)       onLeftArrow;
   final void Function(FocusNode)     onFirstNodeReady;
   final void Function(Channel, int)  onChannelTap;
   final void Function(Channel)       onToggleFavourite;
@@ -346,8 +351,9 @@ class _ChannelList extends StatefulWidget {
 }
 
 class _ChannelListState extends State<_ChannelList> {
-  List<FocusNode>        _nodes     = [];
+  List<FocusNode>        _nodes      = [];
   final ScrollController _scrollCtrl = ScrollController();
+  final _containerKey                = GlobalKey();
   int _restoreIndex = 0;
 
   @override
@@ -405,6 +411,29 @@ class _ChannelListState extends State<_ChannelList> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
+  double? _getCenterY(int idx) {
+    final ctx = _containerKey.currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+    final top    = box.localToGlobal(Offset.zero).dy;
+    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
+    return top + idx * AppConstants.channelRowHeight - offset + AppConstants.channelRowHeight / 2;
+  }
+
+  void focusClosestTo(double targetY) {
+    if (_nodes.isEmpty) { _moveTo(0); return; }
+    double bestDist = double.infinity;
+    int    bestIdx  = 0;
+    for (int i = 0; i < _nodes.length; i++) {
+      final cy = _getCenterY(i);
+      if (cy == null) continue;
+      final dist = (cy - targetY).abs();
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    }
+    _moveTo(bestIdx);
+  }
+
   void _ensureVisible(int idx) {
     if (!_scrollCtrl.hasClients) return;
     final itemTop    = idx * AppConstants.channelRowHeight;
@@ -444,7 +473,7 @@ class _ChannelListState extends State<_ChannelList> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.sidebarNode.requestFocus();
+      widget.onLeftArrow(_getCenterY(idx));
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.contextMenu) {
@@ -461,6 +490,7 @@ class _ChannelListState extends State<_ChannelList> {
     return ScrollConfiguration(
       behavior: const ScrollBehavior().copyWith(scrollbars: false),
       child: Focus(
+        key:           _containerKey,
         onKeyEvent:    _handleKey,
         skipTraversal: true,
         child: ListView.builder(
@@ -624,24 +654,26 @@ class _FirstLetterPlaceholder extends StatelessWidget {
 
 class _CategorySidebar extends StatefulWidget {
   const _CategorySidebar({
+    super.key,
     required this.categories,
     required this.selectedId,
     required this.onSelect,
     required this.onRightArrow,
     this.firstItemNode,
   });
-  final List<ChannelCategory> categories;
-  final int?                  selectedId;
-  final void Function(int)    onSelect;
-  final VoidCallback          onRightArrow;
-  final FocusNode?            firstItemNode;
+  final List<ChannelCategory>   categories;
+  final int?                    selectedId;
+  final void Function(int)      onSelect;
+  final void Function(double?)  onRightArrow;
+  final FocusNode?              firstItemNode;
 
   @override
   State<_CategorySidebar> createState() => _CategorySidebarState();
 }
 
 class _CategorySidebarState extends State<_CategorySidebar> {
-  final ScrollController _scrollCtrl = ScrollController();
+  final ScrollController _scrollCtrl  = ScrollController();
+  final _containerKey                 = GlobalKey();
   // _nodes[i] is for item index i+1 (item 0 uses widget.firstItemNode)
   List<FocusNode> _nodes = [];
 
@@ -713,9 +745,38 @@ class _CategorySidebarState extends State<_CategorySidebar> {
     }
   }
 
+  double? _getCenterY(int idx) {
+    final ctx = _containerKey.currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+    final top    = box.localToGlobal(Offset.zero).dy;
+    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
+    return top + idx * 56.0 - offset + 28.0;
+  }
+
+  void focusClosestTo(double targetY) {
+    if (widget.categories.isEmpty) return;
+    double bestDist = double.infinity;
+    int    bestIdx  = 0;
+    for (int i = 0; i < widget.categories.length; i++) {
+      final cy = _getCenterY(i);
+      if (cy == null) continue;
+      final dist = (cy - targetY).abs();
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    }
+    if (bestIdx == 0) {
+      widget.firstItemNode?.requestFocus();
+    } else {
+      _nodes[bestIdx - 1].requestFocus();
+    }
+    _ensureVisible(bestIdx);
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      key:   _containerKey,
       width: 200,
       child: ScrollConfiguration(
         behavior: const ScrollBehavior().copyWith(scrollbars: false),
@@ -731,7 +792,7 @@ class _CategorySidebarState extends State<_CategorySidebar> {
               onKeyEvent: (_, event) {
                 if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                 if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  widget.onRightArrow();
+                  widget.onRightArrow(_getCenterY(i));
                   return KeyEventResult.handled;
                 }
                 if (event.logicalKey == LogicalKeyboardKey.arrowDown &&

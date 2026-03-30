@@ -26,9 +26,8 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   final _firstCategoryFocusNode = FocusNode();
   final _searchFocusNode        = FocusNode();
   final _backFocusNode          = FocusNode();
-  final _contentListKey         = GlobalKey<_ContentListState>();
-  // First grid item focus node — set by _ContentList via callback
-  FocusNode? _firstGridFocusNode;
+  final _contentListKey  = GlobalKey<_ContentListState>();
+  final _categoryBarKey  = GlobalKey<_CategoryBarState>();
 
   List<VodCategory> _categories    = [];
   int?              _selectedCatId;
@@ -140,11 +139,12 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
               onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
             ),
             if (_categories.isNotEmpty) _CategoryBar(
+              key:                _categoryBarKey,
               categories:         _categories,
               selectedId:         _selectedCatId,
               onSelect:           _selectCategory,
               firstItemFocusNode: _firstCategoryFocusNode,
-              onDownArrow:        () => _firstGridFocusNode?.requestFocus(),
+              onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
               onUpArrow:          () => _backFocusNode.requestFocus(),
             ),
             Expanded(child: _buildContent()),
@@ -174,14 +174,13 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       );
     }
     return _ContentList(
-      key:                _contentListKey,
-      items:              display,
-      columns:            cols,
-      categories:         _categories,
-      categoryFocusNode:  _firstCategoryFocusNode,
-      focusMemoryKey:     'movies',
-      onFirstNodeReady:   (node) { _firstGridFocusNode = node; },
-      onTap:              (vod) async {
+      key:              _contentListKey,
+      items:            display,
+      columns:          cols,
+      categories:       _categories,
+      focusMemoryKey:   'movies',
+      onUpFromFirstRow: (x) => _categoryBarKey.currentState?.focusClosestTo(x),
+      onTap:            (vod) async {
         final cat = _categories.firstWhere(
           (c) => c.id == vod.categoryId,
           orElse: () => const VodCategory(id: 0, name: ''),
@@ -208,16 +207,14 @@ class _ContentList extends StatefulWidget {
     required this.columns,
     required this.categories,
     required this.onTap,
-    required this.onFirstNodeReady,
-    this.categoryFocusNode,
+    required this.onUpFromFirstRow,
     this.focusMemoryKey,
   });
   final List<VodItem>          items;
   final int                    columns;
   final List<VodCategory>      categories;
   final void Function(VodItem) onTap;
-  final void Function(FocusNode) onFirstNodeReady;
-  final FocusNode?             categoryFocusNode;
+  final void Function(double)  onUpFromFirstRow;
   final String?                focusMemoryKey;
 
   @override
@@ -239,7 +236,6 @@ class _ContentListState extends State<_ContentList> {
       _restoreIndex = FocusMemoryService.instance.restore(widget.focusMemoryKey!) ?? 0;
       if (_restoreIndex >= widget.items.length) _restoreIndex = 0;
     }
-    _notifyFirstNode();
   }
 
   @override
@@ -248,15 +244,6 @@ class _ContentListState extends State<_ContentList> {
     if (widget.items != old.items) {
       for (final n in _nodes.values) n.dispose();
       _nodes.clear();
-      _notifyFirstNode();
-    }
-  }
-
-  void _notifyFirstNode() {
-    if (widget.items.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.onFirstNodeReady(_nodeFor(0));
-      });
     }
   }
 
@@ -290,6 +277,20 @@ class _ContentListState extends State<_ContentList> {
     if (to < 0 || to >= widget.items.length) return;
     _nodeFor(to).requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(to));
+  }
+
+  void focusClosestColumnTo(double targetX) {
+    if (widget.items.isEmpty || _availableWidth == 0) { _move(0); return; }
+    final cols      = widget.columns;
+    final itemWidth = (_availableWidth - AppSpacing.tvH * 2 - (cols - 1) * AppSpacing.sm) / cols;
+    double bestDist = double.infinity;
+    int    bestCol  = 0;
+    for (int col = 0; col < cols; col++) {
+      final centerX = AppSpacing.tvH + col * (itemWidth + AppSpacing.sm) + itemWidth / 2;
+      final dist    = (centerX - targetX).abs();
+      if (dist < bestDist) { bestDist = dist; bestCol = col; }
+    }
+    _move(bestCol.clamp(0, widget.items.length - 1));
   }
 
   // Smooth-scroll so the focused poster is always fully visible
@@ -346,7 +347,14 @@ class _ContentListState extends State<_ContentList> {
       if (idx - widget.columns >= 0) {
         _move(idx - widget.columns);
       } else {
-        widget.categoryFocusNode?.requestFocus();
+        final cols      = widget.columns;
+        final col       = idx % cols;
+        final itemWidth = _availableWidth > 0
+            ? (_availableWidth - AppSpacing.tvH * 2 - (cols - 1) * AppSpacing.sm) / cols
+            : 0.0;
+        widget.onUpFromFirstRow(
+          AppSpacing.tvH + col * (itemWidth + AppSpacing.sm) + itemWidth / 2,
+        );
       }
       return KeyEventResult.handled;
     }
@@ -526,6 +534,7 @@ class _TopBar extends StatelessWidget {
 
 class _CategoryBar extends StatefulWidget {
   const _CategoryBar({
+    super.key,
     required this.categories,
     required this.selectedId,
     required this.onSelect,
@@ -533,12 +542,12 @@ class _CategoryBar extends StatefulWidget {
     required this.onUpArrow,
     this.firstItemFocusNode,
   });
-  final List<VodCategory>  categories;
-  final int?               selectedId;
-  final void Function(int) onSelect;
-  final VoidCallback       onDownArrow;
-  final VoidCallback       onUpArrow;
-  final FocusNode?         firstItemFocusNode;
+  final List<VodCategory>       categories;
+  final int?                    selectedId;
+  final void Function(int)      onSelect;
+  final void Function(double?)  onDownArrow;
+  final VoidCallback            onUpArrow;
+  final FocusNode?              firstItemFocusNode;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
@@ -611,6 +620,37 @@ class _CategoryBarState extends State<_CategoryBar> {
     });
   }
 
+  int get _focusedIndex {
+    if (widget.firstItemFocusNode?.hasFocus == true) return 0;
+    for (int i = 0; i < _nodes.length; i++) {
+      if (_nodes[i].hasFocus) return i + 1;
+    }
+    return -1;
+  }
+
+  double? _getCenterX(int i) {
+    final ctx = _keys[i].currentContext;
+    if (ctx == null) return null;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return null;
+    final pos = box.localToGlobal(Offset.zero);
+    return pos.dx + box.size.width / 2;
+  }
+
+  void focusClosestTo(double targetX) {
+    double bestDist = double.infinity;
+    int    bestIdx  = 0;
+    for (int i = 0; i < widget.categories.length; i++) {
+      final cx = _getCenterX(i);
+      if (cx == null) continue;
+      final dist = (cx - targetX).abs();
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    }
+    final node = bestIdx == 0 ? widget.firstItemFocusNode : _nodes[bestIdx - 1];
+    node?.requestFocus();
+    _scrollToKey(_keys[bestIdx]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -640,7 +680,7 @@ class _CategoryBarState extends State<_CategoryBar> {
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.onDownArrow();
+                widget.onDownArrow(_getCenterX(i));
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
