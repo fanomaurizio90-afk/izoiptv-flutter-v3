@@ -504,30 +504,48 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xl2),
           Expanded(
-            child: Focus(
-              focusNode: searchFocusNode,
-              onKeyEvent: (_, event) {
-                if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  onDownArrow?.call();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: TextField(
-                controller: searchCtrl,
-                style: TextStyle(color: AppColors.textPrimary, fontSize: 12),
-                decoration: InputDecoration(
-                  hintText:       'Search in this category...',
-                  hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  border:         InputBorder.none,
-                  enabledBorder:  InputBorder.none,
-                  focusedBorder:  InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  isDense:        true,
-                  filled:         true,
-                  fillColor:      Colors.transparent,
-                ),
+            child: Container(
+              height: 34,
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border:       Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 10),
+                  const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Focus(
+                      focusNode: searchFocusNode,
+                      onKeyEvent: (_, event) {
+                        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                          onDownArrow?.call();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        controller: searchCtrl,
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText:       'Search...',
+                          hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          border:         InputBorder.none,
+                          enabledBorder:  InputBorder.none,
+                          focusedBorder:  InputBorder.none,
+                          contentPadding: const EdgeInsets.only(bottom: 2),
+                          isDense:        true,
+                          filled:         true,
+                          fillColor:      Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
               ),
             ),
           ),

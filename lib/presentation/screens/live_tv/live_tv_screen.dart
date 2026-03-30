@@ -191,27 +191,65 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       child: Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Row(
+        child: Column(
           children: [
-            _CategorySidebar(
-              key:           _sidebarKey,
-              categories:    _categories,
-              selectedId:    _selectedCatId,
-              onSelect:      _selectCategory,
-              firstItemNode: _firstSidebarNode,
-              onRightArrow:  (y) => _channelListKey.currentState?.focusClosestTo(y ?? 0),
-            ),
-            Container(width: 0.5, color: AppColors.border),
-            Expanded(
-              child: Column(
+            // ── Non-focusable header ────────────────────────────────────
+            Container(
+              height:  44,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+              ),
+              child: const Row(
                 children: [
-                  _SearchBar(
-                    controller:     _searchCtrl,
-                    focusNode:      _searchFocusNode,
-                    onLeftArrow:    () => _firstSidebarNode.requestFocus(),
-                    onDownArrow:    () => _firstChannelNode?.requestFocus(),
+                  SizedBox(
+                    width: 8,
+                    height: 8,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
-                  Expanded(child: _buildChannelList()),
+                  SizedBox(width: 10),
+                  Text(
+                    'Live TV',
+                    style: TextStyle(
+                      color:      AppColors.textPrimary,
+                      fontSize:   14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── Two-panel layout ────────────────────────────────────────
+            Expanded(
+              child: Row(
+                children: [
+                  _CategorySidebar(
+                    key:           _sidebarKey,
+                    categories:    _categories,
+                    selectedId:    _selectedCatId,
+                    onSelect:      _selectCategory,
+                    firstItemNode: _firstSidebarNode,
+                    onRightArrow:  (y) => _channelListKey.currentState?.focusClosestTo(y ?? 0),
+                  ),
+                  Container(width: 0.5, color: AppColors.border),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _SearchBar(
+                          controller:  _searchCtrl,
+                          focusNode:   _searchFocusNode,
+                          onLeftArrow: () => _firstSidebarNode.requestFocus(),
+                          onDownArrow: () => _firstChannelNode?.requestFocus(),
+                        ),
+                        Expanded(child: _buildChannelList()),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -277,51 +315,57 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(
-        left: AppSpacing.md, right: AppSpacing.tvH,
-        top: AppSpacing.sm,  bottom: AppSpacing.sm,
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.tvH, vertical: AppSpacing.sm,
       ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 16),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Focus(
-              onKeyEvent: (_, event) {
-                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  onLeftArrow();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  onDownArrow();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: TextField(
-                controller: controller,
-                focusNode:  focusNode,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  hintText:       'Search channels',
-                  hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 13),
-                  border:         InputBorder.none,
-                  enabledBorder:  InputBorder.none,
-                  focusedBorder:  InputBorder.none,
-                  isDense:        true,
-                  contentPadding: EdgeInsets.zero,
-                  fillColor:      Colors.transparent,
-                  filled:         true,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color:        AppColors.card,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          border:       Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 14),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Focus(
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    onLeftArrow();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    onDownArrow();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: TextField(
+                  controller: controller,
+                  focusNode:  focusNode,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText:       'Search channels...',
+                    hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    border:         InputBorder.none,
+                    enabledBorder:  InputBorder.none,
+                    focusedBorder:  InputBorder.none,
+                    isDense:        true,
+                    contentPadding: const EdgeInsets.only(bottom: 2),
+                    fillColor:      Colors.transparent,
+                    filled:         true,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+          ],
+        ),
       ),
     );
   }
@@ -782,9 +826,10 @@ class _CategorySidebarState extends State<_CategorySidebar> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       key:   _containerKey,
-      width: 200,
+      width: 180,
+      color: AppColors.surface,
       child: ScrollConfiguration(
         behavior: const ScrollBehavior().copyWith(scrollbars: false),
         child: ListView.builder(
