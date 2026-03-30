@@ -8,6 +8,7 @@ import '../../../domain/entities/channel.dart';
 import '../../providers/channel_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/player_provider.dart';
+import '../../widgets/common/focusable_widget.dart';
 
 class LivePlayerScreen extends ConsumerStatefulWidget {
   const LivePlayerScreen({super.key});
@@ -106,28 +107,53 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
         autofocus:  true,
         onKeyEvent: (_, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
-          switch (event.logicalKey) {
-            case LogicalKeyboardKey.arrowUp:
-              _previousChannel();
-              return KeyEventResult.handled;
-            case LogicalKeyboardKey.arrowDown:
-              _nextChannel();
-              return KeyEventResult.handled;
-            case LogicalKeyboardKey.select:
-            case LogicalKeyboardKey.enter:
-              ref.read(playerProvider.notifier).togglePlay();
-              return KeyEventResult.handled;
-            case LogicalKeyboardKey.escape:
-            case LogicalKeyboardKey.arrowLeft:
-            case LogicalKeyboardKey.numpadEnter:
-              context.pop();
-              return KeyEventResult.handled;
-            case LogicalKeyboardKey.contextMenu:
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            default:
-              return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          // Play / pause
+          if (key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.numpadEnter ||
+              key == LogicalKeyboardKey.gameButtonA ||
+              key == LogicalKeyboardKey.mediaPlayPause) {
+            ref.read(playerProvider.notifier).togglePlay();
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
           }
+          // Channel navigation
+          if (key == LogicalKeyboardKey.arrowUp ||
+              key == LogicalKeyboardKey.channelUp ||
+              key == LogicalKeyboardKey.mediaTrackPrevious) {
+            _previousChannel();
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowDown ||
+              key == LogicalKeyboardKey.channelDown ||
+              key == LogicalKeyboardKey.mediaTrackNext) {
+            _nextChannel();
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          // Seek
+          if (key == LogicalKeyboardKey.arrowLeft ||
+              key == LogicalKeyboardKey.mediaRewind) {
+            final pos = ref.read(playerProvider).position;
+            ref.read(playerProvider.notifier).seek(pos - const Duration(seconds: 10));
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowRight ||
+              key == LogicalKeyboardKey.mediaFastForward) {
+            final pos = ref.read(playerProvider).position;
+            ref.read(playerProvider.notifier).seek(pos + const Duration(seconds: 10));
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          // Menu — show/hide controls
+          if (key == LogicalKeyboardKey.contextMenu) {
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
         },
         child: GestureDetector(
           onTap: _showControlsTemporarily,
@@ -195,21 +221,11 @@ class _ControlsOverlay extends ConsumerWidget {
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Row(
                 children: [
-                  Focus(
-                    onKeyEvent: (_, event) {
-                      if (event is KeyDownEvent &&
-                          (event.logicalKey == LogicalKeyboardKey.select ||
-                           event.logicalKey == LogicalKeyboardKey.enter ||
-                           event.logicalKey == LogicalKeyboardKey.numpadEnter ||
-                           event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
-                        onBack();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: GestureDetector(
-                      onTap: onBack,
-                      child: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
+                  FocusableWidget(
+                    onTap: onBack,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 18),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -267,9 +283,12 @@ class _CtrlBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return FocusableWidget(
       onTap: onTap,
-      child: Icon(icon, color: AppColors.textPrimary, size: AppSpacing.iconMd),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, color: AppColors.textPrimary, size: AppSpacing.iconMd),
+      ),
     );
   }
 }
@@ -278,12 +297,15 @@ class _PlayPauseBtn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isPlaying = ref.watch(playerProvider.select((s) => s.isPlaying));
-    return GestureDetector(
+    return FocusableWidget(
       onTap: () => ref.read(playerProvider.notifier).togglePlay(),
-      child: Icon(
-        isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
-        color: AppColors.textPrimary,
-        size:  AppSpacing.iconLg,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
+          color: AppColors.textPrimary,
+          size:  AppSpacing.iconLg,
+        ),
       ),
     );
   }

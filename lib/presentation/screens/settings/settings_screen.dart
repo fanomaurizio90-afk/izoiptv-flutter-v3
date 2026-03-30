@@ -176,7 +176,7 @@ KeyEventResult _rowKeyEvent(
   FocusNode? downNode,
   VoidCallback? onTap,
 ) {
-  if (event is! KeyDownEvent) return KeyEventResult.ignored;
+  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
   if (event.logicalKey == LogicalKeyboardKey.arrowUp   && upNode   != null) {
     upNode.requestFocus();
     return KeyEventResult.handled;

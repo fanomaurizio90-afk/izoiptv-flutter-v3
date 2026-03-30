@@ -175,7 +175,7 @@ class _Tab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Focus(
       onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
           onLeft();
           return KeyEventResult.handled;
@@ -276,7 +276,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
@@ -402,7 +402,7 @@ class _SimpleListState extends State<_SimpleList> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {

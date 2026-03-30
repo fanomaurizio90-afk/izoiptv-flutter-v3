@@ -10,6 +10,7 @@ import '../../../domain/entities/series.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/providers.dart';
 import '../../../domain/repositories/history_repository.dart';
+import '../../widgets/common/focusable_widget.dart';
 
 class VodPlayerScreen extends ConsumerStatefulWidget {
   const VodPlayerScreen({
@@ -201,20 +202,32 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           autofocus:  true,
           onKeyEvent: (_, event) {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
-            if (_isActivateKey(event)) {
+            final key = event.logicalKey;
+            // Play / pause
+            if (_isActivateKey(event) ||
+                key == LogicalKeyboardKey.mediaPlayPause) {
               _playerNotifier.togglePlay();
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            // Seek back
+            if (key == LogicalKeyboardKey.arrowLeft ||
+                key == LogicalKeyboardKey.mediaRewind) {
               final pos = ref.read(playerProvider).position;
               _playerNotifier.seek(pos - const Duration(seconds: 10));
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            // Seek forward
+            if (key == LogicalKeyboardKey.arrowRight ||
+                key == LogicalKeyboardKey.mediaFastForward) {
               final pos = ref.read(playerProvider).position;
               _playerNotifier.seek(pos + const Duration(seconds: 10));
+              _showControlsTemporarily();
+              return KeyEventResult.handled;
+            }
+            // Menu — show/hide controls
+            if (key == LogicalKeyboardKey.contextMenu) {
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
@@ -253,17 +266,11 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                               padding: const EdgeInsets.all(AppSpacing.lg),
                               child: Row(
                                 children: [
-                                  Focus(
-                                    onKeyEvent: (_, event) {
-                                      if (event is KeyDownEvent && _isActivateKey(event)) {
-                                        context.pop();
-                                        return KeyEventResult.handled;
-                                      }
-                                      return KeyEventResult.ignored;
-                                    },
-                                    child: GestureDetector(
-                                      onTap: () => context.pop(),
-                                      child: const Icon(Icons.arrow_back,
+                                  FocusableWidget(
+                                    onTap: () => context.go(widget.backPath),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: Icon(Icons.arrow_back,
                                           color: AppColors.textPrimary, size: 18),
                                     ),
                                   ),
@@ -281,22 +288,25 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                                     ),
                                   ),
                                   if (_hasNextEpisode)
-                                    GestureDetector(
+                                    FocusableWidget(
                                       onTap: _playNextEpisode,
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            'Next',
-                                            style: TextStyle(
-                                                color: AppColors.textSecondary,
-                                                fontSize: 12),
-                                          ),
-                                          SizedBox(width: 4),
-                                          Icon(Icons.skip_next_outlined,
-                                              color: AppColors.textPrimary,
-                                              size: 18),
-                                        ],
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(4),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Next',
+                                              style: TextStyle(
+                                                  color: AppColors.textSecondary,
+                                                  fontSize: 12),
+                                            ),
+                                            SizedBox(width: 4),
+                                            Icon(Icons.skip_next_outlined,
+                                                color: AppColors.textPrimary,
+                                                size: 18),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -374,40 +384,52 @@ class _VodControls extends ConsumerWidget {
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 11)),
               const Spacer(),
-              GestureDetector(
+              FocusableWidget(
                 onTap: () {
                   final p = ref.read(playerProvider).position;
                   ref.read(playerProvider.notifier).seek(p - const Duration(seconds: 10));
                 },
-                child: const Icon(Icons.replay_10,
-                    color: AppColors.textSecondary, size: 26),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              GestureDetector(
-                onTap: () => ref.read(playerProvider.notifier).togglePlay(),
-                child: Icon(
-                  playerState.isPlaying
-                      ? Icons.pause_outlined
-                      : Icons.play_arrow_outlined,
-                  color: AppColors.textPrimary,
-                  size:  AppSpacing.iconMd,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.replay_10,
+                      color: AppColors.textSecondary, size: 26),
                 ),
               ),
               const SizedBox(width: AppSpacing.xl2),
-              GestureDetector(
+              FocusableWidget(
+                onTap: () => ref.read(playerProvider.notifier).togglePlay(),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    playerState.isPlaying
+                        ? Icons.pause_outlined
+                        : Icons.play_arrow_outlined,
+                    color: AppColors.textPrimary,
+                    size:  AppSpacing.iconMd,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
                 onTap: () {
                   final p = ref.read(playerProvider).position;
                   ref.read(playerProvider.notifier).seek(p + const Duration(seconds: 10));
                 },
-                child: const Icon(Icons.forward_10,
-                    color: AppColors.textSecondary, size: 26),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.forward_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
               ),
               const Spacer(),
               if (hasNext)
-                GestureDetector(
+                FocusableWidget(
                   onTap: onNextEpisode,
-                  child: const Icon(Icons.skip_next_outlined,
-                      color: AppColors.textSecondary, size: 18),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.skip_next_outlined,
+                        color: AppColors.textSecondary, size: 18),
+                  ),
                 )
               else
                 Text(_fmt(dur),

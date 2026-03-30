@@ -315,7 +315,7 @@ class _ContentListState extends State<_ContentList> {
   }
 
   KeyEventResult _handleGridKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     final col = idx % widget.columns;
@@ -486,7 +486,7 @@ class _TopBar extends StatelessWidget {
             child: Focus(
               focusNode: searchFocusNode,
               onKeyEvent: (_, event) {
-                if (event is KeyDownEvent &&
+                if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
                     event.logicalKey == LogicalKeyboardKey.arrowDown) {
                   onDownArrow?.call();
                   return KeyEventResult.handled;
@@ -618,7 +618,7 @@ class _CategoryBarState extends State<_CategoryBar> {
           return Focus(
             key: _keys[i],
             onKeyEvent: (_, event) {
-              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
               if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                 if (i < widget.categories.length - 1) {
                   _nodes[i].requestFocus();

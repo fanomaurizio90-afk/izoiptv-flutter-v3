@@ -288,7 +288,7 @@ class _SearchBar extends StatelessWidget {
           Expanded(
             child: Focus(
               onKeyEvent: (_, event) {
-                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                 if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
                   onLeftArrow();
                   return KeyEventResult.handled;
@@ -427,7 +427,7 @@ class _ChannelListState extends State<_ChannelList> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -729,7 +729,7 @@ class _CategorySidebarState extends State<_CategorySidebar> {
             final node       = i == 0 ? widget.firstItemNode : _nodes[i - 1];
             return Focus(
               onKeyEvent: (_, event) {
-                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                 if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                   widget.onRightArrow();
                   return KeyEventResult.handled;

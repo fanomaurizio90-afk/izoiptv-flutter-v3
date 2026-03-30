@@ -297,7 +297,7 @@ class _HeroTilesState extends State<_HeroTiles> {
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
           widget.onUpArrow?.call();
           return KeyEventResult.handled;
@@ -503,7 +503,7 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       widget.onUpArrow?.call();
       return KeyEventResult.handled;
@@ -571,7 +571,7 @@ class _ContinueWatchingRowState extends ConsumerState<_ContinueWatchingRow> {
         if (items.isEmpty) {
           return Focus(
             onKeyEvent: (_, event) {
-              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
               if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
                 widget.onUpArrow?.call();
                 return KeyEventResult.handled;

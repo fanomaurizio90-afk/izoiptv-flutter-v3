@@ -70,7 +70,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   // Key handler for tab buttons — L/R switches tabs, down enters first field
   KeyEventResult _tabKeyEvent(KeyEvent event, FocusNode firstField, {FocusNode? leftTab, FocusNode? rightTab}) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       firstField.requestFocus();
       return KeyEventResult.handled;
@@ -88,7 +88,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   // Key handler for text fields — up/down navigates between fields
   KeyEventResult _fieldKeyEvent(KeyEvent event, FocusNode? prev, FocusNode? next) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown && next != null) {
       next.requestFocus();
       return KeyEventResult.handled;

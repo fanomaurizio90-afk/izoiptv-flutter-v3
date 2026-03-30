@@ -366,7 +366,7 @@ class _PlayButtonState extends State<_PlayButton> {
   Widget build(BuildContext context) {
     return Focus(
       onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
+        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
             event.logicalKey == LogicalKeyboardKey.arrowUp) {
           widget.backNode.requestFocus();
           return KeyEventResult.handled;

@@ -146,7 +146,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
   }
 
   KeyEventResult _handleSeasonKey(int i, int total, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       if (i > 0) {
         _seasonNodes[i - 1].requestFocus();
@@ -595,7 +595,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
