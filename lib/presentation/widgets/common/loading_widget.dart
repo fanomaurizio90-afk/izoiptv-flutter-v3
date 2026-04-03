@@ -11,12 +11,12 @@ class LoadingWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
-            width:  24,
-            height: 24,
+          SizedBox(
+            width:  20,
+            height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color:       AppColors.textMuted,
+              color:       AppColors.accentPrimary.withOpacity(0.6),
             ),
           ),
           if (message != null) ...[
@@ -25,9 +25,9 @@ class LoadingWidget extends StatelessWidget {
               message!,
               style: const TextStyle(
                 color:         AppColors.textMuted,
-                fontSize:      12,
+                fontSize:      11,
                 fontWeight:    FontWeight.w300,
-                letterSpacing: 0.3,
+                letterSpacing: 0.4,
               ),
             ),
           ],

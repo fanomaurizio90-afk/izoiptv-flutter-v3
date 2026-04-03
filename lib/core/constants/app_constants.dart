@@ -1,7 +1,7 @@
 abstract final class AppConstants {
   // App version — mirrors pubspec.yaml version field; update both together
-  static const appVersion     = '3.0.6';
-  static const appVersionCode = 23;
+  static const appVersion     = '3.2.0';
+  static const appVersionCode = 30;
 
   // Database
   static const dbName    = 'izo_iptv.db';

@@ -23,28 +23,24 @@ class LiveTvScreen extends ConsumerStatefulWidget {
 }
 
 class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
-  final _searchCtrl = TextEditingController();
-  final _debounce   = Debounce(duration: const Duration(milliseconds: 250));
+  final _searchCtrl        = TextEditingController();
+  final _debounce          = Debounce(duration: const Duration(milliseconds: 250));
+  final _backFocusNode     = FocusNode();
+  final _searchFocusNode   = FocusNode();
+  final _firstCatFocusNode = FocusNode();
+  final _categoryBarKey    = GlobalKey<_CategoryBarState>();
+  final _channelListKey    = GlobalKey<_ChannelListState>();
 
   static const _favouritesCatId = -1;
 
-  List<ChannelCategory> _categories    = [];
+  List<ChannelCategory> _categories     = [];
   int?                  _selectedCatId;
-  List<Channel>         _channels      = [];
-  List<Channel>         _filtered      = [];
-  bool                  _loading       = true;
-  bool                  _syncing       = false;
+  List<Channel>         _channels       = [];
+  List<Channel>         _filtered       = [];
+  bool                  _loading        = true;
+  bool                  _syncing        = false;
   String?               _error;
   int                   _favouriteCount = 0;
-
-  // Focus nodes for cross-panel navigation
-  final _searchFocusNode  = FocusNode();
-  final _firstSidebarNode = FocusNode();
-  // First channel row focus — set via callback from _ChannelList (used by search bar DOWN)
-  FocusNode? _firstChannelNode;
-  // Keys for position-based closest navigation
-  final _sidebarKey     = GlobalKey<_CategorySidebarState>();
-  final _channelListKey = GlobalKey<_ChannelListState>();
 
   @override
   void initState() {
@@ -58,8 +54,9 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     _searchCtrl.removeListener(_onSearch);
     _searchCtrl.dispose();
     _debounce.dispose();
+    _backFocusNode.dispose();
     _searchFocusNode.dispose();
-    _firstSidebarNode.dispose();
+    _firstCatFocusNode.dispose();
     super.dispose();
   }
 
@@ -119,8 +116,6 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
 
   Future<void> _selectCategory(int catId) async {
     setState(() { _selectedCatId = catId; _loading = true; });
-    // Clear stale channel node reference before rebuilding the list
-    _firstChannelNode = null;
     try {
       final repo = ref.read(channelRepositoryProvider);
       final channels = catId == _favouritesCatId
@@ -143,18 +138,15 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     final newVal = !ch.isFavourite;
     await repo.toggleFavourite(ch.id, newVal);
 
-    // Update the in-memory lists
     Channel update(Channel c) => c.id == ch.id ? c.copyWith(isFavourite: newVal) : c;
     _channels = _channels.map(update).toList();
     _filtered = _filtered.map(update).toList();
 
-    // If viewing favourites and we just un-favourited, remove it
     if (_selectedCatId == _favouritesCatId && !newVal) {
       _channels.removeWhere((c) => c.id == ch.id);
       _filtered.removeWhere((c) => c.id == ch.id);
     }
 
-    // Update favourite count and categories list
     final favs = await repo.getFavourites();
     _favouriteCount = favs.length;
     final hasFavCat = _categories.any((c) => c.id == _favouritesCatId);
@@ -162,7 +154,6 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       _categories.insert(0, const ChannelCategory(id: _favouritesCatId, name: 'Favourites'));
     } else if (_favouriteCount == 0 && hasFavCat) {
       _categories.removeWhere((c) => c.id == _favouritesCatId);
-      // If we were viewing favourites, switch to first real category
       if (_selectedCatId == _favouritesCatId && _categories.isNotEmpty) {
         _selectCategory(_categories.first.id);
         return;
@@ -183,91 +174,47 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) {
-        if (!didPop) context.go('/home');
-      },
-      child: Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Non-focusable header ────────────────────────────────────
-            Container(
-              height:  44,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+    return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ── Top bar ───────────────────────────────────────────────
+              _TopBar(
+                backFocusNode:     _backFocusNode,
+                searchFocusNode:   _searchFocusNode,
+                searchCtrl:        _searchCtrl,
+                onDownArrow:       () => _firstCatFocusNode.requestFocus(),
+                onBackRightArrow:  () => _searchFocusNode.requestFocus(),
+                onSearchLeftArrow: () => _backFocusNode.requestFocus(),
               ),
-              child: const Row(
-                children: [
-                  SizedBox(
-                    width: 8,
-                    height: 8,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    'Live TV',
-                    style: TextStyle(
-                      color:      AppColors.textPrimary,
-                      fontSize:   14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+              // ── Category chips ────────────────────────────────────────
+              _CategoryBar(
+                key:                _categoryBarKey,
+                categories:         _categories,
+                selectedId:         _selectedCatId,
+                onSelect:           _selectCategory,
+                firstItemFocusNode: _firstCatFocusNode,
+                onUpArrow:          () => _backFocusNode.requestFocus(),
+                onDownArrow:        () => _channelListKey.currentState?.focusFirst(),
               ),
-            ),
-            // ── Two-panel layout ────────────────────────────────────────
-            Expanded(
-              child: Row(
-                children: [
-                  _CategorySidebar(
-                    key:           _sidebarKey,
-                    categories:    _categories,
-                    selectedId:    _selectedCatId,
-                    onSelect:      _selectCategory,
-                    firstItemNode: _firstSidebarNode,
-                    onRightArrow:  (y) => _channelListKey.currentState?.focusClosestTo(y ?? 0),
-                  ),
-                  Container(width: 0.5, color: AppColors.border),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _SearchBar(
-                          controller:  _searchCtrl,
-                          focusNode:   _searchFocusNode,
-                          onLeftArrow: () => _firstSidebarNode.requestFocus(),
-                          onDownArrow: () => _firstChannelNode?.requestFocus(),
-                        ),
-                        Expanded(child: _buildChannelList()),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              // ── Channel list ──────────────────────────────────────────
+              Expanded(child: _buildChannelArea()),
+            ],
+          ),
         ),
-      ),
-      ), // Scaffold
-    ); // PopScope
+      );
   }
 
-  Widget _buildChannelList() {
+  Widget _buildChannelArea() {
     if (_syncing || _loading) return const SkeletonChannelList();
     if (_error != null) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
         const SizedBox(height: AppSpacing.md),
         FocusableWidget(onTap: _load,
-          child: Text('Retry', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+          child: const Text('Retry',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
       ]));
     }
     if (_filtered.isEmpty) {
@@ -276,11 +223,9 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     return _ChannelList(
       key:               _channelListKey,
       channels:          _filtered,
-      categories:        _categories,
-      onLeftArrow:       (y) => _sidebarKey.currentState?.focusClosestTo(y ?? 0),
-      onFirstNodeReady:  (node) { _firstChannelNode = node; },
+      onUpFromFirst:     () => _categoryBarKey.currentState?.focusSelected(),
       onToggleFavourite: _toggleFavourite,
-      onChannelTap:       (ch, i) async {
+      onChannelTap:      (ch, i) async {
         final cat = _categories.firstWhere(
           (c) => c.id == ch.categoryId,
           orElse: () => const ChannelCategory(id: 0, name: ''),
@@ -299,72 +244,381 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   }
 }
 
-// ── Search Bar ────────────────────────────────────────────────────────────────
+// ── Top Bar ───────────────────────────────────────────────────────────────────
 
-class _SearchBar extends StatelessWidget {
-  const _SearchBar({
-    required this.controller,
-    required this.focusNode,
-    required this.onLeftArrow,
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.backFocusNode,
+    required this.searchFocusNode,
+    required this.searchCtrl,
     required this.onDownArrow,
+    required this.onBackRightArrow,
+    required this.onSearchLeftArrow,
   });
-  final TextEditingController controller;
-  final FocusNode             focusNode;
-  final VoidCallback          onLeftArrow;
+  final FocusNode             backFocusNode;
+  final FocusNode             searchFocusNode;
+  final TextEditingController searchCtrl;
   final VoidCallback          onDownArrow;
+  final VoidCallback          onBackRightArrow;
+  final VoidCallback          onSearchLeftArrow;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.tvH, vertical: AppSpacing.sm,
+        horizontal: AppSpacing.tvH, vertical: AppSpacing.md,
       ),
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color:        AppColors.card,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-          border:       Border.all(color: AppColors.border, width: 0.5),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 12),
-            const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 14),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Focus(
-                onKeyEvent: (_, event) {
-                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                    onLeftArrow();
-                    return KeyEventResult.handled;
-                  }
-                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                    onDownArrow();
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: TextField(
-                  controller: controller,
-                  focusNode:  focusNode,
-                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText:       'Search channels...',
-                    hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 13),
-                    border:         InputBorder.none,
-                    enabledBorder:  InputBorder.none,
-                    focusedBorder:  InputBorder.none,
-                    isDense:        true,
-                    contentPadding: const EdgeInsets.only(bottom: 2),
-                    fillColor:      Colors.transparent,
-                    filled:         true,
-                  ),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          // Back button
+          Focus(
+            onKeyEvent: (_, event) {
+              if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                onBackRightArrow();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                onDownArrow();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: FocusableWidget(
+              focusNode:    backFocusNode,
+              autofocus:    true,
+              borderRadius: AppSpacing.radiusPill,
+              onTap:        () => context.go('/home'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color:        Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  border:       Border.all(color: AppColors.border, width: 1),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textSecondary, size: 11),
+                    SizedBox(width: 5),
+                    Text('Back', style: TextStyle(
+                      color:         AppColors.textSecondary,
+                      fontSize:      12,
+                      fontWeight:    FontWeight.w400,
+                      letterSpacing: 0.1,
+                    )),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-          ],
+          ),
+          const SizedBox(width: AppSpacing.md),
+
+          // Live dot + title
+          _LiveDot(),
+          const SizedBox(width: 7),
+          const Text(
+            'Live TV',
+            style: TextStyle(
+              color:         AppColors.textPrimary,
+              fontSize:      14,
+              fontWeight:    FontWeight.w500,
+              letterSpacing: -0.1,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xl2),
+
+          // Search pill
+          Expanded(
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border:       Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 14),
+                  const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Focus(
+                      focusNode: searchFocusNode,
+                      onKeyEvent: (_, event) {
+                        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                          onSearchLeftArrow();
+                          return KeyEventResult.handled;
+                        }
+                        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                          onDownArrow();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        controller: searchCtrl,
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText:       'Search channels…',
+                          hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          border:         InputBorder.none,
+                          enabledBorder:  InputBorder.none,
+                          focusedBorder:  InputBorder.none,
+                          contentPadding: const EdgeInsets.only(bottom: 2),
+                          isDense:        true,
+                          filled:         true,
+                          fillColor:      Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pulsing live dot ──────────────────────────────────────────────────────────
+
+class _LiveDot extends StatefulWidget {
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>   _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.75, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width:  7,
+        height: 7,
+        decoration: const BoxDecoration(
+          color: AppColors.success,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Category Bar ───────────────────────────────────────────────────────────────
+
+class _CategoryBar extends StatefulWidget {
+  const _CategoryBar({
+    super.key,
+    required this.categories,
+    required this.selectedId,
+    required this.onSelect,
+    required this.onUpArrow,
+    required this.onDownArrow,
+    this.firstItemFocusNode,
+  });
+  final List<ChannelCategory> categories;
+  final int?                  selectedId;
+  final void Function(int)    onSelect;
+  final VoidCallback          onUpArrow;
+  final VoidCallback          onDownArrow;
+  final FocusNode?            firstItemFocusNode;
+
+  @override
+  State<_CategoryBar> createState() => _CategoryBarState();
+}
+
+class _CategoryBarState extends State<_CategoryBar> {
+  final ScrollController _scrollCtrl = ScrollController();
+  List<FocusNode> _nodes        = [];
+  int             _focusedCatIdx = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuild();
+    widget.firstItemFocusNode?.addListener(_onFirstFocus);
+  }
+
+  @override
+  void didUpdateWidget(_CategoryBar old) {
+    super.didUpdateWidget(old);
+    if (widget.categories.length - 1 != _nodes.length) _rebuild();
+    if (widget.firstItemFocusNode != old.firstItemFocusNode) {
+      old.firstItemFocusNode?.removeListener(_onFirstFocus);
+      widget.firstItemFocusNode?.addListener(_onFirstFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.firstItemFocusNode?.removeListener(_onFirstFocus);
+    for (final n in _nodes) n.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onFirstFocus() {
+    if (!mounted) return;
+    final hasFocus = widget.firstItemFocusNode?.hasFocus == true;
+    setState(() => _focusedCatIdx = hasFocus ? 0 : (_focusedCatIdx == 0 ? -1 : _focusedCatIdx));
+    if (!hasFocus) return;
+    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
+    if (selIdx > 0 && selIdx <= _nodes.length) {
+      _nodes[selIdx - 1].requestFocus();
+    }
+  }
+
+  void _rebuild() {
+    for (final n in _nodes) n.dispose();
+    _nodes = [];
+    for (int i = 1; i < widget.categories.length; i++) {
+      final idx = i;
+      final n   = FocusNode();
+      n.addListener(() {
+        if (!mounted) return;
+        setState(() => _focusedCatIdx = n.hasFocus ? idx : (_focusedCatIdx == idx ? -1 : _focusedCatIdx));
+        if (n.hasFocus) _scrollToChip(idx);
+      });
+      _nodes.add(n);
+    }
+  }
+
+  void _scrollToChip(int idx) {
+    if (!_scrollCtrl.hasClients) return;
+    const chipW = 110.0;
+    final target = (idx * chipW).clamp(0.0, _scrollCtrl.position.maxScrollExtent);
+    _scrollCtrl.animateTo(
+      target,
+      duration: const Duration(milliseconds: 150),
+      curve:    Curves.easeOut,
+    );
+  }
+
+  void focusSelected() {
+    if (widget.categories.isEmpty) return;
+    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
+    if (selIdx <= 0) {
+      widget.firstItemFocusNode?.requestFocus();
+    } else if (selIdx <= _nodes.length) {
+      _nodes[selIdx - 1].requestFocus();
+      _scrollToChip(selIdx);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.categories.isEmpty) return const SizedBox(height: 44);
+    return SizedBox(
+      height: 46,
+      child: ScrollConfiguration(
+        behavior: const ScrollBehavior().copyWith(scrollbars: false),
+        child: ListView.builder(
+          controller:      _scrollCtrl,
+          scrollDirection: Axis.horizontal,
+          padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+          itemCount:       widget.categories.length,
+          itemBuilder: (_, i) {
+            final cat        = widget.categories[i];
+            final isSelected = cat.id == widget.selectedId;
+            final isFocused  = _focusedCatIdx == i;
+            final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
+            return Focus(
+              onKeyEvent: (_, event) {
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                  widget.onUpArrow();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  widget.onDownArrow();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft && i > 0) {
+                  (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
+                    i < widget.categories.length - 1) {
+                  _nodes[i].requestFocus();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: FocusableWidget(
+                focusNode:       node,
+                autofocus:       i == 0,
+                borderRadius:    AppSpacing.radiusPill,
+                showFocusBorder: false,
+                onTap:           () => widget.onSelect(cat.id),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize:      MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Text(
+                          cat.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isSelected
+                                ? AppColors.textPrimary
+                                : isFocused
+                                    ? AppColors.textSecondary
+                                    : AppColors.textMuted,
+                            fontSize:   13,
+                            fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      AnimatedContainer(
+                        duration: AppDurations.medium,
+                        curve:    Curves.easeOut,
+                        height:   1.5,
+                        width:    isSelected ? 18 : 0,
+                        decoration: BoxDecoration(
+                          color:        AppColors.accentPrimary,
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -377,18 +631,14 @@ class _ChannelList extends StatefulWidget {
   const _ChannelList({
     super.key,
     required this.channels,
-    required this.categories,
-    required this.onLeftArrow,
-    required this.onFirstNodeReady,
+    required this.onUpFromFirst,
     required this.onChannelTap,
     required this.onToggleFavourite,
   });
-  final List<Channel>                channels;
-  final List<ChannelCategory>        categories;
-  final void Function(double?)       onLeftArrow;
-  final void Function(FocusNode)     onFirstNodeReady;
-  final void Function(Channel, int)  onChannelTap;
-  final void Function(Channel)       onToggleFavourite;
+  final List<Channel>               channels;
+  final VoidCallback                onUpFromFirst;
+  final void Function(Channel, int) onChannelTap;
+  final void Function(Channel)      onToggleFavourite;
 
   @override
   State<_ChannelList> createState() => _ChannelListState();
@@ -397,8 +647,9 @@ class _ChannelList extends StatefulWidget {
 class _ChannelListState extends State<_ChannelList> {
   List<FocusNode>        _nodes      = [];
   final ScrollController _scrollCtrl = ScrollController();
-  final _containerKey                = GlobalKey();
   int _restoreIndex = 0;
+
+  static const double _rowH = 76.0;
 
   @override
   void initState() {
@@ -406,7 +657,6 @@ class _ChannelListState extends State<_ChannelList> {
     _restoreIndex = FocusMemoryService.instance.restore('live_tv') ?? 0;
     if (_restoreIndex >= widget.channels.length) _restoreIndex = 0;
     _nodes = List.generate(widget.channels.length, (_) => FocusNode());
-    _notifyFirst();
     if (_restoreIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _restoreIndex < _nodes.length) {
@@ -423,7 +673,6 @@ class _ChannelListState extends State<_ChannelList> {
     if (widget.channels.length != _nodes.length) {
       for (final n in _nodes) n.dispose();
       _nodes = List.generate(widget.channels.length, (_) => FocusNode());
-      _notifyFirst();
     }
   }
 
@@ -432,14 +681,6 @@ class _ChannelListState extends State<_ChannelList> {
     for (final n in _nodes) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
-  }
-
-  void _notifyFirst() {
-    if (_nodes.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.onFirstNodeReady(_nodes[0]);
-      });
-    }
   }
 
   int get _focusedIndex {
@@ -455,33 +696,12 @@ class _ChannelListState extends State<_ChannelList> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
-  double? _getCenterY(int idx) {
-    final ctx = _containerKey.currentContext;
-    if (ctx == null) return null;
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.attached) return null;
-    final top    = box.localToGlobal(Offset.zero).dy;
-    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
-    return top + idx * AppConstants.channelRowHeight - offset + AppConstants.channelRowHeight / 2;
-  }
-
-  void focusClosestTo(double targetY) {
-    if (_nodes.isEmpty) { _moveTo(0); return; }
-    double bestDist = double.infinity;
-    int    bestIdx  = 0;
-    for (int i = 0; i < _nodes.length; i++) {
-      final cy = _getCenterY(i);
-      if (cy == null) continue;
-      final dist = (cy - targetY).abs();
-      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
-    }
-    _moveTo(bestIdx);
-  }
+  void focusFirst() => _moveTo(0);
 
   void _ensureVisible(int idx) {
     if (!_scrollCtrl.hasClients) return;
-    final itemTop    = idx * AppConstants.channelRowHeight;
-    final itemBottom = itemTop + AppConstants.channelRowHeight;
+    final itemTop    = idx * _rowH;
+    final itemBottom = itemTop + _rowH;
     final viewport   = _scrollCtrl.position.viewportDimension;
     final offset     = _scrollCtrl.offset;
     double? target;
@@ -510,18 +730,14 @@ class _ChannelListState extends State<_ChannelList> {
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (idx > 0) {
         _moveTo(idx - 1);
+        return KeyEventResult.handled;
       } else {
-        // First item — let focus go up to the search bar
-        return KeyEventResult.ignored;
+        widget.onUpFromFirst();
+        return KeyEventResult.handled;
       }
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.onLeftArrow(_getCenterY(idx));
-      return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.contextMenu) {
-      if (idx >= 0 && idx < widget.channels.length) {
+      if (idx < widget.channels.length) {
         widget.onToggleFavourite(widget.channels[idx]);
         return KeyEventResult.handled;
       }
@@ -534,20 +750,20 @@ class _ChannelListState extends State<_ChannelList> {
     return ScrollConfiguration(
       behavior: const ScrollBehavior().copyWith(scrollbars: false),
       child: Focus(
-        key:           _containerKey,
         onKeyEvent:    _handleKey,
         skipTraversal: true,
         child: ListView.builder(
           controller: _scrollCtrl,
           itemCount:  widget.channels.length,
-          itemExtent: AppConstants.channelRowHeight,
+          itemExtent: _rowH,
           itemBuilder: (_, i) {
             final ch = widget.channels[i];
             return _ChannelRow(
-              channel:            ch,
-              focusNode:          _nodes[i],
-              onTap:              () => widget.onChannelTap(ch, i),
-              onToggleFavourite:  () => widget.onToggleFavourite(ch),
+              channel:           ch,
+              focusNode:         _nodes[i],
+              autofocus:         i == 0 && _restoreIndex == 0,
+              onTap:             () => widget.onChannelTap(ch, i),
+              onToggleFavourite: () => widget.onToggleFavourite(ch),
             );
           },
         ),
@@ -564,11 +780,13 @@ class _ChannelRow extends StatefulWidget {
     required this.onTap,
     required this.focusNode,
     required this.onToggleFavourite,
+    this.autofocus = false,
   });
   final Channel      channel;
   final VoidCallback onTap;
   final FocusNode    focusNode;
   final VoidCallback onToggleFavourite;
+  final bool         autofocus;
 
   @override
   State<_ChannelRow> createState() => _ChannelRowState();
@@ -605,72 +823,95 @@ class _ChannelRowState extends State<_ChannelRow> {
   @override
   Widget build(BuildContext context) {
     return FocusableWidget(
-      focusNode:   widget.focusNode,
-      onTap:       widget.onTap,
-      onLongPress: widget.onToggleFavourite,
-      child: Container(
-          height:  AppConstants.channelRowHeight,
-          padding: const EdgeInsets.only(left: AppSpacing.md, right: AppSpacing.tvH),
-          decoration: BoxDecoration(
-            color: _focused ? const Color(0x1AFFFFFF) : Colors.transparent,
-            border: Border(
-              left: BorderSide(
-                color: _focused ? AppColors.textPrimary : Colors.transparent,
-                width: _focused ? 3.0 : 2.5,
-              ),
-              bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
+      focusNode:       widget.focusNode,
+      autofocus:       widget.autofocus,
+      showFocusBorder: false,
+      onTap:           widget.onTap,
+      onLongPress:     widget.onToggleFavourite,
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.tvH, vertical: AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: _focused ? AppColors.accentSoft : Colors.transparent,
+          border: Border(
+            left: BorderSide(
+              color: _focused ? AppColors.accentPrimary : Colors.transparent,
+              width: 3.0,
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width:  48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color:        AppColors.card,
-                  borderRadius: BorderRadius.circular(8),
-                  border:       Border.all(color: AppColors.border, width: 0.5),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(7.5),
-                  child: widget.channel.logoUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl:    widget.channel.logoUrl!,
-                          fit:         BoxFit.contain,
-                          errorWidget: (_, __, ___) =>
-                              _FirstLetterPlaceholder(name: widget.channel.name),
-                        )
-                      : _FirstLetterPlaceholder(name: widget.channel.name),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  widget.channel.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color:      AppColors.textPrimary,
-                    fontSize:   _focused ? 14 : 13,
-                    fontWeight: _focused ? FontWeight.w500 : FontWeight.w400,
-                    height:     1.4,
-                  ),
-                ),
-              ),
-              if (widget.channel.isFavourite)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.favorite, color: Colors.white, size: 14),
-                ),
-              const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
-            ],
+            bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
           ),
         ),
-      );
+        child: Row(
+          children: [
+            // Logo
+            AnimatedContainer(
+              duration: AppDurations.fast,
+              width:  54,
+              height: 54,
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _focused ? AppColors.borderGold : AppColors.border,
+                  width: _focused ? 1.0 : 0.5,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_focused ? 9 : 10),
+                child: widget.channel.logoUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl:    widget.channel.logoUrl!,
+                        fit:         BoxFit.contain,
+                        errorWidget: (_, __, ___) =>
+                            _FirstLetterPlaceholder(name: widget.channel.name),
+                      )
+                    : _FirstLetterPlaceholder(name: widget.channel.name),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+
+            // Name
+            Expanded(
+              child: Text(
+                widget.channel.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color:      _focused ? AppColors.textPrimary : AppColors.textSecondary,
+                  fontSize:   14,
+                  fontWeight: _focused ? FontWeight.w500 : FontWeight.w300,
+                  height:     1.3,
+                ),
+              ),
+            ),
+
+            // Favourite indicator
+            if (widget.channel.isFavourite)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(
+                  Icons.favorite,
+                  color: _focused ? AppColors.accentPrimary : AppColors.accentSoft,
+                  size: 12,
+                ),
+              ),
+
+            // Play icon
+            Icon(
+              Icons.play_arrow_rounded,
+              color: _focused ? AppColors.accentPrimary : AppColors.textMuted.withOpacity(0.5),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-
+// ── First Letter Placeholder ──────────────────────────────────────────────────
 
 class _FirstLetterPlaceholder extends StatelessWidget {
   const _FirstLetterPlaceholder({required this.name});
@@ -684,221 +925,10 @@ class _FirstLetterPlaceholder extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: TextStyle(
+        style: const TextStyle(
           color:      AppColors.textSecondary,
-          fontSize:   18,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-// ── Category Sidebar ──────────────────────────────────────────────────────────
-
-class _CategorySidebar extends StatefulWidget {
-  const _CategorySidebar({
-    super.key,
-    required this.categories,
-    required this.selectedId,
-    required this.onSelect,
-    required this.onRightArrow,
-    this.firstItemNode,
-  });
-  final List<ChannelCategory>   categories;
-  final int?                    selectedId;
-  final void Function(int)      onSelect;
-  final void Function(double?)  onRightArrow;
-  final FocusNode?              firstItemNode;
-
-  @override
-  State<_CategorySidebar> createState() => _CategorySidebarState();
-}
-
-class _CategorySidebarState extends State<_CategorySidebar> {
-  final ScrollController _scrollCtrl  = ScrollController();
-  final _containerKey                 = GlobalKey();
-  // _nodes[i] is for item index i+1 (item 0 uses widget.firstItemNode)
-  List<FocusNode> _nodes        = [];
-  int             _focusedIdx   = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _rebuildNodes();
-    widget.firstItemNode?.addListener(_onFirstNodeFocus);
-  }
-
-  @override
-  void didUpdateWidget(_CategorySidebar old) {
-    super.didUpdateWidget(old);
-    if (widget.categories.length - 1 != _nodes.length) _rebuildNodes();
-    if (widget.firstItemNode != old.firstItemNode) {
-      old.firstItemNode?.removeListener(_onFirstNodeFocus);
-      widget.firstItemNode?.addListener(_onFirstNodeFocus);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.firstItemNode?.removeListener(_onFirstNodeFocus);
-    for (final n in _nodes) n.dispose();
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onFirstNodeFocus() {
-    if (!mounted) return;
-    final hasFocus = widget.firstItemNode?.hasFocus == true;
-    setState(() => _focusedIdx = hasFocus ? 0 : (_focusedIdx == 0 ? -1 : _focusedIdx));
-    if (!hasFocus) return;
-    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
-    } else {
-      _ensureVisible(0);
-    }
-  }
-
-  void _rebuildNodes() {
-    for (final n in _nodes) n.dispose();
-    _nodes = [];
-    for (int i = 1; i < widget.categories.length; i++) {
-      final idx = i;
-      final n   = FocusNode();
-      n.addListener(() {
-        if (mounted) setState(() => _focusedIdx = n.hasFocus ? idx : (_focusedIdx == idx ? -1 : _focusedIdx));
-        if (n.hasFocus && mounted) _ensureVisible(idx);
-      });
-      _nodes.add(n);
-    }
-  }
-
-  void _ensureVisible(int idx) {
-    if (!_scrollCtrl.hasClients) return;
-    const h      = 56.0;
-    final top    = idx * h;
-    final bottom = top + h;
-    final vp     = _scrollCtrl.position.viewportDimension;
-    final off    = _scrollCtrl.offset;
-    double? target;
-    if (top < off) {
-      target = top;
-    } else if (bottom > off + vp) {
-      target = bottom - vp;
-    }
-    if (target != null) {
-      _scrollCtrl.animateTo(
-        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 150),
-        curve:    Curves.easeOut,
-      );
-    }
-  }
-
-  double? _getCenterY(int idx) {
-    final ctx = _containerKey.currentContext;
-    if (ctx == null) return null;
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.attached) return null;
-    final top    = box.localToGlobal(Offset.zero).dy;
-    final offset = _scrollCtrl.hasClients ? _scrollCtrl.offset : 0.0;
-    return top + idx * 56.0 - offset + 28.0;
-  }
-
-  void focusClosestTo(double targetY) {
-    if (widget.categories.isEmpty) return;
-    double bestDist = double.infinity;
-    int    bestIdx  = 0;
-    for (int i = 0; i < widget.categories.length; i++) {
-      final cy = _getCenterY(i);
-      if (cy == null) continue;
-      final dist = (cy - targetY).abs();
-      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
-    }
-    if (bestIdx == 0) {
-      widget.firstItemNode?.requestFocus();
-    } else {
-      _nodes[bestIdx - 1].requestFocus();
-    }
-    _ensureVisible(bestIdx);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key:   _containerKey,
-      width: 180,
-      color: AppColors.surface,
-      child: ScrollConfiguration(
-        behavior: const ScrollBehavior().copyWith(scrollbars: false),
-        child: ListView.builder(
-          controller: _scrollCtrl,
-          itemCount:  widget.categories.length,
-          itemExtent: 56,
-          itemBuilder: (_, i) {
-            final cat        = widget.categories[i];
-            final isSelected = cat.id == widget.selectedId;
-            final node       = i == 0 ? widget.firstItemNode : _nodes[i - 1];
-            return Focus(
-              onKeyEvent: (_, event) {
-                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  widget.onRightArrow(_getCenterY(i));
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-                    i < widget.categories.length - 1) {
-                  _nodes[i].requestFocus(); // focus item i+1
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp && i > 0) {
-                  (i == 1 ? widget.firstItemNode : _nodes[i - 2])?.requestFocus();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: FocusableWidget(
-                focusNode:       node,
-                autofocus:       i == 0,
-                showFocusBorder: false,
-                onTap:           () => widget.onSelect(cat.id),
-                child: AnimatedContainer(
-                  duration: AppDurations.fast,
-                  height:   56,
-                  padding:  const EdgeInsets.only(left: AppSpacing.tvH, right: AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0x14FFFFFF)
-                        : _focusedIdx == i
-                            ? const Color(0x0A00F0FF)
-                            : Colors.transparent,
-                    border: Border(
-                      left: BorderSide(
-                        color: isSelected
-                            ? AppColors.textPrimary
-                            : _focusedIdx == i
-                                ? AppColors.accentPrimary
-                                : Colors.transparent,
-                        width: 2.5,
-                      ),
-                    ),
-                  ),
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    cat.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color:      (isSelected || _focusedIdx == i) ? AppColors.textPrimary : AppColors.textMuted,
-                      fontSize:   12,
-                      fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+          fontSize:   20,
+          fontWeight: FontWeight.w300,
         ),
       ),
     );

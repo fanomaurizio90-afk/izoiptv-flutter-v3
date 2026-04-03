@@ -50,11 +50,11 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     if (widget.series != null) {
       return PopScope(
         canPop: false,
-        onPopInvoked: (didPop) {
+        onPopInvokedWithResult: (didPop, _) {
           if (!didPop) context.go('/series');
         },
         child: Scaffold(
-          backgroundColor: const Color(0xFF080808),
+          backgroundColor: AppColors.background,
           body: _SeriesDetailBody(series: widget.series!),
         ),
       );
@@ -62,11 +62,11 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/series');
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF080808),
+        backgroundColor: AppColors.background,
         body: seriesAsync.when(
           data: (series) {
             if (series == null) {
@@ -213,10 +213,10 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                 end:    Alignment.bottomCenter,
                 stops:  [0.0, 0.25, 0.6, 1.0],
                 colors: [
-                  Color(0x30080808),
-                  Color(0x10080808),
-                  Color(0xAA080808),
-                  Color(0xFF080808),
+                  Color(0x30070709),
+                  Color(0x10070709),
+                  Color(0xAA070709),
+                  Color(0xFF070709),
                 ],
               ),
             ),
@@ -226,7 +226,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
         // ── Solid below ─────────────────────────────────────────────────
         Positioned(
           top: screenH * 0.55, left: 0, right: 0, bottom: 0,
-          child: Container(color: const Color(0xFF080808)),
+          child: Container(color: AppColors.background),
         ),
 
         // ── Back button ─────────────────────────────────────────────────
@@ -775,14 +775,14 @@ class _EpisodeRowState extends State<_EpisodeRow> {
           duration: AppDurations.fast,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.tvH,
-            vertical:   12,
+            vertical:   16,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x14FFFFFF) : Colors.transparent,
+            color: _focused ? AppColors.accentSoft : Colors.transparent,
             border: Border(
               left: BorderSide(
-                color: _focused ? AppColors.textPrimary : Colors.transparent,
-                width: 2.5,
+                color: _focused ? AppColors.accentPrimary : Colors.transparent,
+                width: 3.0,
               ),
               bottom: const BorderSide(
                 color: AppColors.borderSubtle, width: 0.5),
@@ -791,19 +791,34 @@ class _EpisodeRowState extends State<_EpisodeRow> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // ── Episode number ────────────────────────────────────────
-              SizedBox(
-                width: 28,
+              // ── Episode number badge ──────────────────────────────────
+              AnimatedContainer(
+                duration: AppDurations.fast,
+                width:  32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _focused
+                      ? const Color(0x14C8A058)
+                      : AppColors.card,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _focused
+                        ? AppColors.borderGold
+                        : AppColors.border,
+                    width: 1,
+                  ),
+                ),
+                alignment: Alignment.center,
                 child: Text(
                   '${widget.episode.episodeNumber}',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color:      _isWatched
+                    color: _isWatched
                         ? AppColors.textMuted
                         : _focused
-                            ? AppColors.textPrimary
+                            ? AppColors.accentPrimary
                             : AppColors.textSecondary,
-                    fontSize:   14,
+                    fontSize:   12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -811,71 +826,83 @@ class _EpisodeRowState extends State<_EpisodeRow> {
               const SizedBox(width: 14),
 
               // ── Thumbnail ─────────────────────────────────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: SizedBox(
-                  width:  120,
-                  height: 68,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      widget.episode.thumbnailUrl != null
-                          ? CachedNetworkImage(
-                              imageUrl:    widget.episode.thumbnailUrl!,
-                              fit:         BoxFit.cover,
-                              errorWidget: (_, __, ___) =>
-                                  _ThumbnailPlaceholder(
-                                    number: widget.episode.episodeNumber),
-                            )
-                          : _ThumbnailPlaceholder(
-                              number: widget.episode.episodeNumber),
+              AnimatedContainer(
+                duration: AppDurations.fast,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: _focused
+                        ? const Color(0x50C8A058)
+                        : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(5.5),
+                  child: SizedBox(
+                    width:  120,
+                    height: 68,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        widget.episode.thumbnailUrl != null
+                            ? CachedNetworkImage(
+                                imageUrl:    widget.episode.thumbnailUrl!,
+                                fit:         BoxFit.cover,
+                                errorWidget: (_, __, ___) =>
+                                    _ThumbnailPlaceholder(
+                                      number: widget.episode.episodeNumber),
+                              )
+                            : _ThumbnailPlaceholder(
+                                number: widget.episode.episodeNumber),
 
-                      // Watched overlay
-                      if (_isWatched) ...[
-                        Container(color: const Color(0x66000000)),
-                        const Center(
-                          child: Icon(Icons.check_circle_rounded,
-                            color: Colors.white, size: 22),
-                        ),
-                      ],
-
-                      // Play icon on focus (unwatched/in-progress)
-                      if (_focused && !_isWatched)
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xBB000000),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.play_arrow_rounded,
-                              color: Colors.white, size: 18),
+                        // Watched overlay
+                        if (_isWatched) ...[
+                          Container(color: const Color(0x77000000)),
+                          const Center(
+                            child: Icon(Icons.check_circle_rounded,
+                              color: Colors.white, size: 22),
                           ),
-                        ),
+                        ],
 
-                      // Progress bar
-                      if (_isInProgress)
-                        Positioned(
-                          left: 0, right: 0, bottom: 0,
-                          child: Container(
-                            height: 3,
-                            decoration: const BoxDecoration(
-                              borderRadius: BorderRadius.only(
-                                bottomLeft:  Radius.circular(6),
-                                bottomRight: Radius.circular(6),
+                        // Play icon on focus (unwatched/in-progress)
+                        if (_focused && !_isWatched)
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xCC000000),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.white, size: 18),
+                            ),
+                          ),
+
+                        // Progress bar
+                        if (_isInProgress)
+                          Positioned(
+                            left: 0, right: 0, bottom: 0,
+                            child: Container(
+                              height: 3,
+                              clipBehavior: Clip.hardEdge,
+                              decoration: const BoxDecoration(
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft:  Radius.circular(6),
+                                  bottomRight: Radius.circular(6),
+                                ),
+                              ),
+                              child: LinearProgressIndicator(
+                                value:           _progress,
+                                minHeight:       3,
+                                backgroundColor: const Color(0x1AC8A058),
+                                valueColor: const AlwaysStoppedAnimation(
+                                  AppColors.accentPrimary),
                               ),
                             ),
-                            clipBehavior: Clip.hardEdge,
-                            child: LinearProgressIndicator(
-                              value:           _progress,
-                              minHeight:       3,
-                              backgroundColor: const Color(0x33FFFFFF),
-                              valueColor: const AlwaysStoppedAnimation(
-                                Colors.white),
-                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -895,13 +922,13 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                         color: _isWatched
                             ? AppColors.textMuted
                             : AppColors.textPrimary,
-                        fontSize:   14,
+                        fontSize:   15,
                         fontWeight: _focused ? FontWeight.w500 : FontWeight.w400,
                         height:     1.3,
                       ),
                     ),
                     if (widget.episode.plot != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       Text(
                         widget.episode.plot!,
                         maxLines: 2,
@@ -910,16 +937,16 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                           color:      AppColors.textMuted,
                           fontSize:   11,
                           fontWeight: FontWeight.w300,
-                          height:     1.45,
+                          height:     1.5,
                         ),
                       ),
                     ],
                     if (_isInProgress) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       Text(
                         '${(_progress * 100).round()}% watched',
                         style: const TextStyle(
-                          color:    AppColors.textMuted,
+                          color:    AppColors.accentPrimary,
                           fontSize: 10,
                         ),
                       ),
@@ -935,8 +962,8 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                   padding: const EdgeInsets.only(left: 12),
                   child: Text(
                     _formatDuration(widget.episode.durationSecs!),
-                    style: const TextStyle(
-                      color:    AppColors.textMuted,
+                    style: TextStyle(
+                      color:    _focused ? AppColors.textSecondary : AppColors.textMuted,
                       fontSize: 11,
                     ),
                   ),

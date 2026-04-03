@@ -44,96 +44,84 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/home');
-      },
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
             // ── Top bar ─────────────────────────────────────────────────
-            Container(
-              color:   AppColors.surface,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg, vertical: AppSpacing.sm,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.tvH, AppSpacing.xl, AppSpacing.tvH, AppSpacing.sm,
               ),
+              child: FocusableWidget(
+                focusNode:    _backNode,
+                autofocus:    true,
+                borderRadius: AppSpacing.radiusPill,
+                onTap:        () => context.go('/home'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(color: AppColors.border, width: 0.5),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
+                      SizedBox(width: 6),
+                      Text(
+                        'Favourites',
+                        style: TextStyle(
+                          color:         AppColors.textSecondary,
+                          fontSize:      13,
+                          fontWeight:    FontWeight.w400,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // ── Tab bar ─────────────────────────────────────────────────
+            SizedBox(
+              height: 46,
               child: Row(
                 children: [
-                  FocusableWidget(
-                    focusNode:    _backNode,
-                    autofocus:    true,
-                    borderRadius: AppSpacing.radiusPill,
-                    onTap:        () => context.go('/home'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color:        AppColors.card,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
-                          SizedBox(width: 2),
-                          Text('Back', style: TextStyle(
-                            color:      AppColors.textSecondary,
-                            fontSize:   11,
-                            fontWeight: FontWeight.w400,
-                          )),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(width: AppSpacing.tvH),
+                  _Tab(
+                    label:     'Channels',
+                    selected:  _tab == 0,
+                    focusNode: _tabNode0,
+                    onTap: () => setState(() => _tab = 0),
+                    onLeft:  () => _backNode.requestFocus(),
+                    onRight: () => _tabNode1.requestFocus(),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  const Text(
-                    'Favourites',
-                    style: TextStyle(
-                      color:      AppColors.textPrimary,
-                      fontSize:   14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  _Tab(
+                    label:     'Movies',
+                    selected:  _tab == 1,
+                    focusNode: _tabNode1,
+                    onTap: () => setState(() => _tab = 1),
+                    onLeft:  () => _tabNode0.requestFocus(),
+                    onRight: () => _tabNode2.requestFocus(),
+                  ),
+                  _Tab(
+                    label:     'Series',
+                    selected:  _tab == 2,
+                    focusNode: _tabNode2,
+                    onTap: () => setState(() => _tab = 2),
+                    onLeft:  () => _tabNode1.requestFocus(),
+                    onRight: null,
                   ),
                 ],
               ),
             ),
-            // ── Tab bar ─────────────────────────────────────────────────
-            Row(
-              children: [
-                _Tab(
-                  label:     'Channels',
-                  selected:  _tab == 0,
-                  focusNode: _tabNode0,
-                  onTap: () => setState(() => _tab = 0),
-                  onLeft:  () => _backNode.requestFocus(),
-                  onRight: () => _tabNode1.requestFocus(),
-                ),
-                _Tab(
-                  label:     'Movies',
-                  selected:  _tab == 1,
-                  focusNode: _tabNode1,
-                  onTap: () => setState(() => _tab = 1),
-                  onLeft:  () => _tabNode0.requestFocus(),
-                  onRight: () => _tabNode2.requestFocus(),
-                ),
-                _Tab(
-                  label:     'Series',
-                  selected:  _tab == 2,
-                  focusNode: _tabNode2,
-                  onTap: () => setState(() => _tab = 2),
-                  onLeft:  () => _tabNode1.requestFocus(),
-                  onRight: null,
-                ),
-              ],
-            ),
-            const Divider(height: 0),
+            Container(height: 0.5, color: AppColors.border),
             Expanded(child: _buildContent()),
           ],
         ),
       ),
-    ),
     );
   }
 
@@ -238,28 +226,40 @@ class _TabState extends State<_Tab> {
         focusNode:       widget.focusNode,
         onTap:           widget.onTap,
         showFocusBorder: false,
-        child: AnimatedContainer(
-          duration: AppDurations.fast,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.md,
-          ),
-          decoration: BoxDecoration(
-            color: _focused
-                ? const Color(0x12FFFFFF)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-          ),
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              color: widget.selected
-                  ? AppColors.textPrimary
-                  : _focused
-                      ? AppColors.textSecondary
-                      : AppColors.textMuted,
-              fontSize:   13,
-              fontWeight: widget.selected ? FontWeight.w400 : FontWeight.w300,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize:      MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: widget.selected
+                        ? AppColors.textPrimary
+                        : _focused
+                            ? AppColors.textSecondary
+                            : AppColors.textMuted,
+                    fontSize:   12,
+                    fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w300,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: AppDurations.medium,
+                curve:    Curves.easeOut,
+                height:   1.5,
+                width:    widget.selected ? 16 : 0,
+                decoration: BoxDecoration(
+                  color:        AppColors.accentPrimary,
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -377,12 +377,45 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
               context.push('/live/player');
             },
             child: Container(
-              height:    56,
-              padding:   const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              alignment: Alignment.centerLeft,
-              child: Text(
-                ch.name,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+              height:  56,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color:        AppColors.card,
+                      borderRadius: BorderRadius.circular(8),
+                      border:       Border.all(color: AppColors.border, width: 0.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(
+                        color:    AppColors.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      ch.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color:      AppColors.textPrimary,
+                        fontSize:   13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
+                ],
               ),
             ),
           );
@@ -497,12 +530,27 @@ class _SimpleListState extends State<_SimpleList> {
             autofocus: i == 0,
             onTap:     () => widget.onTap(i),
             child: Container(
-              height:    56,
-              padding:   const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              alignment: Alignment.centerLeft,
-              child: Text(
-                widget.items[i],
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+              height:  56,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.items[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color:      AppColors.textPrimary,
+                        fontSize:   13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
+                ],
               ),
             ),
           );

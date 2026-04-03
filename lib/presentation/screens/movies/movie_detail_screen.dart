@@ -48,11 +48,11 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
     final vodAsync = ref.watch(_vodDetailProvider(widget.vodId));
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.go('/movies');
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF080808),
+        backgroundColor: AppColors.background,
         body: vodAsync.when(
           data: (vod) {
             if (vod == null) {
@@ -92,11 +92,11 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
   void initState() {
     super.initState();
     _entranceCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 600),
+      vsync: this, duration: const Duration(milliseconds: 700),
     );
     _fadeIn  = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
     _slideUp = Tween<Offset>(
-      begin: const Offset(0, 0.06), end: Offset.zero,
+      begin: const Offset(0, 0.05), end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
     _entranceCtrl.forward();
   }
@@ -127,10 +127,10 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
 
     return Stack(
       children: [
-        // ── Backdrop ──────────────────────────────────────────────────────
+        // ── Full-bleed backdrop ────────────────────────────────────────────
         Positioned(
           top: 0, left: 0, right: 0,
-          height: screenH * 0.58,
+          height: screenH * 0.60,
           child: vod.posterUrl != null
               ? CachedNetworkImage(
                   imageUrl:    vod.posterUrl!,
@@ -141,49 +141,71 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
               : Container(color: AppColors.card),
         ),
 
-        // ── Multi-stop gradient dissolve ──────────────────────────────────
+        // ── Multi-stop gradient dissolve ───────────────────────────────────
         Positioned(
           top: 0, left: 0, right: 0,
-          height: screenH * 0.58,
+          height: screenH * 0.60,
           child: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin:  Alignment.topCenter,
                 end:    Alignment.bottomCenter,
-                stops:  [0.0, 0.3, 0.65, 1.0],
+                stops:  [0.0, 0.25, 0.60, 1.0],
                 colors: [
-                  Color(0x30080808),
-                  Color(0x10080808),
-                  Color(0xAA080808),
-                  Color(0xFF080808),
+                  Color(0x20070709),
+                  Color(0x08070709),
+                  Color(0xB0070709),
+                  Color(0xFF070709),
                 ],
               ),
             ),
           ),
         ),
 
-        // ── Solid fill below backdrop ─────────────────────────────────────
+        // ── Side vignette ──────────────────────────────────────────────────
         Positioned(
-          top: screenH * 0.58, left: 0, right: 0, bottom: 0,
-          child: Container(color: const Color(0xFF080808)),
+          top: 0, left: 0, bottom: 0,
+          width: screenW * 0.35,
+          child: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin:  Alignment.centerLeft,
+                end:    Alignment.centerRight,
+                colors: [Color(0x90070709), Colors.transparent],
+              ),
+            ),
+          ),
         ),
 
-        // ── Back button ───────────────────────────────────────────────────
+        // ── Solid fill below backdrop ──────────────────────────────────────
         Positioned(
-          top:  topPad + AppSpacing.sm,
+          top: screenH * 0.60, left: 0, right: 0, bottom: 0,
+          child: Container(color: AppColors.background),
+        ),
+
+        // ── Back chevron ───────────────────────────────────────────────────
+        Positioned(
+          top:  topPad + AppSpacing.md,
           left: AppSpacing.tvH,
           child: FocusableWidget(
             focusNode:    _backNode,
-            borderRadius: 20,
+            borderRadius: AppSpacing.radiusPill,
             onTap: () => context.go('/movies'),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0x33000000),
-                borderRadius: BorderRadius.circular(20),
+                color:        const Color(0x30000000),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border:       Border.all(color: const Color(0x15FFFFFF), width: 0.5),
               ),
-              child: const Icon(Icons.arrow_back,
-                color: AppColors.textPrimary, size: 18),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textSecondary, size: 11),
+                  SizedBox(width: 6),
+                  Text('Movies', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w400)),
+                ],
+              ),
             ),
           ),
         ),
@@ -198,39 +220,37 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(height: screenH * 0.38),
+                    SizedBox(height: screenH * 0.36),
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.tvH,
-                      ),
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── Title ───────────────────────────────────────
+                          // ── Title ──────────────────────────────────────────
                           Text(
                             vod.name,
                             style: const TextStyle(
                               color:         AppColors.textPrimary,
-                              fontSize:      34,
-                              fontWeight:    FontWeight.w500,
-                              letterSpacing: -0.5,
-                              height:        1.15,
+                              fontSize:      36,
+                              fontWeight:    FontWeight.w300,
+                              letterSpacing: -0.8,
+                              height:        1.1,
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: AppSpacing.md),
 
-                          // ── Meta chips ──────────────────────────────────
+                          // ── Meta chips ─────────────────────────────────────
                           _MetaRow(vod: vod, duration: _duration),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: AppSpacing.sm),
 
-                          // ── Rating ──────────────────────────────────────
+                          // ── Rating ─────────────────────────────────────────
                           if (vod.rating != null) ...[
                             _RatingBar(rating: vod.rating!),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.xl),
                           ] else
-                            const SizedBox(height: 10),
+                            const SizedBox(height: AppSpacing.md),
 
-                          // ── Plot ────────────────────────────────────────
+                          // ── Plot ───────────────────────────────────────────
                           if (vod.plot != null) ...[
                             Text(
                               vod.plot!,
@@ -240,14 +260,14 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                                 color:      AppColors.textSecondary,
                                 fontSize:   13,
                                 fontWeight: FontWeight.w300,
-                                height:     1.65,
+                                height:     1.7,
                               ),
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: AppSpacing.xl3),
                           ] else
-                            const SizedBox(height: 20),
+                            const SizedBox(height: AppSpacing.xl2),
 
-                          // ── Play button ─────────────────────────────────
+                          // ── Play button ────────────────────────────────────
                           _PlayButton(
                             focusNode: _playNode,
                             backNode:  _backNode,
@@ -287,21 +307,21 @@ class _MetaRow extends StatelessWidget {
     ];
     if (chips.isEmpty) return const SizedBox.shrink();
     return Wrap(
-      spacing:    8,
-      runSpacing: 6,
+      spacing:    6,
+      runSpacing: 5,
       children: chips.map((label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          border:       Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+          border:       Border.all(color: const Color(0x20FFFFFF), width: 0.5),
           borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
         ),
         child: Text(
           label,
           style: const TextStyle(
-            color:         AppColors.textSecondary,
+            color:         AppColors.textMuted,
             fontSize:      11,
             fontWeight:    FontWeight.w400,
-            letterSpacing: 0.4,
+            letterSpacing: 0.3,
           ),
         ),
       )).toList(),
@@ -325,9 +345,9 @@ class _RatingBar extends StatelessWidget {
           child: Icon(
             i < filled ? Icons.star_rounded : Icons.star_outline_rounded,
             color: i < filled
-                ? const Color(0xFFD4A84B)
-                : const Color(0x55FFFFFF),
-            size: 14,
+                ? AppColors.accentPrimary
+                : const Color(0x33FFFFFF),
+            size: 13,
           ),
         )),
         const SizedBox(width: 8),
@@ -336,6 +356,7 @@ class _RatingBar extends StatelessWidget {
           style: const TextStyle(
             color:    AppColors.textMuted,
             fontSize: 12,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -382,29 +403,31 @@ class _PlayButtonState extends State<_PlayButton> {
           canRequestFocus: false,
           onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
           child: AnimatedContainer(
-            duration: AppDurations.fast,
+            duration: AppDurations.focus,
             width:    double.infinity,
             padding:  const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              color:        _focused
-                  ? AppColors.textPrimary
-                  : const Color(0x1AFFFFFF),
+              color: _focused
+                  ? AppColors.accentPrimary
+                  : const Color(0x14FFFFFF),
               borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
             ),
             alignment: Alignment.center,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.play_arrow_rounded,
-                  color: _focused ? const Color(0xFF080808) : AppColors.textPrimary,
-                  size: 24),
+                Icon(
+                  Icons.play_arrow_rounded,
+                  color: _focused ? AppColors.background : AppColors.textPrimary,
+                  size:  22,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Play',
                   style: TextStyle(
-                    color:      _focused ? const Color(0xFF080808) : AppColors.textPrimary,
-                    fontSize:   15,
-                    fontWeight: FontWeight.w500,
+                    color:         _focused ? AppColors.background : AppColors.textPrimary,
+                    fontSize:      14,
+                    fontWeight:    FontWeight.w500,
                     letterSpacing: 0.3,
                   ),
                 ),

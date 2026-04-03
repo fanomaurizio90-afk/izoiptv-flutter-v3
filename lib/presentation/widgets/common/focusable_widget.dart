@@ -8,10 +8,10 @@ import '../../../core/theme/app_theme.dart';
 ///   select, enter, numpadEnter, gameButtonA,
 ///   DPAD_CENTER (keycode 23), BUTTON_A (keycode 96).
 ///
-/// Focus visual : 1px solid white border — no glow, no shadow.
-/// Press visual : AnimatedScale to 0.97 on key/tap down.
-/// Auto-scroll  : ensures focused element is visible in nearest Scrollable.
-/// Long-press   : contextMenu key fires onLongPress (TV menu button).
+/// Focus visual  : 1.5px gold border + ambient glow + 1.03 scale (Apple TV style).
+/// Press visual  : AnimatedScale to 0.96 on key/tap down.
+/// Auto-scroll   : ensures focused element is visible in nearest Scrollable.
+/// Long-press    : contextMenu key fires onLongPress (TV menu button).
 ///
 /// NEVER use InkWell or GestureDetector alone — always FocusableWidget.
 class FocusableWidget extends StatefulWidget {
@@ -51,19 +51,14 @@ class _FocusableWidgetState extends State<FocusableWidget> {
 
   static bool _isActivateKey(KeyEvent event) {
     final lk = event.logicalKey;
-    // Logical keys: select, enter, numpadEnter, gameButtonA
     if (lk == LogicalKeyboardKey.select)       return true;
     if (lk == LogicalKeyboardKey.enter)        return true;
     if (lk == LogicalKeyboardKey.numpadEnter)  return true;
     if (lk == LogicalKeyboardKey.gameButtonA)  return true;
 
-    // Physical key fallbacks for manufacturer-specific mappings
     final pk = event.physicalKey;
-    // DPAD_CENTER (Android keycode 23) — USB HID select
     if (pk == PhysicalKeyboardKey.select)      return true;
-    // BUTTON_A (Android keycode 96) — USB HID gameButtonA
     if (pk == PhysicalKeyboardKey.gameButtonA) return true;
-    // Raw numpad-enter (USB HID 0x00070058) — some Android TV boxes
     if (pk.usbHidUsage == 0x00070058)          return true;
 
     return false;
@@ -101,7 +96,6 @@ class _FocusableWidgetState extends State<FocusableWidget> {
 
   @override
   void dispose() {
-    // Only dispose if we created it
     if (widget.focusNode == null) _ownNode.dispose();
     super.dispose();
   }
@@ -121,19 +115,16 @@ class _FocusableWidgetState extends State<FocusableWidget> {
       onKeyEvent: (node, event) {
         if (!widget.enabled) return KeyEventResult.ignored;
 
-        // Activate on key down
         if (event is KeyDownEvent && _isActivateKey(event)) {
           setState(() => _pressed = true);
           widget.onTap();
           return KeyEventResult.handled;
         }
-        // Release press visual on key up
         if (event is KeyUpEvent && _isActivateKey(event)) {
           if (mounted) setState(() => _pressed = false);
           return KeyEventResult.handled;
         }
 
-        // Long-press via menu/context-menu key
         if (event is KeyDownEvent && _isLongPressKey(event)) {
           widget.onLongPress?.call();
           return widget.onLongPress != null
@@ -150,15 +141,24 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         onTapUp:     widget.enabled ? (_) { if (mounted) setState(() => _pressed = false); } : null,
         onTapCancel: widget.enabled ? ()  { if (mounted) setState(() => _pressed = false); } : null,
         child: AnimatedScale(
-          scale:    _pressed ? 0.97 : 1.0,
+          scale:    _pressed ? 0.96 : (_focused && widget.showFocusBorder ? 1.03 : 1.0),
           duration: AppDurations.press,
+          curve:    Curves.easeOutCubic,
           child: AnimatedContainer(
-            duration: AppDurations.fast,
+            duration: AppDurations.focus,
+            curve:    Curves.easeOut,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(widget.borderRadius),
               border: _focused && widget.showFocusBorder
-                  ? Border.all(color: AppColors.focusBorder, width: 1.0)
-                  : Border.all(color: Colors.transparent, width: 1.0),
+                  ? Border.all(color: AppColors.focusBorder, width: AppSpacing.focusBorderWidth)
+                  : Border.all(color: Colors.transparent,    width: AppSpacing.focusBorderWidth),
+              boxShadow: _focused && widget.showFocusBorder
+                  ? [BoxShadow(
+                      color:      AppColors.focusGlow,
+                      blurRadius: 18,
+                      spreadRadius: 0,
+                    )]
+                  : null,
             ),
             child: widget.child,
           ),

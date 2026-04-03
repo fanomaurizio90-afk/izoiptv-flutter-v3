@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// Shimmer skeleton — replaces loading spinners.
-/// Base: #1A1A1A, shimmer: subtle gradient sweeping left to right, 1.5s loop.
+/// Base: #141418, shimmer: subtle warm-tinted gradient sweeping left→right.
 class SkeletonBox extends StatefulWidget {
   const SkeletonBox({
     super.key,
@@ -28,7 +28,7 @@ class _SkeletonBoxState extends State<SkeletonBox>
     super.initState();
     _ctrl = AnimationController(
       vsync:    this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1800),
     )..repeat();
     _anim = Tween<double>(begin: -2, end: 2).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
@@ -75,21 +75,21 @@ class SkeletonChannelList extends StatelessWidget {
     return ListView.builder(
       physics:     const NeverScrollableScrollPhysics(),
       itemCount:   count,
-      itemExtent:  68,
+      itemExtent:  72,
       itemBuilder: (_, i) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.fromLTRB(AppSpacing.tvH, 14, AppSpacing.tvH, 14),
         child: Row(
           children: [
-            SkeletonBox(width: 44, height: 44, borderRadius: 6),
-            const SizedBox(width: 12),
+            SkeletonBox(width: 44, height: 44, borderRadius: AppSpacing.radiusCard),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment:  MainAxisAlignment.center,
                 children: [
-                  SkeletonBox(height: 13, borderRadius: 4),
-                  const SizedBox(height: 6),
-                  SkeletonBox(width: 80, height: 10, borderRadius: 4),
+                  const SkeletonBox(height: 12, borderRadius: 4),
+                  const SizedBox(height: 7),
+                  SkeletonBox(width: 90, height: 9, borderRadius: 4),
                 ],
               ),
             ),
@@ -110,15 +110,15 @@ class SkeletonPosterGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.builder(
       physics:      const NeverScrollableScrollPhysics(),
-      padding:      const EdgeInsets.all(12),
+      padding:      EdgeInsets.fromLTRB(AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.lg),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount:   columns,
-        crossAxisSpacing: 8,
-        mainAxisSpacing:  8,
+        crossAxisSpacing: AppSpacing.sm,
+        mainAxisSpacing:  AppSpacing.sm,
         childAspectRatio: 2 / 3,
       ),
       itemCount:   columns * rows,
-      itemBuilder: (_, __) => const SkeletonBox(borderRadius: 8),
+      itemBuilder: (_, __) => const SkeletonBox(borderRadius: AppSpacing.radiusCard),
     );
   }
 }
@@ -133,21 +133,21 @@ class SkeletonDetailBackdrop extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SkeletonBox(width: double.infinity, height: h * 0.45, borderRadius: 0),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, 0),
+        SkeletonBox(width: double.infinity, height: h * 0.48, borderRadius: 0),
+        Padding(
+          padding: EdgeInsets.fromLTRB(AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SkeletonBox(width: 280, height: 28, borderRadius: 6),
-              SizedBox(height: 10),
-              SkeletonBox(width: 180, height: 14, borderRadius: 4),
-              SizedBox(height: 20),
-              SkeletonBox(height: 13, borderRadius: 4),
-              SizedBox(height: 6),
-              SkeletonBox(height: 13, borderRadius: 4),
-              SizedBox(height: 6),
+            children: const [
+              SkeletonBox(width: 300, height: 30, borderRadius: 6),
+              SizedBox(height: 12),
               SkeletonBox(width: 200, height: 13, borderRadius: 4),
+              SizedBox(height: AppSpacing.xl),
+              SkeletonBox(height: 12, borderRadius: 4),
+              SizedBox(height: 7),
+              SkeletonBox(height: 12, borderRadius: 4),
+              SizedBox(height: 7),
+              SkeletonBox(width: 240, height: 12, borderRadius: 4),
             ],
           ),
         ),

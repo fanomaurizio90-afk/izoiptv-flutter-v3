@@ -48,12 +48,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/home');
-      },
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
@@ -64,43 +59,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, AppSpacing.xl,
               ),
-              child: Row(
-                children: [
-                  FocusableWidget(
-                    focusNode:    _backNode,
-                    autofocus:    true,
-                    borderRadius: AppSpacing.radiusPill,
-                    onTap:        () => context.go('/home'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color:        AppColors.card,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
-                          SizedBox(width: 2),
-                          Text('Back', style: TextStyle(
-                            color:      AppColors.textSecondary,
-                            fontSize:   11,
-                            fontWeight: FontWeight.w400,
-                          )),
-                        ],
-                      ),
-                    ),
+              child: FocusableWidget(
+                focusNode:    _backNode,
+                autofocus:    true,
+                borderRadius: AppSpacing.radiusPill,
+                onTap:        () => context.go('/home'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(color: AppColors.border, width: 0.5),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  Text(
-                    'Settings',
-                    style: const TextStyle(
-                      color:      AppColors.textPrimary,
-                      fontSize:   16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
+                      SizedBox(width: 6),
+                      Text(
+                        'Settings',
+                        style: TextStyle(
+                          color:         AppColors.textSecondary,
+                          fontSize:      13,
+                          fontWeight:    FontWeight.w400,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
 
@@ -164,7 +150,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ),
-    ),
     );
   }
 }

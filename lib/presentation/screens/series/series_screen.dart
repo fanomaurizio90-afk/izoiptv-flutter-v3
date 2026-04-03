@@ -123,37 +123,31 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/home');
-      },
-      child: Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _TopBar(
-              searchCtrl:      _searchCtrl,
-              backFocusNode:   _backFocusNode,
-              searchFocusNode: _searchFocusNode,
-              onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
-            ),
-            if (_categories.isNotEmpty) _CategoryBar(
-              key:                _categoryBarKey,
-              categories:         _categories,
-              selectedId:         _selectedCatId,
-              onSelect:           _selectCategory,
-              firstItemFocusNode: _firstCategoryFocusNode,
-              onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
-              onUpArrow:          () => _backFocusNode.requestFocus(),
-            ),
-            Expanded(child: _buildContent()),
-          ],
+    return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _TopBar(
+                searchCtrl:      _searchCtrl,
+                backFocusNode:   _backFocusNode,
+                searchFocusNode: _searchFocusNode,
+                onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
+              ),
+              if (_categories.isNotEmpty) _CategoryBar(
+                key:                _categoryBarKey,
+                categories:         _categories,
+                selectedId:         _selectedCatId,
+                onSelect:           _selectCategory,
+                firstItemFocusNode: _firstCategoryFocusNode,
+                onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
+                onUpArrow:          () => _backFocusNode.requestFocus(),
+              ),
+              Expanded(child: _buildContent()),
+            ],
+          ),
         ),
-      ),
-      ), // Scaffold
-    ); // PopScope
+      );
   }
 
   Widget _buildContent() {
@@ -231,6 +225,16 @@ class _ContentListState extends State<_ContentList> {
     if (widget.focusMemoryKey != null) {
       _restoreIndex = FocusMemoryService.instance.restore(widget.focusMemoryKey!) ?? 0;
       if (_restoreIndex >= widget.items.length) _restoreIndex = 0;
+    }
+    if (_restoreIndex > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _nodeFor(_restoreIndex).requestFocus();
+            _ensureVisible(_restoreIndex);
+          }
+        });
+      });
     }
   }
 
@@ -466,46 +470,46 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH, vertical: AppSpacing.md),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.tvH, AppSpacing.md, AppSpacing.tvH, AppSpacing.md),
       child: Row(
         children: [
+          // Back button — breadcrumb pill
           FocusableWidget(
             focusNode:    backFocusNode,
             borderRadius: AppSpacing.radiusPill,
             onTap:        () => context.go('/home'),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color:        AppColors.card,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border:       Border.all(color: AppColors.border, width: 0.5),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
-                  SizedBox(width: 2),
-                  Text('Back', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w400)),
+                children: [
+                  Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
+                  SizedBox(width: 6),
+                  Text(
+                    'Series',
+                    style: TextStyle(
+                      color:         AppColors.textSecondary,
+                      fontSize:      13,
+                      fontWeight:    FontWeight.w400,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            'Series',
-            style: TextStyle(
-              color:      AppColors.textPrimary,
-              fontSize:   14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xl2),
+
+          const SizedBox(width: AppSpacing.xl),
+
+          // Search field
           Expanded(
             child: Container(
-              height: 34,
+              height: 38,
               decoration: BoxDecoration(
                 color:        AppColors.card,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
@@ -513,9 +517,9 @@ class _TopBar extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const SizedBox(width: 10),
-                  const Icon(Icons.search_outlined, color: AppColors.textMuted, size: 14),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 14),
+                  const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Focus(
                       focusNode: searchFocusNode,
@@ -529,14 +533,18 @@ class _TopBar extends StatelessWidget {
                       },
                       child: TextField(
                         controller: searchCtrl,
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
-                        decoration: InputDecoration(
-                          hintText:       'Search...',
+                        style: const TextStyle(
+                          color:      AppColors.textPrimary,
+                          fontSize:   12,
+                          fontWeight: FontWeight.w300,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText:       'Search series…',
                           hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
                           border:         InputBorder.none,
                           enabledBorder:  InputBorder.none,
                           focusedBorder:  InputBorder.none,
-                          contentPadding: const EdgeInsets.only(bottom: 2),
+                          contentPadding: EdgeInsets.only(bottom: 2),
                           isDense:        true,
                           filled:         true,
                           fillColor:      Colors.transparent,
@@ -544,7 +552,7 @@ class _TopBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                 ],
               ),
             ),
@@ -683,7 +691,7 @@ class _CategoryBarState extends State<_CategoryBar> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 46,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
@@ -691,6 +699,7 @@ class _CategoryBarState extends State<_CategoryBar> {
         itemBuilder:     (_, i) {
           final cat        = widget.categories[i];
           final isSelected = cat.id == widget.selectedId;
+          final isFocused  = _focusedCatIdx == i;
           final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
           return Focus(
             key: _keys[i],
@@ -723,31 +732,38 @@ class _CategoryBarState extends State<_CategoryBar> {
               focusNode:       node,
               showFocusBorder: false,
               onTap:           () => widget.onSelect(cat.id),
-              child: AnimatedContainer(
-                duration: AppDurations.fast,
-                margin:   const EdgeInsets.only(right: AppSpacing.xl2),
-                padding:  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color:        _focusedCatIdx == i ? const Color(0x12FFFFFF) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                ),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize:      MainAxisSize.min,
                   children: [
-                    Text(
-                      cat.name,
-                      style: TextStyle(
-                        color:      (isSelected || _focusedCatIdx == i) ? AppColors.textPrimary : AppColors.textMuted,
-                        fontSize:   12,
-                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        cat.name,
+                        style: TextStyle(
+                          color: isSelected
+                              ? AppColors.textPrimary
+                              : isFocused
+                                  ? AppColors.textSecondary
+                                  : AppColors.textMuted,
+                          fontSize:   12,
+                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                          letterSpacing: 0.1,
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 4),
                     AnimatedContainer(
-                      duration: AppDurations.fast,
-                      margin: const EdgeInsets.only(top: 3),
-                      height: 1.5,
-                      width:  isSelected ? 20 : 0,
-                      color:  AppColors.textPrimary,
+                      duration: AppDurations.medium,
+                      curve:    Curves.easeOut,
+                      height:   1.5,
+                      width:    isSelected ? 16 : 0,
+                      decoration: BoxDecoration(
+                        color:        AppColors.accentPrimary,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
                     ),
                   ],
                 ),

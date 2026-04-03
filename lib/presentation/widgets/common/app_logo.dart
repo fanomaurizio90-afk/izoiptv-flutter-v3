@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// IZO IPTV logo — bold wordmark with cyan underline accent
+/// IZO IPTV logo — refined wordmark with warm gold accent bar
 class IzoLogo extends StatelessWidget {
   const IzoLogo({super.key, this.size = 72});
   final double size;
@@ -8,7 +8,7 @@ class IzoLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: size * 1.6,
+      width: size * 1.5,
       height: size,
       child: CustomPaint(painter: _IzoLogoPainter(size: size)),
     );
@@ -24,41 +24,41 @@ class _IzoLogoPainter extends CustomPainter {
     final w = canvasSize.width;
     final h = canvasSize.height;
 
-    // ── "IZO" text ────────────────────────────────────────────────────────────
-    final fontSize = h * 0.72;
+    // ── "IZO" wordmark ────────────────────────────────────────────────────────
+    final fontSize = h * 0.68;
     final tp = TextPainter(
       text: TextSpan(
         text: 'IZO',
         style: TextStyle(
-          color: Colors.white,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w800,
-          letterSpacing: fontSize * 0.04,
-          height: 1.0,
+          color:       const Color(0xFFF0F0F4),
+          fontSize:    fontSize,
+          fontWeight:  FontWeight.w500,
+          letterSpacing: fontSize * 0.06,
+          height:      1.0,
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final textX = (w - tp.width) / 2;
-    final textY = (h - tp.height) / 2 - h * 0.04;
+    final textX = 0.0;
+    final textY = (h - tp.height) / 2 - h * 0.06;
     tp.paint(canvas, Offset(textX, textY));
 
-    // ── Cyan underline ────────────────────────────────────────────────────────
-    const accent = Color(0xFF00C8F0);
-    final lineW = tp.width * 0.5;
-    final lineH = h * 0.055;
-    final lineY = textY + tp.height + h * 0.06;
-    final lineX = (w - lineW) / 2;
+    // ── Gold accent bar — sits below the text ─────────────────────────────────
+    const gold = Color(0xFFC8A058);
+    final barW  = tp.width * 0.38;
+    final barH  = h * 0.045;
+    final barY  = textY + tp.height + h * 0.07;
+    const barX  = 0.0;
 
     final paint = Paint()
-      ..color = accent
+      ..color = gold
       ..style = PaintingStyle.fill;
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(lineX, lineY, lineW, lineH),
-        Radius.circular(lineH / 2),
+        Rect.fromLTWH(barX, barY, barW, barH),
+        Radius.circular(barH / 2),
       ),
       paint,
     );

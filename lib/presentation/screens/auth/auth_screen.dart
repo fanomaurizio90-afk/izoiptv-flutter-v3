@@ -153,44 +153,78 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     Focus(
                       onKeyEvent: (_, e) => _tabKeyEvent(e, _serverNode, rightTab: _m3uTabNode),
                       child: FocusableWidget(
-                        focusNode: _xtreamTabNode,
-                        autofocus: true,
+                        focusNode:       _xtreamTabNode,
+                        autofocus:       true,
+                        showFocusBorder: false,
                         onTap: () {
                           setState(() { _isXtream = true; _m3uError = null; });
                           _serverNode.requestFocus();
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          child: Text(
-                            'Xtream Codes',
-                            style: TextStyle(
-                              color:      _isXtream ? AppColors.textPrimary : AppColors.textMuted,
-                              fontSize:   13,
-                              fontWeight: FontWeight.w400,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              child: Text(
+                                'Xtream Codes',
+                                style: TextStyle(
+                                  color:      _isXtream ? AppColors.textPrimary : AppColors.textMuted,
+                                  fontSize:   13,
+                                  fontWeight: _isXtream ? FontWeight.w500 : FontWeight.w300,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
                             ),
-                          ),
+                            AnimatedContainer(
+                              duration: AppDurations.medium,
+                              curve:    Curves.easeOut,
+                              height:   1.5,
+                              width:    _isXtream ? 20 : 0,
+                              decoration: BoxDecoration(
+                                color:        AppColors.accentPrimary,
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.lg),
+                    const SizedBox(width: AppSpacing.xl2),
                     Focus(
                       onKeyEvent: (_, e) => _tabKeyEvent(e, _m3uUrlNode, leftTab: _xtreamTabNode),
                       child: FocusableWidget(
-                        focusNode: _m3uTabNode,
+                        focusNode:       _m3uTabNode,
+                        showFocusBorder: false,
                         onTap: () {
                           setState(() { _isXtream = false; _m3uError = null; });
                           _m3uUrlNode.requestFocus();
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          child: Text(
-                            'M3U URL',
-                            style: TextStyle(
-                              color:      !_isXtream ? AppColors.textPrimary : AppColors.textMuted,
-                              fontSize:   13,
-                              fontWeight: FontWeight.w400,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              child: Text(
+                                'M3U URL',
+                                style: TextStyle(
+                                  color:      !_isXtream ? AppColors.textPrimary : AppColors.textMuted,
+                                  fontSize:   13,
+                                  fontWeight: !_isXtream ? FontWeight.w500 : FontWeight.w300,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
                             ),
-                          ),
+                            AnimatedContainer(
+                              duration: AppDurations.medium,
+                              curve:    Curves.easeOut,
+                              height:   1.5,
+                              width:    !_isXtream ? 20 : 0,
+                              decoration: BoxDecoration(
+                                color:        AppColors.accentPrimary,
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -253,17 +287,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                       decoration: BoxDecoration(
-                        color:        AppColors.card,
+                        gradient: const LinearGradient(
+                          begin:  Alignment.topLeft,
+                          end:    Alignment.bottomRight,
+                          colors: [Color(0xFFC8A058), Color(0xFFB08840)],
+                        ),
                         borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                        border:       Border.all(color: AppColors.accentSoft, width: 0.5),
                       ),
                       alignment: Alignment.center,
                       child: const Text(
                         'Sign In',
                         style: TextStyle(
-                          color:      AppColors.textPrimary,
-                          fontSize:   14,
-                          fontWeight: FontWeight.w400,
+                          color:         Color(0xFF0E0E0E),
+                          fontSize:      14,
+                          fontWeight:    FontWeight.w600,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),

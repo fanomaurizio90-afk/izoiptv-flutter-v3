@@ -74,6 +74,7 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/live',
+        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const LiveTvScreen(),
         routes: [
           GoRoute(
@@ -84,6 +85,7 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/movies',
+        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const MoviesScreen(),
         routes: [
           // player MUST be declared BEFORE :id
@@ -109,6 +111,7 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/series',
+        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const SeriesScreen(),
         routes: [
           // player MUST be declared BEFORE :id
@@ -140,8 +143,8 @@ GoRouter buildRouter(Ref ref) {
           ),
         ],
       ),
-      GoRoute(path: '/favourites', builder: (_, __) => const FavouritesScreen()),
-      GoRoute(path: '/settings',   builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/favourites', onExit: (context) { context.go('/home'); return false; }, builder: (_, __) => const FavouritesScreen()),
+      GoRoute(path: '/settings',   onExit: (context) { context.go('/home'); return false; }, builder: (_, __) => const SettingsScreen()),
     ],
   );
 }
