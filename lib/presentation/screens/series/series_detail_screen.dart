@@ -188,10 +188,13 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
           height: screenH * 0.55,
           child: _displaySeries.posterUrl != null
               ? CachedNetworkImage(
-                  imageUrl:    _displaySeries.posterUrl!,
-                  fit:         BoxFit.cover,
-                  width:       screenW,
-                  errorWidget: (_, __, ___) => Container(color: AppColors.card),
+                  imageUrl:       _displaySeries.posterUrl!,
+                  fit:            BoxFit.cover,
+                  width:          screenW,
+                  memCacheWidth:  800,
+                  fadeInDuration: const Duration(milliseconds: 200),
+                  placeholder:    (_, __) => Container(color: AppColors.card),
+                  errorWidget:    (_, __, ___) => Container(color: AppColors.card),
                 )
               : Container(color: AppColors.card),
         ),
@@ -842,9 +845,12 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                       children: [
                         widget.episode.thumbnailUrl != null
                             ? CachedNetworkImage(
-                                imageUrl:    widget.episode.thumbnailUrl!,
-                                fit:         BoxFit.cover,
-                                errorWidget: (_, __, ___) =>
+                                imageUrl:       widget.episode.thumbnailUrl!,
+                                fit:            BoxFit.cover,
+                                memCacheWidth:  240,
+                                fadeInDuration: const Duration(milliseconds: 150),
+                                placeholder:    (_, __) => const SizedBox.shrink(),
+                                errorWidget:    (_, __, ___) =>
                                     _ThumbnailPlaceholder(
                                       number: widget.episode.episodeNumber),
                               )

@@ -130,10 +130,13 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
           height: screenH * 0.60,
           child: vod.posterUrl != null
               ? CachedNetworkImage(
-                  imageUrl:    vod.posterUrl!,
-                  fit:         BoxFit.cover,
-                  width:       screenW,
-                  errorWidget: (_, __, ___) => Container(color: AppColors.card),
+                  imageUrl:       vod.posterUrl!,
+                  fit:            BoxFit.cover,
+                  width:          screenW,
+                  memCacheWidth:  800,
+                  fadeInDuration: const Duration(milliseconds: 200),
+                  placeholder:    (_, __) => Container(color: AppColors.card),
+                  errorWidget:    (_, __, ___) => Container(color: AppColors.card),
                 )
               : Container(color: AppColors.card),
         ),

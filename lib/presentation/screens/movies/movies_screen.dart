@@ -24,6 +24,7 @@ class MoviesScreen extends ConsumerStatefulWidget {
 class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   static const _allCatId = 0;
   static const _cwCatId  = -1;
+  static const _favCatId = -2;
 
   final _searchCtrl             = TextEditingController();
   final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
@@ -101,8 +102,13 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
 
       final histRepo = ref.read(historyRepositoryProvider);
       final cwItems  = await histRepo.getInProgressMovies(limit: 20);
+      int insertIdx = 1;
       if (cwItems.isNotEmpty) {
-        cats.insert(1, const VodCategory(id: _cwCatId, name: 'Continue Watching'));
+        cats.insert(insertIdx++, const VodCategory(id: _cwCatId, name: 'Continue Watching'));
+      }
+      final favItems = await repo.getFavourites();
+      if (favItems.isNotEmpty) {
+        cats.insert(insertIdx, const VodCategory(id: _favCatId, name: 'Favourites'));
       }
 
       final catId = (_selectedCatId != null && cats.any((c) => c.id == _selectedCatId))
@@ -116,6 +122,8 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
           final vod = await repo.getVodById(c.contentId);
           if (vod != null) { items.add(vod); progress[vod.id] = c.progress; }
         }
+      } else if (catId == _favCatId) {
+        items = favItems;
       } else if (catId == _allCatId) {
         items = await repo.getAllVod();
       } else {
@@ -150,6 +158,10 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
         }
         if (!mounted) return;
         setState(() { _items = items; _progressMap = progress; _loading = false; });
+      } else if (catId == _favCatId) {
+        final items = await ref.read(vodRepositoryProvider).getFavourites();
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = {}; _loading = false; });
       } else {
         final repo  = ref.read(vodRepositoryProvider);
         final items = catId == _allCatId
@@ -215,8 +227,13 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     VodItem update(VodItem v) => v.id == vod.id ? v.copyWith(isFavourite: newVal) : v;
     if (mounted) {
       setState(() {
-        _items         = _items.map(update).toList();
-        _searchResults = _searchResults.map(update).toList();
+        if (_selectedCatId == _favCatId && !newVal) {
+          _items.removeWhere((v) => v.id == vod.id);
+          _searchResults.removeWhere((v) => v.id == vod.id);
+        } else {
+          _items         = _items.map(update).toList();
+          _searchResults = _searchResults.map(update).toList();
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites'),
@@ -556,9 +573,12 @@ class _PosterCard extends StatelessWidget {
           // Poster image
           if (vod.posterUrl != null)
             CachedNetworkImage(
-              imageUrl:    vod.posterUrl!,
-              fit:         BoxFit.cover,
-              errorWidget: (_, __, ___) => _PlaceholderArt(name: vod.name),
+              imageUrl:       vod.posterUrl!,
+              fit:            BoxFit.cover,
+              memCacheWidth:  300,
+              fadeInDuration: const Duration(milliseconds: 200),
+              placeholder:    (_, __) => const SizedBox.shrink(),
+              errorWidget:    (_, __, ___) => _PlaceholderArt(name: vod.name),
             )
           else
             _PlaceholderArt(name: vod.name),
@@ -692,7 +712,18 @@ class _TopBar extends StatelessWidget {
 
           // Search field
           Expanded(
-            child: AnimatedBuilder(
+            child: Focus(
+              skipTraversal: true,
+              canRequestFocus: false,
+              onKeyEvent: (_, event) {
+                if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  onDownArrow?.call();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: AnimatedBuilder(
               animation: searchFocusNode,
               builder: (context, _) {
                 final focused = searchFocusNode.hasFocus;
@@ -712,27 +743,18 @@ class _TopBar extends StatelessWidget {
                       const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Focus(
-                          focusNode: searchFocusNode,
-                          onKeyEvent: (_, event) {
-                            if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                                event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                              onDownArrow?.call();
-                              return KeyEventResult.handled;
-                            }
-                            return KeyEventResult.ignored;
-                          },
-                          child: TextField(
-                            controller: searchCtrl,
-                            style: const TextStyle(
-                              color:      AppColors.textPrimary,
-                              fontSize:   12,
-                              fontWeight: FontWeight.w300,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText:       'Search movies…',
-                              hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                              border:         InputBorder.none,
+                        child: TextField(
+                          focusNode:  searchFocusNode,
+                          controller: searchCtrl,
+                          style: const TextStyle(
+                            color:      AppColors.textPrimary,
+                            fontSize:   12,
+                            fontWeight: FontWeight.w300,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText:       'Search movies…',
+                            hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            border:         InputBorder.none,
                               enabledBorder:  InputBorder.none,
                               focusedBorder:  InputBorder.none,
                               contentPadding: EdgeInsets.only(bottom: 2),
@@ -741,7 +763,6 @@ class _TopBar extends StatelessWidget {
                               fillColor:      Colors.transparent,
                             ),
                           ),
-                        ),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -749,6 +770,7 @@ class _TopBar extends StatelessWidget {
                 );
               },
             ),
+          ),
           ),
         ],
       ),
@@ -982,7 +1004,7 @@ class _CategoryBarState extends State<_CategoryBar> {
               focusNode:       node,
               showFocusBorder: false,
               onTap:           () => widget.onSelect(cat.id),
-              onLongPress:     (i > 0 && widget.onReorderConfirm != null)
+              onLongPress:     (cat.id > 0 && widget.onReorderConfirm != null)
                   ? () => _showReorderPopup(i)
                   : null,
               child: Padding(

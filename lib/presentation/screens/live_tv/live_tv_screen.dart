@@ -128,7 +128,9 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         _loading  = false;
       });
       _searchCtrl.clear();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Delay focus to avoid the select key-up from the category tap
+      // leaking into the first channel row and triggering playback.
+      Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) _channelListKey.currentState?.focusFirst();
       });
     } catch (_) {
@@ -344,41 +346,43 @@ class _TopBar extends StatelessWidget {
 
           // Search pill
           Expanded(
-            child: AnimatedBuilder(
-              animation: searchFocusNode,
-              builder: (context, _) {
-                final focused = searchFocusNode.hasFocus;
-                return Container(
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color:        AppColors.card,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border:       Border.all(
-                      color: focused ? Colors.white : AppColors.border,
-                      width: focused ? 1.0 : 0.5,
+            child: Focus(
+              skipTraversal: true,
+              canRequestFocus: false,
+              onKeyEvent: (_, event) {
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  onSearchLeftArrow();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  onDownArrow();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: AnimatedBuilder(
+                animation: searchFocusNode,
+                builder: (context, _) {
+                  final focused = searchFocusNode.hasFocus;
+                  return Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color:        AppColors.card,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      border:       Border.all(
+                        color: focused ? Colors.white : AppColors.border,
+                        width: focused ? 1.0 : 0.5,
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 14),
-                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Focus(
-                          focusNode: searchFocusNode,
-                          onKeyEvent: (_, event) {
-                            if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                              onSearchLeftArrow();
-                              return KeyEventResult.handled;
-                            }
-                            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                              onDownArrow();
-                              return KeyEventResult.handled;
-                            }
-                            return KeyEventResult.ignored;
-                          },
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 14),
+                        const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                        const SizedBox(width: 10),
+                        Expanded(
                           child: TextField(
+                            focusNode:       searchFocusNode,
                             controller:      searchCtrl,
                             textInputAction: TextInputAction.search,
                             style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
@@ -395,12 +399,12 @@ class _TopBar extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                  ),
-                );
-              },
+                        const SizedBox(width: 12),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],

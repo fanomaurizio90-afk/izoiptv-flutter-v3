@@ -4,12 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart' as mk;
+import 'package:media_kit_video/media_kit_video.dart' as mkv;
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
 import '../../../domain/repositories/history_repository.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 
+/// Unified movie player: tries ExoPlayer (video_player) first,
+/// falls back to media_kit if initialization fails.
 class MoviePlayerScreen extends ConsumerStatefulWidget {
   const MoviePlayerScreen({
     super.key,
@@ -24,18 +28,28 @@ class MoviePlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
-  VideoPlayerController? _controller;
+  // ── Player state ──────────────────────────────────────────────────────────
   late HistoryRepository _historyRepo;
   bool   _showControls = true;
   bool   _initialized  = false;
   bool   _disposed     = false;
+  bool   _usingMediaKit = false;
   Timer? _hideTimer;
   Timer? _saveTimer;
+
+  // ExoPlayer (video_player)
+  VideoPlayerController? _exoController;
+
+  // media_kit fallback
+  mk.Player?          _mkPlayer;
+  mkv.VideoController? _mkController;
 
   int get _vodId => widget.vod.id;
 
   final _topFocusNode       = FocusNode(debugLabel: 'player-root');
   final _playPauseFocusNode = FocusNode(debugLabel: 'play-pause');
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -59,46 +73,100 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
         startPos = Duration(seconds: hist['position_secs'] as int);
       }
     } catch (_) {}
-
     if (_disposed) return;
 
-    final ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.vod.streamUrl));
+    // ── Try ExoPlayer first ───────────────────────────────────────────────
+    bool exoFailed = false;
     try {
+      final ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.vod.streamUrl));
       await ctrl.initialize();
-    } catch (_) {}
-    if (_disposed) { ctrl.dispose(); return; }
-
-    if (startPos > Duration.zero) {
-      await ctrl.seekTo(startPos);
       if (_disposed) { ctrl.dispose(); return; }
+
+      if (startPos > Duration.zero) {
+        await ctrl.seekTo(startPos);
+        if (_disposed) { ctrl.dispose(); return; }
+      }
+      await ctrl.play();
+
+      if (mounted) {
+        setState(() {
+          _exoController = ctrl;
+          _initialized   = true;
+          _usingMediaKit = false;
+        });
+      } else {
+        ctrl.dispose();
+      }
+      return;
+    } catch (_) {
+      exoFailed = true;
     }
+    if (_disposed) return;
 
-    await ctrl.play();
+    // ── Fallback to media_kit ─────────────────────────────────────────────
+    if (exoFailed) {
+      _showToast('Switching to backup player…');
+      try {
+        final player = mk.Player();
+        final controller = mkv.VideoController(
+          player,
+          configuration: const mkv.VideoControllerConfiguration(
+            enableHardwareAcceleration: false,
+          ),
+        );
+        await player.open(mk.Media(widget.vod.streamUrl));
+        if (_disposed) { player.dispose(); return; }
 
-    if (mounted) {
-      setState(() {
-        _controller  = ctrl;
-        _initialized = true;
-      });
-    } else {
-      ctrl.dispose();
+        if (startPos > Duration.zero) {
+          await player.seek(startPos);
+          if (_disposed) { player.dispose(); return; }
+        }
+
+        if (mounted) {
+          setState(() {
+            _mkPlayer      = player;
+            _mkController   = controller;
+            _initialized    = true;
+            _usingMediaKit  = true;
+          });
+        } else {
+          player.dispose();
+        }
+      } catch (_) {
+        if (mounted) _showToast('Unable to play this stream');
+      }
     }
   }
 
   @override
   void dispose() {
     _disposed = true;
-    _controller?.pause();
+    _exoController?.pause();
+    _mkPlayer?.pause();
     _hideTimer?.cancel();
     _saveTimer?.cancel();
     try { _savePositionSync(); } catch (_) {}
-    _controller?.dispose();
+    _exoController?.dispose();
+    _mkPlayer?.dispose();
     _topFocusNode.dispose();
     _playPauseFocusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
     super.dispose();
   }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+
+  void _showToast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      duration: const Duration(seconds: 3),
+      backgroundColor: const Color(0xFF1A1A1A),
+    ));
+  }
+
+  // ── Timers ────────────────────────────────────────────────────────────────
 
   void _startHideTimer() {
     _hideTimer?.cancel();
@@ -126,11 +194,40 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
       AppDurations.historyFlushPeriod, (_) => _savePosition());
   }
 
+  // ── Playback abstraction ──────────────────────────────────────────────────
+
+  bool get _isPlaying {
+    if (_usingMediaKit) return _mkPlayer?.state.playing ?? false;
+    return _exoController?.value.isPlaying ?? false;
+  }
+
+  Duration get _position {
+    if (_usingMediaKit) return _mkPlayer?.state.position ?? Duration.zero;
+    return _exoController?.value.position ?? Duration.zero;
+  }
+
+  Duration get _duration {
+    if (_usingMediaKit) return _mkPlayer?.state.duration ?? Duration.zero;
+    return _exoController?.value.duration ?? Duration.zero;
+  }
+
+  double get _aspectRatio {
+    if (_usingMediaKit) {
+      final w = _mkPlayer?.state.width;
+      final h = _mkPlayer?.state.height;
+      if (w != null && h != null && h > 0) return w / h;
+      return 16 / 9;
+    }
+    final ar = _exoController?.value.aspectRatio ?? 0;
+    return ar > 0 ? ar : 16 / 9;
+  }
+
+  // ── History ───────────────────────────────────────────────────────────────
+
   Future<void> _savePosition() async {
-    final ctrl = _controller;
-    if (!mounted || ctrl == null || !ctrl.value.isInitialized) return;
-    final pos = ctrl.value.position.inSeconds;
-    final dur = ctrl.value.duration.inSeconds;
+    if (!mounted || !_initialized) return;
+    final pos = _position.inSeconds;
+    final dur = _duration.inSeconds;
     if (pos <= 0) return;
     try {
       await _historyRepo.savePosition(
@@ -145,10 +242,9 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
   }
 
   void _savePositionSync() {
-    final ctrl = _controller;
-    if (ctrl == null || !ctrl.value.isInitialized) return;
-    final pos = ctrl.value.position.inSeconds;
-    final dur = ctrl.value.duration.inSeconds;
+    if (!_initialized) return;
+    final pos = _position.inSeconds;
+    final dur = _duration.inSeconds;
     if (pos <= 0) return;
     _historyRepo.savePosition(
       contentId:    _vodId,
@@ -160,20 +256,216 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
     );
   }
 
+  // ── Playback controls ─────────────────────────────────────────────────────
+
   void _togglePlay() {
-    final ctrl = _controller;
-    if (ctrl == null) return;
-    ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+    if (_usingMediaKit) {
+      _mkPlayer?.playOrPause();
+    } else {
+      final ctrl = _exoController;
+      if (ctrl == null) return;
+      ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+    }
     _showControlsTemporarily();
   }
 
   void _seek(Duration offset) {
-    final ctrl = _controller;
-    if (ctrl == null) return;
-    final newPos = ctrl.value.position + offset;
-    ctrl.seekTo(newPos.isNegative ? Duration.zero : newPos);
+    final newPos = _position + offset;
+    final clamped = newPos.isNegative ? Duration.zero : newPos;
+    if (_usingMediaKit) {
+      _mkPlayer?.seek(clamped);
+    } else {
+      _exoController?.seekTo(clamped);
+    }
     _showControlsTemporarily();
   }
+
+  void _seekTo(Duration pos) {
+    if (_usingMediaKit) {
+      _mkPlayer?.seek(pos);
+    } else {
+      _exoController?.seekTo(pos);
+    }
+  }
+
+  // ── Track selection (media_kit only) ──────────────────────────────────────
+
+  void _showSubtitlePicker() {
+    if (!_usingMediaKit || _mkPlayer == null) {
+      _showToast('Subtitles not available with this player');
+      return;
+    }
+    final tracks = _mkPlayer!.state.tracks.subtitle;
+    if (tracks.isEmpty) {
+      _showToast('No subtitle tracks found');
+      return;
+    }
+    _showTrackDialog<mk.SubtitleTrack>(
+      title: 'Subtitles',
+      items: [mk.SubtitleTrack.no(), ...tracks],
+      labelOf: (t) {
+        if (t.id == 'no') return 'Off';
+        final parts = <String>[];
+        if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
+        if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
+        return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
+      },
+      selectedId: _mkPlayer!.state.track.subtitle.id,
+      onSelect: (t) => _mkPlayer!.setSubtitleTrack(t),
+    );
+  }
+
+  void _showAudioPicker() {
+    if (!_usingMediaKit || _mkPlayer == null) {
+      _showToast('Audio tracks not available with this player');
+      return;
+    }
+    final tracks = _mkPlayer!.state.tracks.audio;
+    if (tracks.length <= 1) {
+      _showToast('Only one audio track available');
+      return;
+    }
+    _showTrackDialog<mk.AudioTrack>(
+      title: 'Audio',
+      items: tracks,
+      labelOf: (t) {
+        final parts = <String>[];
+        if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
+        if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
+        return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
+      },
+      selectedId: _mkPlayer!.state.track.audio.id,
+      onSelect: (t) => _mkPlayer!.setAudioTrack(t),
+    );
+  }
+
+  void _showSpeedPicker() {
+    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    final current = _usingMediaKit
+        ? _mkPlayer?.state.rate ?? 1.0
+        : _exoController?.value.playbackSpeed ?? 1.0;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text('Playback Speed',
+                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+              ...speeds.map((s) => FocusableWidget(
+                autofocus: (s - current).abs() < 0.01,
+                borderRadius: 8,
+                onTap: () {
+                  if (_usingMediaKit) {
+                    _mkPlayer?.setRate(s);
+                  } else {
+                    _exoController?.setPlaybackSpeed(s);
+                  }
+                  Navigator.of(ctx).pop();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if ((s - current).abs() < 0.01)
+                        const Icon(Icons.check, color: Colors.white, size: 14)
+                      else
+                        const SizedBox(width: 14),
+                      const SizedBox(width: 8),
+                      Text('${s}x',
+                          style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+    _showControlsTemporarily();
+  }
+
+  void _showTrackDialog<T>({
+    required String title,
+    required List<T> items,
+    required String Function(T) labelOf,
+    required String selectedId,
+    required void Function(T) onSelect,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: items.map((t) {
+                        final id = (t as dynamic).id as String;
+                        final selected = id == selectedId;
+                        return FocusableWidget(
+                          autofocus: selected,
+                          borderRadius: 8,
+                          onTap: () {
+                            onSelect(t);
+                            Navigator.of(ctx).pop();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (selected)
+                                  const Icon(Icons.check, color: Colors.white, size: 14)
+                                else
+                                  const SizedBox(width: 14),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(labelOf(t),
+                                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    _showControlsTemporarily();
+  }
+
+  // ── Key handling ──────────────────────────────────────────────────────────
 
   static bool _isActivateKey(KeyEvent e) =>
       e.logicalKey == LogicalKeyboardKey.select       ||
@@ -184,9 +476,10 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
       e.physicalKey == PhysicalKeyboardKey.gameButtonA ||
       e.physicalKey.usbHidUsage == 0x00070058;
 
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final ctrl = _controller;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -201,7 +494,7 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
             final key = event.logicalKey;
 
-            // Dedicated media keys always work regardless of controls state
+            // Dedicated media keys always work
             if (key == LogicalKeyboardKey.mediaPlayPause) {
               _togglePlay();
               return KeyEventResult.handled;
@@ -246,22 +539,8 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
             child: Stack(
               children: [
                 // Video surface
-                if (ctrl != null && _initialized)
-                  Center(
-                    child: AspectRatio(
-                      aspectRatio: ctrl.value.aspectRatio > 0
-                          ? ctrl.value.aspectRatio
-                          : 16 / 9,
-                      child: VideoPlayer(ctrl),
-                    ),
-                  )
-                else
-                  const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.textPrimary,
-                      strokeWidth: 1.5,
-                    ),
-                  ),
+                _buildVideoSurface(),
+
                 // Controls overlay
                 AnimatedOpacity(
                   opacity:  _showControls ? 1.0 : 0.0,
@@ -277,46 +556,14 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
                             top:   MediaQuery.of(context).padding.top,
                             left:  0,
                             right: 0,
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: Row(
-                                children: [
-                                  FocusableWidget(
-                                    onTap: () { if (context.canPop()) context.pop(); },
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(4),
-                                      child: Icon(Icons.arrow_back,
-                                          color: AppColors.textPrimary, size: 18),
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: Text(
-                                      widget.vod.name,
-                                      style: const TextStyle(
-                                        color:      AppColors.textPrimary,
-                                        fontSize:   14,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            child: _buildTopBar(),
                           ),
                           // Bottom controls
                           Positioned(
                             bottom: 0,
                             left:   0,
                             right:  0,
-                            child: _MovieControls(
-                              controller:         ctrl,
-                              onSeek:             _seek,
-                              onToggle:           _togglePlay,
-                              playPauseFocusNode: _playPauseFocusNode,
-                            ),
+                            child: _buildBottomControls(),
                           ),
                         ],
                       ),
@@ -330,106 +577,229 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
       ),
     );
   }
+
+  Widget _buildVideoSurface() {
+    if (!_initialized) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.textPrimary,
+          strokeWidth: 1.5,
+        ),
+      );
+    }
+    if (_usingMediaKit && _mkController != null) {
+      return Center(
+        child: AspectRatio(
+          aspectRatio: _aspectRatio,
+          child: mkv.Video(controller: _mkController!),
+        ),
+      );
+    }
+    if (_exoController != null) {
+      return Center(
+        child: AspectRatio(
+          aspectRatio: _aspectRatio,
+          child: VideoPlayer(_exoController!),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        children: [
+          FocusableWidget(
+            onTap: () { if (context.canPop()) context.pop(); },
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.arrow_back,
+                  color: AppColors.textPrimary, size: 18),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              widget.vod.name,
+              style: const TextStyle(
+                color:      AppColors.textPrimary,
+                fontSize:   14,
+                fontWeight: FontWeight.w400,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Player badge
+          if (_usingMediaKit)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('MK', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w600)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    return _MovieControls(
+      isPlaying:          _isPlaying,
+      position:           _position,
+      duration:           _duration,
+      usingMediaKit:      _usingMediaKit,
+      onSeek:             _seek,
+      onSeekTo:           _seekTo,
+      onToggle:           _togglePlay,
+      onSubtitles:        _showSubtitlePicker,
+      onAudio:            _showAudioPicker,
+      onSpeed:            _showSpeedPicker,
+      playPauseFocusNode: _playPauseFocusNode,
+    );
+  }
 }
 
 // ─── Controls bar ─────────────────────────────────────────────────────────────
 
 class _MovieControls extends StatelessWidget {
   const _MovieControls({
-    required this.controller,
+    required this.isPlaying,
+    required this.position,
+    required this.duration,
+    required this.usingMediaKit,
     required this.onSeek,
+    required this.onSeekTo,
     required this.onToggle,
+    required this.onSubtitles,
+    required this.onAudio,
+    required this.onSpeed,
     this.playPauseFocusNode,
   });
-  final VideoPlayerController? controller;
+  final bool                    isPlaying;
+  final Duration                position;
+  final Duration                duration;
+  final bool                    usingMediaKit;
   final void Function(Duration) onSeek;
-  final VoidCallback           onToggle;
-  final FocusNode?             playPauseFocusNode;
+  final void Function(Duration) onSeekTo;
+  final VoidCallback            onToggle;
+  final VoidCallback            onSubtitles;
+  final VoidCallback            onAudio;
+  final VoidCallback            onSpeed;
+  final FocusNode?              playPauseFocusNode;
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = controller;
-    if (ctrl == null) return const SizedBox.shrink();
-    return ValueListenableBuilder<VideoPlayerValue>(
-      valueListenable: ctrl,
-      builder: (context, value, _) {
-        if (!value.isInitialized) return const SizedBox.shrink();
-        final pos      = value.position;
-        final dur      = value.duration;
-        final progress = dur.inMilliseconds > 0
-            ? (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0)
-            : 0.0;
-        return Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    final pos      = position;
+    final dur      = duration;
+    final progress = dur.inMilliseconds > 0
+        ? (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight:        1.0,
+              thumbShape:         const RoundSliderThumbShape(enabledThumbRadius: 4),
+              activeTrackColor:   AppColors.textPrimary,
+              inactiveTrackColor: AppColors.accentSoft,
+              thumbColor:         AppColors.textPrimary,
+              overlayShape:       SliderComponentShape.noOverlay,
+            ),
+            child: Slider(
+              value: progress.toDouble(),
+              onChanged: (v) {
+                if (dur.inMilliseconds <= 0) return;
+                onSeekTo(Duration(
+                    milliseconds: (v * dur.inMilliseconds).round()));
+              },
+            ),
+          ),
+          Row(
             children: [
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight:        1.0,
-                  thumbShape:         const RoundSliderThumbShape(enabledThumbRadius: 4),
-                  activeTrackColor:   AppColors.textPrimary,
-                  inactiveTrackColor: AppColors.accentSoft,
-                  thumbColor:         AppColors.textPrimary,
-                  overlayShape:       SliderComponentShape.noOverlay,
+              Text(_fmt(pos),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
+              const Spacer(),
+              // Subtitle button (media_kit only)
+              if (usingMediaKit) ...[
+                FocusableWidget(
+                  onTap: onSubtitles,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.subtitles_outlined,
+                        color: AppColors.textSecondary, size: 20),
+                  ),
                 ),
-                child: Slider(
-                  value: progress.toDouble(),
-                  onChanged: (v) {
-                    if (dur.inMilliseconds <= 0) return;
-                    ctrl.seekTo(Duration(
-                        milliseconds: (v * dur.inMilliseconds).round()));
-                  },
+                const SizedBox(width: AppSpacing.md),
+                // Audio button
+                FocusableWidget(
+                  onTap: onAudio,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.audiotrack_outlined,
+                        color: AppColors.textSecondary, size: 20),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+              ],
+              FocusableWidget(
+                onTap: () => onSeek(const Duration(seconds: -10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.replay_10,
+                      color: AppColors.textSecondary, size: 26),
                 ),
               ),
-              Row(
-                children: [
-                  Text(_fmt(pos),
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 11)),
-                  const Spacer(),
-                  FocusableWidget(
-                    onTap: () => onSeek(const Duration(seconds: -10)),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.replay_10,
-                          color: AppColors.textSecondary, size: 26),
-                    ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                focusNode: playPauseFocusNode,
+                onTap: onToggle,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    isPlaying
+                        ? Icons.pause_outlined
+                        : Icons.play_arrow_outlined,
+                    color: AppColors.textPrimary,
+                    size:  AppSpacing.iconMd,
                   ),
-                  const SizedBox(width: AppSpacing.xl2),
-                  FocusableWidget(
-                    focusNode: playPauseFocusNode,
-                    onTap: onToggle,
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        value.isPlaying
-                            ? Icons.pause_outlined
-                            : Icons.play_arrow_outlined,
-                        color: AppColors.textPrimary,
-                        size:  AppSpacing.iconMd,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xl2),
-                  FocusableWidget(
-                    onTap: () => onSeek(const Duration(seconds: 10)),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.forward_10,
-                          color: AppColors.textSecondary, size: 26),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(_fmt(dur),
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 11)),
-                ],
+                ),
               ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                onTap: () => onSeek(const Duration(seconds: 10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.forward_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              // Speed button
+              FocusableWidget(
+                onTap: onSpeed,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.speed,
+                      color: AppColors.textSecondary, size: 20),
+                ),
+              ),
+              const Spacer(),
+              Text(_fmt(dur),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 

@@ -24,6 +24,7 @@ class SeriesScreen extends ConsumerStatefulWidget {
 class _SeriesScreenState extends ConsumerState<SeriesScreen> {
   static const _allCatId = 0;
   static const _cwCatId  = -1;
+  static const _favCatId = -2;
 
   final _searchCtrl             = TextEditingController();
   final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
@@ -107,8 +108,13 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       for (final c in cwItems) {
         if (seen.add(c.contentId)) cwUnique.add(c);
       }
+      int insertIdx = 1;
       if (cwUnique.isNotEmpty) {
-        cats.insert(1, const SeriesCategory(id: _cwCatId, name: 'Continue Watching'));
+        cats.insert(insertIdx++, const SeriesCategory(id: _cwCatId, name: 'Continue Watching'));
+      }
+      final favItems = await repo.getFavourites();
+      if (favItems.isNotEmpty) {
+        cats.insert(insertIdx, const SeriesCategory(id: _favCatId, name: 'Favourites'));
       }
 
       final catId = (_selectedCatId != null && cats.any((c) => c.id == _selectedCatId))
@@ -122,6 +128,8 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
           final s = await repo.getSeriesById(c.contentId);
           if (s != null) { items.add(s); progress[s.id] = c.progress; }
         }
+      } else if (catId == _favCatId) {
+        items = favItems;
       } else if (catId == _allCatId) {
         items = await repo.getAllSeries();
       } else {
@@ -159,6 +167,10 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
         }
         if (!mounted) return;
         setState(() { _items = items; _progressMap = progress; _loading = false; _searching = false; _searchResults = []; });
+      } else if (catId == _favCatId) {
+        final items = await ref.read(seriesRepositoryProvider).getFavourites();
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = {}; _loading = false; _searching = false; _searchResults = []; });
       } else {
         final repo  = ref.read(seriesRepositoryProvider);
         final items = catId == _allCatId
@@ -224,8 +236,13 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     SeriesItem update(SeriesItem s) => s.id == series.id ? s.copyWith(isFavourite: newVal) : s;
     if (mounted) {
       setState(() {
-        _items         = _items.map(update).toList();
-        _searchResults = _searchResults.map(update).toList();
+        if (_selectedCatId == _favCatId && !newVal) {
+          _items.removeWhere((s) => s.id == series.id);
+          _searchResults.removeWhere((s) => s.id == series.id);
+        } else {
+          _items         = _items.map(update).toList();
+          _searchResults = _searchResults.map(update).toList();
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(newVal ? '${series.name} added to Favourites' : '${series.name} removed from Favourites'),
@@ -546,9 +563,12 @@ class _PosterCard extends StatelessWidget {
           Container(color: AppColors.card),
           if (series.posterUrl != null)
             CachedNetworkImage(
-              imageUrl:    series.posterUrl!,
-              fit:         BoxFit.cover,
-              errorWidget: (_, __, ___) => const Center(
+              imageUrl:       series.posterUrl!,
+              fit:            BoxFit.cover,
+              memCacheWidth:  300,
+              fadeInDuration: const Duration(milliseconds: 200),
+              placeholder:    (_, __) => const SizedBox.shrink(),
+              errorWidget:    (_, __, ___) => const Center(
                 child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
               ),
             )
@@ -665,37 +685,39 @@ class _TopBar extends StatelessWidget {
 
           // Search field
           Expanded(
-            child: AnimatedBuilder(
-              animation: searchFocusNode,
-              builder: (context, _) {
-                final focused = searchFocusNode.hasFocus;
-                return Container(
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color:        AppColors.card,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border:       Border.all(
-                      color: focused ? Colors.white : AppColors.border,
-                      width: focused ? 1.0 : 0.5,
+            child: Focus(
+              skipTraversal: true,
+              canRequestFocus: false,
+              onKeyEvent: (_, event) {
+                if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  onDownArrow?.call();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: AnimatedBuilder(
+                animation: searchFocusNode,
+                builder: (context, _) {
+                  final focused = searchFocusNode.hasFocus;
+                  return Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color:        AppColors.card,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      border:       Border.all(
+                        color: focused ? Colors.white : AppColors.border,
+                        width: focused ? 1.0 : 0.5,
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 14),
-                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Focus(
-                          focusNode: searchFocusNode,
-                          onKeyEvent: (_, event) {
-                            if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                                event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                              onDownArrow?.call();
-                              return KeyEventResult.handled;
-                            }
-                            return KeyEventResult.ignored;
-                          },
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 14),
+                        const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                        const SizedBox(width: 8),
+                        Expanded(
                           child: TextField(
+                            focusNode:  searchFocusNode,
                             controller: searchCtrl,
                             style: const TextStyle(
                               color:      AppColors.textPrimary,
@@ -715,12 +737,12 @@ class _TopBar extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                  ),
-                );
-              },
+                        const SizedBox(width: 12),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -955,7 +977,7 @@ class _CategoryBarState extends State<_CategoryBar> {
               focusNode:       node,
               showFocusBorder: false,
               onTap:           () => widget.onSelect(cat.id),
-              onLongPress:     (i > 0 && widget.onReorderConfirm != null)
+              onLongPress:     (cat.id > 0 && widget.onReorderConfirm != null)
                   ? () => _showReorderPopup(i)
                   : null,
               child: Padding(
