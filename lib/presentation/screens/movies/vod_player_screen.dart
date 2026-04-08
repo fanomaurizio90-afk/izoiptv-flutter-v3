@@ -193,8 +193,8 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
-        if (!didPop) context.go(widget.backPath);
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && context.canPop()) context.pop();
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -267,7 +267,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                               child: Row(
                                 children: [
                                   FocusableWidget(
-                                    onTap: () => context.go(widget.backPath),
+                                    onTap: () { if (context.canPop()) context.pop(); },
                                     child: const Padding(
                                       padding: EdgeInsets.all(4),
                                       child: Icon(Icons.arrow_back,

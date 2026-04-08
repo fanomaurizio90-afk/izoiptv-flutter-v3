@@ -98,7 +98,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
 
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) context.pop();
       },
       child: Scaffold(

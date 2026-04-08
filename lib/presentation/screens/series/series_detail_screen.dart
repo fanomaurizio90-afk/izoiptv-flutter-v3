@@ -49,10 +49,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
   Widget build(BuildContext context) {
     if (widget.series != null) {
       return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) context.go('/series');
-        },
+        canPop: true,
         child: Scaffold(
           backgroundColor: AppColors.background,
           body: _SeriesDetailBody(series: widget.series!),
@@ -61,10 +58,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     }
     final seriesAsync = ref.watch(_seriesDetailProvider(widget.seriesId));
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/series');
-      },
+      canPop: true,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: seriesAsync.when(
@@ -237,7 +231,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
             focusNode:    _backNode,
             autofocus:    true,
             borderRadius: AppSpacing.radiusPill,
-            onTap: () => context.go('/series'),
+            onTap: () => context.pop(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
@@ -587,14 +581,15 @@ class _EpisodeList extends ConsumerStatefulWidget {
 }
 
 class _EpisodeListState extends ConsumerState<_EpisodeList> {
-  List<FocusNode> _nodes   = [];
-  List<GlobalKey> _rowKeys = [];
+  final Map<int, FocusNode> _nodes   = {};
+  List<GlobalKey>           _rowKeys = [];
   Map<int, Map<String, dynamic>> _history = {};
+
+  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
 
   @override
   void initState() {
     super.initState();
-    _nodes   = List.generate(widget.episodes.length, (_) => FocusNode());
     _rowKeys = List.generate(widget.episodes.length, (_) => GlobalKey());
     _notifyFirst();
     _loadHistory();
@@ -602,14 +597,14 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
 
   @override
   void dispose() {
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     super.dispose();
   }
 
   void _notifyFirst() {
-    if (_nodes.isNotEmpty) {
+    if (widget.episodes.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.onFirstNodeReady(_nodes[0]);
+        if (mounted) widget.onFirstNodeReady(_nodeFor(0));
       });
     }
   }
@@ -626,8 +621,8 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
   }
 
   int get _focusedIndex {
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
@@ -653,14 +648,14 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-        idx + 1 < _nodes.length) {
-      _nodes[idx + 1].requestFocus();
+        idx + 1 < widget.episodes.length) {
+      _nodeFor(idx + 1).requestFocus();
       _scrollTo(idx + 1, goingDown: true);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (idx > 0) {
-        _nodes[idx - 1].requestFocus();
+        _nodeFor(idx - 1).requestFocus();
         _scrollTo(idx - 1, goingDown: false);
       } else {
         widget.firstSeasonNode?.requestFocus();
@@ -682,7 +677,7 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
           episode:   e.value,
           episodes:  widget.episodes,
           index:     e.key,
-          focusNode: _nodes[e.key],
+          focusNode: _nodeFor(e.key),
           history:   _history[e.value.id],
         )).toList(),
       ),

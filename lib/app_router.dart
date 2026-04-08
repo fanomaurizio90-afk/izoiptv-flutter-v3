@@ -11,8 +11,10 @@ import 'presentation/screens/live_tv/player_screen.dart';
 import 'presentation/screens/movies/movies_screen.dart';
 import 'presentation/screens/movies/movie_detail_screen.dart';
 import 'presentation/screens/movies/vod_player_screen.dart';
+import 'presentation/screens/movies/movie_player_screen.dart';
 import 'presentation/screens/series/series_screen.dart';
 import 'presentation/screens/series/series_detail_screen.dart';
+import 'presentation/screens/series/series_player_screen.dart';
 import 'presentation/screens/favourites/favourites_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
 import 'domain/entities/vod.dart';
@@ -74,7 +76,6 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/live',
-        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const LiveTvScreen(),
         routes: [
           GoRoute(
@@ -85,7 +86,6 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/movies',
-        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const MoviesScreen(),
         routes: [
           // player MUST be declared BEFORE :id
@@ -96,7 +96,7 @@ GoRouter buildRouter(Ref ref) {
               final vod      = extra['vod']      as VodItem;
               final backPath = extra['backPath'] as String;
               return NoTransitionPage(
-                child: VodPlayerScreen(vod: vod, backPath: backPath),
+                child: MoviePlayerScreen(vod: vod, backPath: backPath),
               );
             },
           ),
@@ -111,7 +111,6 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/series',
-        onExit: (context) { context.go('/home'); return false; },
         builder: (_, __) => const SeriesScreen(),
         routes: [
           // player MUST be declared BEFORE :id
@@ -124,7 +123,7 @@ GoRouter buildRouter(Ref ref) {
               final episodes     = extra['episodes']     as List<Episode>?;
               final episodeIndex = extra['episodeIndex'] as int?;
               return NoTransitionPage(
-                child: VodPlayerScreen(
+                child: SeriesPlayerScreen(
                   vod:          vod,
                   backPath:     backPath,
                   episodes:     episodes,
@@ -143,8 +142,8 @@ GoRouter buildRouter(Ref ref) {
           ),
         ],
       ),
-      GoRoute(path: '/favourites', onExit: (context) { context.go('/home'); return false; }, builder: (_, __) => const FavouritesScreen()),
-      GoRoute(path: '/settings',   onExit: (context) { context.go('/home'); return false; }, builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/favourites', builder: (_, __) => const FavouritesScreen()),
+      GoRoute(path: '/settings',   builder: (_, __) => const SettingsScreen()),
     ],
   );
 }
@@ -154,3 +153,4 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(router.dispose);
   return router;
 });
+

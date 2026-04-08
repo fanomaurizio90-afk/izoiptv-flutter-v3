@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/series.dart';
+import '../../../domain/entities/continue_watching.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
@@ -21,6 +22,9 @@ class SeriesScreen extends ConsumerStatefulWidget {
 }
 
 class _SeriesScreenState extends ConsumerState<SeriesScreen> {
+  static const _allCatId = 0;
+  static const _cwCatId  = -1;
+
   final _searchCtrl             = TextEditingController();
   final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
   final _firstCategoryFocusNode = FocusNode();
@@ -29,14 +33,15 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
   final _contentListKey  = GlobalKey<_ContentListState>();
   final _categoryBarKey  = GlobalKey<_CategoryBarState>();
 
-  List<SeriesCategory> _categories    = [];
-  int?                 _selectedCatId;
-  List<SeriesItem>     _items         = [];
-  List<SeriesItem>     _searchResults = [];
-  bool                 _loading       = true;
-  bool                 _syncing       = false;
-  String?              _error;
-  bool                 _searching     = false;
+  List<SeriesCategory>   _categories     = [];
+  int?                   _selectedCatId;
+  List<SeriesItem>       _items          = [];
+  List<SeriesItem>       _searchResults  = [];
+  Map<int, double>       _progressMap    = {};
+  bool                   _loading        = true;
+  bool                   _syncing        = false;
+  String?                _error;
+  bool                   _searching      = false;
 
   @override
   void initState() {
@@ -92,15 +97,42 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
+      cats.insert(0, const SeriesCategory(id: _allCatId, name: 'All'));
+
+      final histRepo = ref.read(historyRepositoryProvider);
+      final cwItems  = await histRepo.getInProgressEpisodes(limit: 20);
+      // Deduplicate by series — keep only the most recent episode per series
+      final seen = <int>{};
+      final cwUnique = <ContinueWatchingItem>[];
+      for (final c in cwItems) {
+        if (seen.add(c.contentId)) cwUnique.add(c);
+      }
+      if (cwUnique.isNotEmpty) {
+        cats.insert(1, const SeriesCategory(id: _cwCatId, name: 'Continue Watching'));
+      }
+
       final catId = (_selectedCatId != null && cats.any((c) => c.id == _selectedCatId))
-          ? _selectedCatId!
-          : cats.first.id;
-      final items = await repo.getSeriesByCategory(catId);
+          ? _selectedCatId! : _allCatId;
+
+      List<SeriesItem> items;
+      Map<int, double> progress = {};
+      if (catId == _cwCatId) {
+        items = [];
+        for (final c in cwUnique) {
+          final s = await repo.getSeriesById(c.contentId);
+          if (s != null) { items.add(s); progress[s.id] = c.progress; }
+        }
+      } else if (catId == _allCatId) {
+        items = await repo.getAllSeries();
+      } else {
+        items = await repo.getSeriesByCategory(catId);
+      }
       if (!mounted) return;
       setState(() {
         _categories    = cats;
         _selectedCatId = catId;
         _items         = items;
+        _progressMap   = progress;
         _loading       = false;
       });
     } catch (e) {
@@ -113,11 +145,93 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     setState(() { _selectedCatId = catId; _loading = true; });
     _searchCtrl.clear();
     try {
-      final items = await ref.read(seriesRepositoryProvider).getSeriesByCategory(catId);
-      if (!mounted) return;
-      setState(() { _items = items; _loading = false; _searching = false; _searchResults = []; });
+      if (catId == _cwCatId) {
+        final cwItems = await ref.read(historyRepositoryProvider).getInProgressEpisodes(limit: 20);
+        final seen = <int>{};
+        final cwUnique = <ContinueWatchingItem>[];
+        for (final c in cwItems) { if (seen.add(c.contentId)) cwUnique.add(c); }
+        final repo = ref.read(seriesRepositoryProvider);
+        final items = <SeriesItem>[];
+        final progress = <int, double>{};
+        for (final c in cwUnique) {
+          final s = await repo.getSeriesById(c.contentId);
+          if (s != null) { items.add(s); progress[s.id] = c.progress; }
+        }
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = progress; _loading = false; _searching = false; _searchResults = []; });
+      } else {
+        final repo  = ref.read(seriesRepositoryProvider);
+        final items = catId == _allCatId
+            ? await repo.getAllSeries()
+            : await repo.getSeriesByCategory(catId);
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = {}; _loading = false; _searching = false; _searchResults = []; });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _onSeriesCategoryReorder(List<SeriesCategory> ordered) async {
+    final realOrdered = ordered.where((c) => c.id > 0).toList();
+    setState(() => _categories = ordered);
+    await ref.read(seriesRepositoryProvider).saveSeriesCategoryOrder(realOrdered);
+  }
+
+  Future<void> _showItemPopup(SeriesItem series) async {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FocusableWidget(
+                autofocus: true,
+                borderRadius: 8,
+                onTap: () => Navigator.of(ctx).pop('favourite'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(series.isFavourite ? Icons.favorite : Icons.favorite_border,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        series.isFavourite ? 'Remove from Favourites' : 'Add to Favourites',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == 'favourite') _toggleFavouriteSeries(series);
+  }
+
+  Future<void> _toggleFavouriteSeries(SeriesItem series) async {
+    final repo   = ref.read(seriesRepositoryProvider);
+    final newVal = !series.isFavourite;
+    await repo.toggleFavourite(series.id, newVal);
+    SeriesItem update(SeriesItem s) => s.id == series.id ? s.copyWith(isFavourite: newVal) : s;
+    if (mounted) {
+      setState(() {
+        _items         = _items.map(update).toList();
+        _searchResults = _searchResults.map(update).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(newVal ? '${series.name} added to Favourites' : '${series.name} removed from Favourites'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF1A1A1A),
+      ));
     }
   }
 
@@ -142,6 +256,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
                 firstItemFocusNode: _firstCategoryFocusNode,
                 onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
                 onUpArrow:          () => _backFocusNode.requestFocus(),
+                onReorderConfirm:   _onSeriesCategoryReorder,
               ),
               Expanded(child: _buildContent()),
             ],
@@ -174,6 +289,8 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
       columns:          cols,
       categories:       _categories,
       focusMemoryKey:   'series',
+      onLongPress:      _showItemPopup,
+      progressMap:      _progressMap,
       onUpFromFirstRow: (x) => _categoryBarKey.currentState?.focusClosestTo(x),
       onTap:            (s) async {
         final cat = _categories.firstWhere(
@@ -186,7 +303,10 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
         }
         if (!mounted) return;
         await context.push('/series/${s.id}', extra: s);
-        if (mounted) _contentListKey.currentState?.restoreFocus();
+        if (mounted) {
+          _contentListKey.currentState?.restoreFocus();
+          if (_selectedCatId == _cwCatId) _selectCategory(_cwCatId);
+        }
       },
     );
   }
@@ -200,14 +320,18 @@ class _ContentList extends StatefulWidget {
     required this.categories,
     required this.onTap,
     required this.onUpFromFirstRow,
+    this.onLongPress,
     this.focusMemoryKey,
+    this.progressMap,
   });
-  final List<SeriesItem>          items;
-  final int                       columns;
-  final List<SeriesCategory>      categories;
-  final void Function(SeriesItem) onTap;
-  final void Function(double)     onUpFromFirstRow;
-  final String?                   focusMemoryKey;
+  final List<SeriesItem>            items;
+  final int                         columns;
+  final List<SeriesCategory>        categories;
+  final void Function(SeriesItem)   onTap;
+  final void Function(double)       onUpFromFirstRow;
+  final void Function(SeriesItem)?  onLongPress;
+  final String?                     focusMemoryKey;
+  final Map<int, double>?           progressMap;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -390,7 +514,13 @@ class _ContentListState extends State<_ContentList> {
                 }
                 widget.onTap(widget.items[i]);
               },
-              child:        _PosterCard(series: widget.items[i]),
+              onLongPress:  widget.onLongPress != null
+                  ? () => widget.onLongPress!(widget.items[i])
+                  : null,
+              child:        _PosterCard(
+                series:   widget.items[i],
+                progress: widget.progressMap?[widget.items[i].id],
+              ),
             ),
           ),
         );
@@ -402,8 +532,9 @@ class _ContentListState extends State<_ContentList> {
 // ── Poster Card ────────────────────────────────────────────────────────────────
 
 class _PosterCard extends StatelessWidget {
-  const _PosterCard({required this.series});
+  const _PosterCard({required this.series, this.progress});
   final SeriesItem series;
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +579,32 @@ class _PosterCard extends StatelessWidget {
               ),
             ),
           ),
+
+          // Favourite heart
+          if (series.isFavourite)
+            const Positioned(
+              top:   6,
+              right: 6,
+              child: Icon(Icons.favorite, color: Colors.white, size: 12),
+            ),
+
+          // Progress bar
+          if (progress != null)
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft:  Radius.circular(AppSpacing.radiusCard),
+                  bottomRight: Radius.circular(AppSpacing.radiusCard),
+                ),
+                child: LinearProgressIndicator(
+                  value:           progress!,
+                  minHeight:       3,
+                  backgroundColor: Colors.white24,
+                  valueColor:      const AlwaysStoppedAnimation<Color>(AppColors.accentPrimary),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -478,7 +635,7 @@ class _TopBar extends StatelessWidget {
           FocusableWidget(
             focusNode:    backFocusNode,
             borderRadius: AppSpacing.radiusPill,
-            onTap:        () => context.go('/home'),
+            onTap:        () => context.pop(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -508,53 +665,62 @@ class _TopBar extends StatelessWidget {
 
           // Search field
           Expanded(
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color:        AppColors.card,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border:       Border.all(color: AppColors.border, width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Focus(
-                      focusNode: searchFocusNode,
-                      onKeyEvent: (_, event) {
-                        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                            event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                          onDownArrow?.call();
-                          return KeyEventResult.handled;
-                        }
-                        return KeyEventResult.ignored;
-                      },
-                      child: TextField(
-                        controller: searchCtrl,
-                        style: const TextStyle(
-                          color:      AppColors.textPrimary,
-                          fontSize:   12,
-                          fontWeight: FontWeight.w300,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText:       'Search series…',
-                          hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                          border:         InputBorder.none,
-                          enabledBorder:  InputBorder.none,
-                          focusedBorder:  InputBorder.none,
-                          contentPadding: EdgeInsets.only(bottom: 2),
-                          isDense:        true,
-                          filled:         true,
-                          fillColor:      Colors.transparent,
-                        ),
-                      ),
+            child: AnimatedBuilder(
+              animation: searchFocusNode,
+              builder: (context, _) {
+                final focused = searchFocusNode.hasFocus;
+                return Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color:        AppColors.card,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(
+                      color: focused ? Colors.white : AppColors.border,
+                      width: focused ? 1.0 : 0.5,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Focus(
+                          focusNode: searchFocusNode,
+                          onKeyEvent: (_, event) {
+                            if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                                event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                              onDownArrow?.call();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: TextField(
+                            controller: searchCtrl,
+                            style: const TextStyle(
+                              color:      AppColors.textPrimary,
+                              fontSize:   12,
+                              fontWeight: FontWeight.w300,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText:       'Search series…',
+                              hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              border:         InputBorder.none,
+                              enabledBorder:  InputBorder.none,
+                              focusedBorder:  InputBorder.none,
+                              contentPadding: EdgeInsets.only(bottom: 2),
+                              isDense:        true,
+                              filled:         true,
+                              fillColor:      Colors.transparent,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -574,34 +740,48 @@ class _CategoryBar extends StatefulWidget {
     required this.onDownArrow,
     required this.onUpArrow,
     this.firstItemFocusNode,
+    this.onReorderConfirm,
   });
-  final List<SeriesCategory>    categories;
-  final int?                    selectedId;
-  final void Function(int)      onSelect;
-  final void Function(double?)  onDownArrow;
-  final VoidCallback            onUpArrow;
-  final FocusNode?              firstItemFocusNode;
+  final List<SeriesCategory>                     categories;
+  final int?                                     selectedId;
+  final void Function(int)                       onSelect;
+  final void Function(double?)                   onDownArrow;
+  final VoidCallback                             onUpArrow;
+  final FocusNode?                               firstItemFocusNode;
+  final void Function(List<SeriesCategory>)?     onReorderConfirm;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
 }
 
 class _CategoryBarState extends State<_CategoryBar> {
-  List<FocusNode> _nodes = [];
-  List<GlobalKey> _keys  = [];
-  int _focusedCatIdx     = -1;
+  final Map<int, FocusNode> _nodes         = {};
+  List<GlobalKey>           _keys          = [];
+  int                       _focusedCatIdx = -1;
+
+  FocusNode _nodeFor(int i) {
+    return _nodes.putIfAbsent(i, () {
+      final n = FocusNode();
+      n.addListener(() {
+        if (!mounted) return;
+        setState(() => _focusedCatIdx = n.hasFocus ? i : (_focusedCatIdx == i ? -1 : _focusedCatIdx));
+        if (n.hasFocus) _scrollToKey(_keys[i]);
+      });
+      return n;
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _rebuild();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
     widget.firstItemFocusNode?.addListener(_onFirstFocus);
   }
 
   @override
   void didUpdateWidget(_CategoryBar old) {
     super.didUpdateWidget(old);
-    if (widget.categories.length != _nodes.length + 1) _rebuild();
+    if (widget.categories.length != old.categories.length) _rebuild();
     if (widget.firstItemFocusNode != old.firstItemFocusNode) {
       old.firstItemFocusNode?.removeListener(_onFirstFocus);
       widget.firstItemFocusNode?.addListener(_onFirstFocus);
@@ -611,37 +791,25 @@ class _CategoryBarState extends State<_CategoryBar> {
   @override
   void dispose() {
     widget.firstItemFocusNode?.removeListener(_onFirstFocus);
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     super.dispose();
   }
 
   void _onFirstFocus() {
     if (!mounted) return;
     final hasFocus = widget.firstItemFocusNode?.hasFocus == true;
-    setState(() => _focusedCatIdx = hasFocus ? 0 : (_focusedCatIdx == 0 ? -1 : _focusedCatIdx));
-    if (!hasFocus) return;
-    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
+    if (hasFocus) {
+      setState(() => _focusedCatIdx = 0);
+      if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
     } else {
-      _scrollToKey(_keys[0]);
+      setState(() { if (_focusedCatIdx == 0) _focusedCatIdx = -1; });
     }
   }
 
   void _rebuild() {
-    for (final n in _nodes) n.dispose();
-    _keys  = List.generate(widget.categories.length, (_) => GlobalKey());
-    _nodes = [];
-    for (int i = 1; i < widget.categories.length; i++) {
-      final key  = _keys[i];
-      final idx  = i;
-      final n    = FocusNode();
-      n.addListener(() {
-        if (mounted) setState(() => _focusedCatIdx = n.hasFocus ? idx : (_focusedCatIdx == idx ? -1 : _focusedCatIdx));
-        if (n.hasFocus && mounted) _scrollToKey(key);
-      });
-      _nodes.add(n);
-    }
+    for (final n in _nodes.values) n.dispose();
+    _nodes.clear();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
   }
 
   void _scrollToKey(GlobalKey key) {
@@ -659,8 +827,8 @@ class _CategoryBarState extends State<_CategoryBar> {
 
   int get _focusedIndex {
     if (widget.firstItemFocusNode?.hasFocus == true) return 0;
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i + 1;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
@@ -683,47 +851,102 @@ class _CategoryBarState extends State<_CategoryBar> {
       final dist = (cx - targetX).abs();
       if (dist < bestDist) { bestDist = dist; bestIdx = i; }
     }
-    final node = bestIdx == 0 ? widget.firstItemFocusNode : _nodes[bestIdx - 1];
+    final node = bestIdx == 0 ? widget.firstItemFocusNode : _nodeFor(bestIdx);
     node?.requestFocus();
     _scrollToKey(_keys[bestIdx]);
   }
 
+  Future<void> _showReorderPopup(int idx) async {
+    if (idx <= 0) return;
+    final cats     = List<SeriesCategory>.from(widget.categories);
+    final canLeft  = idx > 1;
+    final canRight = idx < cats.length - 1;
+    if (!canLeft && !canRight) return;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canLeft)
+                FocusableWidget(
+                  autofocus: true,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('left'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_back, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Left', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              if (canRight)
+                FocusableWidget(
+                  autofocus: !canLeft,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('right'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Right', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == null) return;
+    if (action == 'left' && canLeft) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx - 1, item);
+    } else if (action == 'right' && canRight) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx + 1, item);
+    }
+    widget.onReorderConfirm?.call(cats);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cats = widget.categories;
     return SizedBox(
       height: 46,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        itemCount:       widget.categories.length,
+        itemCount:       cats.length,
         itemBuilder:     (_, i) {
-          final cat        = widget.categories[i];
+          final cat        = cats[i];
           final isSelected = cat.id == widget.selectedId;
           final isFocused  = _focusedCatIdx == i;
-          final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
+          final node       = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
           return Focus(
             key: _keys[i],
             onKeyEvent: (_, event) {
               if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
               if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                if (i < widget.categories.length - 1) {
-                  _nodes[i].requestFocus();
-                }
+                if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                if (i > 0) {
-                  (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
-                }
+                if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.onDownArrow(_getCenterX(i));
-                return KeyEventResult.handled;
+                widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                widget.onUpArrow();
-                return KeyEventResult.handled;
+                widget.onUpArrow(); return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
             },
@@ -732,6 +955,9 @@ class _CategoryBarState extends State<_CategoryBar> {
               focusNode:       node,
               showFocusBorder: false,
               onTap:           () => widget.onSelect(cat.id),
+              onLongPress:     (i > 0 && widget.onReorderConfirm != null)
+                  ? () => _showReorderPopup(i)
+                  : null,
               child: Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: Column(
@@ -748,8 +974,8 @@ class _CategoryBarState extends State<_CategoryBar> {
                               : isFocused
                                   ? AppColors.textSecondary
                                   : AppColors.textMuted,
-                          fontSize:   12,
-                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                          fontSize:      12,
+                          fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
                           letterSpacing: 0.1,
                         ),
                       ),
@@ -775,3 +1001,4 @@ class _CategoryBarState extends State<_CategoryBar> {
     );
   }
 }
+

@@ -6,5 +6,6 @@ abstract interface class ChannelRepository {
   Future<List<Channel>> searchChannels(String query);
   Future<void> syncChannels();
   Future<void> toggleFavourite(int channelId, bool isFav);
-  Future<List<Channel>> getFavourites();
+  Future<List<Channel>>         getFavourites();
+  Future<void>                  saveCategoryOrder(List<ChannelCategory> ordered);
 }

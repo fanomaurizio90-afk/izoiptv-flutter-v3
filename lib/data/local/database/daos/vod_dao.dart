@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../../domain/entities/vod.dart';
 import '../../../../domain/entities/series.dart';
+import '../../../../domain/entities/continue_watching.dart';
 import '../app_database.dart';
 
 class VodDao {
@@ -13,7 +14,7 @@ class VodDao {
 
   Future<List<VodCategory>> getVodCategories() async {
     final db   = await _db;
-    final rows = await db.query('vod_categories', orderBy: 'name ASC');
+    final rows = await db.query('vod_categories', orderBy: 'sort_order ASC, name ASC');
     return rows.map((r) => VodCategory(id: r['id'] as int, name: r['name'] as String)).toList();
   }
 
@@ -22,7 +23,17 @@ class VodDao {
     final batch = db.batch();
     for (final c in cats) {
       batch.insert('vod_categories', {'id': c.id, 'name': c.name},
-          conflictAlgorithm: ConflictAlgorithm.replace);
+          conflictAlgorithm: ConflictAlgorithm.ignore); // preserve sort_order
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> saveVodCategoryOrder(List<VodCategory> ordered) async {
+    final db    = await _db;
+    final batch = db.batch();
+    for (var i = 0; i < ordered.length; i++) {
+      batch.update('vod_categories', {'sort_order': i},
+          where: 'id = ?', whereArgs: [ordered[i].id]);
     }
     await batch.commit(noResult: true);
   }
@@ -31,7 +42,9 @@ class VodDao {
 
   Future<List<VodItem>> getVodByCategory(int categoryId) async {
     final db   = await _db;
-    final rows = await db.query('vod', where: 'category_id = ?', whereArgs: [categoryId], orderBy: 'id DESC');
+    final rows = await db.query('vod',
+        where: 'category_id = ?', whereArgs: [categoryId],
+        orderBy: 'added DESC, id DESC');
     return rows.map(_rowToVod).toList();
   }
 
@@ -52,6 +65,12 @@ class VodDao {
       "SELECT * FROM vod WHERE name LIKE ? ESCAPE '\\' LIMIT 200",
       ['%$escaped%'],
     );
+    return rows.map(_rowToVod).toList();
+  }
+
+  Future<List<VodItem>> getAllVod({int limit = 500}) async {
+    final db   = await _db;
+    final rows = await db.query('vod', orderBy: 'added DESC, id DESC', limit: limit);
     return rows.map(_rowToVod).toList();
   }
 
@@ -81,6 +100,7 @@ class VodDao {
           'duration_secs':       v.durationSecs,
           'container_extension': v.containerExtension,
           'is_favourite':        v.isFavourite ? 1 : 0,
+          'added':               v.added ?? 0,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -89,7 +109,6 @@ class VodDao {
   }
 
   /// Update only metadata fields — preserves stream_url, category_id, favourites.
-  /// Only writes non-null values so a partial API response doesn't overwrite good data.
   Future<void> updateVodMeta(int id, VodItem meta) async {
     final db  = await _db;
     final map = <String, Object?>{};
@@ -125,7 +144,7 @@ class VodDao {
 
   Future<List<SeriesCategory>> getSeriesCategories() async {
     final db   = await _db;
-    final rows = await db.query('series_categories', orderBy: 'name ASC');
+    final rows = await db.query('series_categories', orderBy: 'sort_order ASC, name ASC');
     return rows.map((r) => SeriesCategory(id: r['id'] as int, name: r['name'] as String)).toList();
   }
 
@@ -134,7 +153,17 @@ class VodDao {
     final batch = db.batch();
     for (final c in cats) {
       batch.insert('series_categories', {'id': c.id, 'name': c.name},
-          conflictAlgorithm: ConflictAlgorithm.replace);
+          conflictAlgorithm: ConflictAlgorithm.ignore); // preserve sort_order
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> saveSeriesCategoryOrder(List<SeriesCategory> ordered) async {
+    final db    = await _db;
+    final batch = db.batch();
+    for (var i = 0; i < ordered.length; i++) {
+      batch.update('series_categories', {'sort_order': i},
+          where: 'id = ?', whereArgs: [ordered[i].id]);
     }
     await batch.commit(noResult: true);
   }
@@ -143,7 +172,9 @@ class VodDao {
 
   Future<List<SeriesItem>> getSeriesByCategory(int categoryId) async {
     final db   = await _db;
-    final rows = await db.query('series', where: 'category_id = ?', whereArgs: [categoryId], orderBy: 'id DESC');
+    final rows = await db.query('series',
+        where: 'category_id = ?', whereArgs: [categoryId],
+        orderBy: 'added DESC, id DESC');
     return rows.map(_rowToSeries).toList();
   }
 
@@ -164,6 +195,12 @@ class VodDao {
       "SELECT * FROM series WHERE name LIKE ? ESCAPE '\\' LIMIT 200",
       ['%$escaped%'],
     );
+    return rows.map(_rowToSeries).toList();
+  }
+
+  Future<List<SeriesItem>> getAllSeries({int limit = 500}) async {
+    final db   = await _db;
+    final rows = await db.query('series', orderBy: 'added DESC, id DESC', limit: limit);
     return rows.map(_rowToSeries).toList();
   }
 
@@ -190,6 +227,7 @@ class VodDao {
           'release_date': s.releaseDate,
           'rating':       s.rating,
           'is_favourite': s.isFavourite ? 1 : 0,
+          'added':        s.added ?? 0,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -241,7 +279,7 @@ class VodDao {
     final db   = await _db;
     final rows = await db.query(
       'episodes',
-      where: 'series_id = ?',
+      where: 'series_id = ? AND id > 0',
       whereArgs: [seriesId],
       orderBy: 'season_number ASC, episode_number ASC',
     );
@@ -251,6 +289,7 @@ class VodDao {
   Future<void> insertEpisodes(int seriesId, List<Episode> episodes) async {
     final db    = await _db;
     final batch = db.batch();
+    batch.delete('episodes', where: 'series_id = ?', whereArgs: [seriesId]);
     for (final ep in episodes) {
       batch.insert(
         'episodes',
@@ -272,15 +311,71 @@ class VodDao {
     await batch.commit(noResult: true);
   }
 
+  // ─── Continue Watching ───────────────────────────────────────────────────────
+
+  Future<List<ContinueWatchingItem>> getInProgressMovies({int limit = 20}) async {
+    final db   = await _db;
+    final rows = await db.rawQuery('''
+      SELECT wh.content_id, wh.content_name, wh.position_secs, wh.duration_secs,
+             wh.thumbnail_url, v.poster_url
+      FROM watch_history wh
+      LEFT JOIN vod v ON v.id = wh.content_id
+      WHERE wh.content_type = 'movie'
+        AND wh.position_secs > 30
+        AND wh.duration_secs > 0
+        AND wh.position_secs < (wh.duration_secs - 30)
+      ORDER BY wh.updated_at DESC
+      LIMIT $limit
+    ''');
+    return rows.map((r) => ContinueWatchingItem(
+      contentId:   r['content_id'] as int,
+      contentType: 'movie',
+      contentName: r['content_name'] as String,
+      positionSecs: r['position_secs'] as int,
+      durationSecs: r['duration_secs'] as int,
+      posterUrl:   _s(r, 'poster_url') ?? _s(r, 'thumbnail_url'),
+    )).toList();
+  }
+
+  Future<List<ContinueWatchingItem>> getInProgressEpisodes({int limit = 20}) async {
+    final db   = await _db;
+    final rows = await db.rawQuery('''
+      SELECT wh.content_id, wh.content_name, wh.position_secs, wh.duration_secs,
+             wh.episode_id, wh.thumbnail_url,
+             s.poster_url  AS series_poster,
+             s.name        AS series_name,
+             e.season_number, e.episode_number
+      FROM watch_history wh
+      LEFT JOIN series   s ON s.id = wh.content_id
+      LEFT JOIN episodes e ON e.id = wh.episode_id
+      WHERE wh.content_type = 'episode'
+        AND wh.position_secs > 30
+        AND wh.duration_secs > 0
+        AND wh.position_secs < (wh.duration_secs - 30)
+      ORDER BY wh.updated_at DESC
+      LIMIT $limit
+    ''');
+    return rows.map((r) => ContinueWatchingItem(
+      contentId:    r['content_id'] as int,
+      contentType:  'episode',
+      contentName:  r['content_name'] as String,
+      positionSecs: r['position_secs'] as int,
+      durationSecs: r['duration_secs'] as int,
+      episodeId:    r['episode_id'] as int?,
+      posterUrl:    _s(r, 'series_poster') ?? _s(r, 'thumbnail_url'),
+      seriesName:   _s(r, 'series_name'),
+      seasonNumber: r['season_number'] as int?,
+      episodeNumber: r['episode_number'] as int?,
+    )).toList();
+  }
+
   // ─── Mappers ─────────────────────────────────────────────────────────────────
 
-  /// Treat empty strings as null — providers often store "" instead of NULL.
   String? _s(Map<String, dynamic> r, String key) {
     final v = r[key] as String?;
     return (v == null || v.isEmpty) ? null : v;
   }
 
-  /// sqflite returns REAL columns as int when the value has no fractional part.
   double? _d(Map<String, dynamic> r, String key) =>
       (r[key] as num?)?.toDouble();
 
@@ -298,6 +393,7 @@ class VodDao {
     durationSecs:       r['duration_secs'] as int?,
     containerExtension: r['container_extension'] as String?,
     isFavourite:        (r['is_favourite'] as int? ?? 0) == 1,
+    added:              r['added'] as int?,
   );
 
   SeriesItem _rowToSeries(Map<String, dynamic> r) => SeriesItem(
@@ -311,6 +407,7 @@ class VodDao {
     releaseDate: _s(r, 'release_date'),
     rating:      _d(r, 'rating'),
     isFavourite: (r['is_favourite'] as int? ?? 0) == 1,
+    added:       r['added'] as int?,
   );
 
   Episode _rowToEpisode(Map<String, dynamic> r) => Episode(

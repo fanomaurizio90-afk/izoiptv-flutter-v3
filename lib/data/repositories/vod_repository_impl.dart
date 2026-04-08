@@ -60,6 +60,12 @@ class VodRepositoryImpl implements VodRepository {
   }
 
   @override
+  Future<List<VodItem>> getAllVod({int limit = 500}) async {
+    final items = await _dao.getAllVod(limit: limit);
+    return items.map(_withFreshUrl).toList();
+  }
+
+  @override
   Future<List<VodItem>> searchVod(String query) async {
     final items = await _dao.searchVod(query);
     return items.map(_withFreshUrl).toList();
@@ -102,4 +108,8 @@ class VodRepositoryImpl implements VodRepository {
 
   @override
   Future<List<VodItem>> getFavourites() => _dao.getVodFavourites();
+
+  @override
+  Future<void> saveVodCategoryOrder(List<VodCategory> ordered) =>
+      _dao.saveVodCategoryOrder(ordered);
 }

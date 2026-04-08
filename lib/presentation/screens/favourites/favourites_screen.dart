@@ -58,7 +58,7 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
                 focusNode:    _backNode,
                 autofocus:    true,
                 borderRadius: AppSpacing.radiusPill,
-                onTap:        () => context.go('/home'),
+                onTap:        () => context.pop(),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
@@ -278,41 +278,37 @@ class _ChannelList extends ConsumerStatefulWidget {
 }
 
 class _ChannelListState extends ConsumerState<_ChannelList> {
-  List<FocusNode>        _nodes      = [];
-  final ScrollController _scrollCtrl = ScrollController();
+  final Map<int, FocusNode> _nodes      = {};
+  final ScrollController    _scrollCtrl = ScrollController();
 
-  @override
-  void initState() {
-    super.initState();
-    _nodes = List.generate(widget.channels.length, (_) => FocusNode());
-  }
+  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
 
   @override
   void didUpdateWidget(_ChannelList old) {
     super.didUpdateWidget(old);
-    if (widget.channels.length != _nodes.length) {
-      for (final n in _nodes) n.dispose();
-      _nodes = List.generate(widget.channels.length, (_) => FocusNode());
+    if (widget.channels != old.channels) {
+      for (final n in _nodes.values) n.dispose();
+      _nodes.clear();
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
   int get _focusedIndex {
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
 
   void _moveTo(int idx) {
-    if (idx < 0 || idx >= _nodes.length) return;
-    _nodes[idx].requestFocus();
+    if (idx < 0 || idx >= widget.channels.length) return;
+    _nodeFor(idx).requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
@@ -339,7 +335,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < widget.channels.length) {
       _moveTo(idx + 1);
       return KeyEventResult.handled;
     }
@@ -368,7 +364,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
         itemBuilder: (_, i) {
           final ch = widget.channels[i];
           return FocusableWidget(
-            focusNode: _nodes[i],
+            focusNode: _nodeFor(i),
             autofocus: i == 0,
             onTap: () {
               ref.read(selectedChannelProvider.notifier).state     = ch;
@@ -437,41 +433,37 @@ class _SimpleList extends StatefulWidget {
 }
 
 class _SimpleListState extends State<_SimpleList> {
-  List<FocusNode>        _nodes      = [];
-  final ScrollController _scrollCtrl = ScrollController();
+  final Map<int, FocusNode> _nodes      = {};
+  final ScrollController    _scrollCtrl = ScrollController();
 
-  @override
-  void initState() {
-    super.initState();
-    _nodes = List.generate(widget.items.length, (_) => FocusNode());
-  }
+  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
 
   @override
   void didUpdateWidget(_SimpleList old) {
     super.didUpdateWidget(old);
-    if (widget.items.length != _nodes.length) {
-      for (final n in _nodes) n.dispose();
-      _nodes = List.generate(widget.items.length, (_) => FocusNode());
+    if (widget.items != old.items) {
+      for (final n in _nodes.values) n.dispose();
+      _nodes.clear();
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
   int get _focusedIndex {
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
 
   void _moveTo(int idx) {
-    if (idx < 0 || idx >= _nodes.length) return;
-    _nodes[idx].requestFocus();
+    if (idx < 0 || idx >= widget.items.length) return;
+    _nodeFor(idx).requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
@@ -498,7 +490,7 @@ class _SimpleListState extends State<_SimpleList> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     final idx = _focusedIndex;
     if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < _nodes.length) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < widget.items.length) {
       _moveTo(idx + 1);
       return KeyEventResult.handled;
     }
@@ -526,7 +518,7 @@ class _SimpleListState extends State<_SimpleList> {
         itemExtent: 56,
         itemBuilder: (_, i) {
           return FocusableWidget(
-            focusNode: _nodes[i],
+            focusNode: _nodeFor(i),
             autofocus: i == 0,
             onTap:     () => widget.onTap(i),
             child: Container(

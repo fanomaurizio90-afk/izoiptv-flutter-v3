@@ -128,6 +128,9 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         _loading  = false;
       });
       _searchCtrl.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _channelListKey.currentState?.focusFirst();
+      });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -172,6 +175,13 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     }
   }
 
+  Future<void> _onChannelCategoryReorder(List<ChannelCategory> ordered) async {
+    setState(() => _categories = ordered);
+    final repo = ref.read(channelRepositoryProvider);
+    final realOrdered = ordered.where((c) => c.id > 0).toList();
+    await repo.saveCategoryOrder(realOrdered);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -195,8 +205,9 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
                 selectedId:         _selectedCatId,
                 onSelect:           _selectCategory,
                 firstItemFocusNode: _firstCatFocusNode,
-                onUpArrow:          () => _backFocusNode.requestFocus(),
+                onUpArrow:          () => _searchFocusNode.requestFocus(),
                 onDownArrow:        () => _channelListKey.currentState?.focusFirst(),
+                onReorderConfirm:   _onChannelCategoryReorder,
               ),
               // ── Channel list ──────────────────────────────────────────
               Expanded(child: _buildChannelArea()),
@@ -291,7 +302,7 @@ class _TopBar extends StatelessWidget {
               focusNode:    backFocusNode,
               autofocus:    true,
               borderRadius: AppSpacing.radiusPill,
-              onTap:        () => context.go('/home'),
+              onTap:        () => context.pop(),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
@@ -333,53 +344,63 @@ class _TopBar extends StatelessWidget {
 
           // Search pill
           Expanded(
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color:        AppColors.card,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border:       Border.all(color: AppColors.border, width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Focus(
-                      focusNode: searchFocusNode,
-                      onKeyEvent: (_, event) {
-                        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                          onSearchLeftArrow();
-                          return KeyEventResult.handled;
-                        }
-                        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                          onDownArrow();
-                          return KeyEventResult.handled;
-                        }
-                        return KeyEventResult.ignored;
-                      },
-                      child: TextField(
-                        controller: searchCtrl,
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
-                        decoration: InputDecoration(
-                          hintText:       'Search channels…',
-                          hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                          border:         InputBorder.none,
-                          enabledBorder:  InputBorder.none,
-                          focusedBorder:  InputBorder.none,
-                          contentPadding: const EdgeInsets.only(bottom: 2),
-                          isDense:        true,
-                          filled:         true,
-                          fillColor:      Colors.transparent,
-                        ),
-                      ),
+            child: AnimatedBuilder(
+              animation: searchFocusNode,
+              builder: (context, _) {
+                final focused = searchFocusNode.hasFocus;
+                return Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color:        AppColors.card,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(
+                      color: focused ? Colors.white : AppColors.border,
+                      width: focused ? 1.0 : 0.5,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Focus(
+                          focusNode: searchFocusNode,
+                          onKeyEvent: (_, event) {
+                            if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                              onSearchLeftArrow();
+                              return KeyEventResult.handled;
+                            }
+                            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                              onDownArrow();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: TextField(
+                            controller:      searchCtrl,
+                            textInputAction: TextInputAction.search,
+                            style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText:       'Search channels…',
+                              hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              border:         InputBorder.none,
+                              enabledBorder:  InputBorder.none,
+                              focusedBorder:  InputBorder.none,
+                              contentPadding: const EdgeInsets.only(bottom: 2),
+                              isDense:        true,
+                              filled:         true,
+                              fillColor:      Colors.transparent,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -444,34 +465,54 @@ class _CategoryBar extends StatefulWidget {
     required this.onUpArrow,
     required this.onDownArrow,
     this.firstItemFocusNode,
+    this.onReorderConfirm,
   });
-  final List<ChannelCategory> categories;
-  final int?                  selectedId;
-  final void Function(int)    onSelect;
-  final VoidCallback          onUpArrow;
-  final VoidCallback          onDownArrow;
-  final FocusNode?            firstItemFocusNode;
+  final List<ChannelCategory>                    categories;
+  final int?                                     selectedId;
+  final void Function(int)                       onSelect;
+  final VoidCallback                             onUpArrow;
+  final VoidCallback                             onDownArrow;
+  final FocusNode?                               firstItemFocusNode;
+  final void Function(List<ChannelCategory>)?    onReorderConfirm;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
 }
 
 class _CategoryBarState extends State<_CategoryBar> {
-  final ScrollController _scrollCtrl = ScrollController();
-  List<FocusNode> _nodes        = [];
-  int             _focusedCatIdx = -1;
+  final Map<int, FocusNode> _nodes          = {};
+  List<GlobalKey>           _keys           = [];
+  int                       _focusedCatIdx  = -1;
+  int                       _lastFocusedIdx = 0;
+
+  FocusNode _nodeFor(int i) {
+    return _nodes.putIfAbsent(i, () {
+      final n = FocusNode();
+      n.addListener(() {
+        if (!mounted) return;
+        if (n.hasFocus) {
+          _lastFocusedIdx = i;
+          setState(() => _focusedCatIdx = i);
+          _scrollToKey(_keys[i]);
+        } else {
+          setState(() { if (_focusedCatIdx == i) _focusedCatIdx = -1; });
+        }
+      });
+      return n;
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _rebuild();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
     widget.firstItemFocusNode?.addListener(_onFirstFocus);
   }
 
   @override
   void didUpdateWidget(_CategoryBar old) {
     super.didUpdateWidget(old);
-    if (widget.categories.length - 1 != _nodes.length) _rebuild();
+    if (widget.categories.length != old.categories.length) _rebuild();
     if (widget.firstItemFocusNode != old.firstItemFocusNode) {
       old.firstItemFocusNode?.removeListener(_onFirstFocus);
       widget.firstItemFocusNode?.addListener(_onFirstFocus);
@@ -481,95 +522,155 @@ class _CategoryBarState extends State<_CategoryBar> {
   @override
   void dispose() {
     widget.firstItemFocusNode?.removeListener(_onFirstFocus);
-    for (final n in _nodes) n.dispose();
-    _scrollCtrl.dispose();
+    for (final n in _nodes.values) n.dispose();
     super.dispose();
   }
 
   void _onFirstFocus() {
     if (!mounted) return;
     final hasFocus = widget.firstItemFocusNode?.hasFocus == true;
-    setState(() => _focusedCatIdx = hasFocus ? 0 : (_focusedCatIdx == 0 ? -1 : _focusedCatIdx));
-    if (!hasFocus) return;
-    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
+    if (hasFocus) {
+      _lastFocusedIdx = 0;
+      setState(() => _focusedCatIdx = 0);
+      if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
+    } else {
+      setState(() { if (_focusedCatIdx == 0) _focusedCatIdx = -1; });
     }
   }
 
   void _rebuild() {
-    for (final n in _nodes) n.dispose();
-    _nodes = [];
-    for (int i = 1; i < widget.categories.length; i++) {
-      final idx = i;
-      final n   = FocusNode();
-      n.addListener(() {
-        if (!mounted) return;
-        setState(() => _focusedCatIdx = n.hasFocus ? idx : (_focusedCatIdx == idx ? -1 : _focusedCatIdx));
-        if (n.hasFocus) _scrollToChip(idx);
-      });
-      _nodes.add(n);
-    }
+    for (final n in _nodes.values) n.dispose();
+    _nodes.clear();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
   }
 
-  void _scrollToChip(int idx) {
-    if (!_scrollCtrl.hasClients) return;
-    const chipW = 110.0;
-    final target = (idx * chipW).clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 150),
-      curve:    Curves.easeOut,
+  void _scrollToKey(GlobalKey key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = key.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration:  const Duration(milliseconds: 150),
+          curve:     Curves.easeOut,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
+  int get _focusedIndex {
+    if (widget.firstItemFocusNode?.hasFocus == true) return 0;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
+    }
+    return -1;
+  }
+
+  Future<void> _showReorderPopup(int idx) async {
+    if (idx <= 0) return;
+    final cats     = List<ChannelCategory>.from(widget.categories);
+    final canLeft  = idx > 1;
+    final canRight = idx < cats.length - 1;
+    if (!canLeft && !canRight) return;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canLeft)
+                FocusableWidget(
+                  autofocus: true,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('left'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_back, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Left', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              if (canRight)
+                FocusableWidget(
+                  autofocus: !canLeft,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('right'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Right', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
+    if (action == null) return;
+    if (action == 'left' && canLeft) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx - 1, item);
+    } else if (action == 'right' && canRight) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx + 1, item);
+    }
+    widget.onReorderConfirm?.call(cats);
   }
 
   void focusSelected() {
     if (widget.categories.isEmpty) return;
-    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx <= 0) {
+    // Restore to where user last was, not the currently playing category
+    if (_lastFocusedIdx <= 0) {
       widget.firstItemFocusNode?.requestFocus();
-    } else if (selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
-      _scrollToChip(selIdx);
+      if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
+    } else {
+      _nodeFor(_lastFocusedIdx).requestFocus();
+      if (_lastFocusedIdx < _keys.length) _scrollToKey(_keys[_lastFocusedIdx]);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.categories.isEmpty) return const SizedBox(height: 44);
+    final cats = widget.categories;
     return SizedBox(
       height: 46,
       child: ScrollConfiguration(
         behavior: const ScrollBehavior().copyWith(scrollbars: false),
         child: ListView.builder(
-          controller:      _scrollCtrl,
           scrollDirection: Axis.horizontal,
           padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-          itemCount:       widget.categories.length,
+          itemCount:       cats.length,
           itemBuilder: (_, i) {
-            final cat        = widget.categories[i];
+            final cat        = cats[i];
             final isSelected = cat.id == widget.selectedId;
             final isFocused  = _focusedCatIdx == i;
-            final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
+            final node       = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
             return Focus(
+              key: _keys[i],
               onKeyEvent: (_, event) {
                 if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                 if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                  widget.onUpArrow();
-                  return KeyEventResult.handled;
+                  widget.onUpArrow(); return KeyEventResult.handled;
                 }
                 if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  widget.onDownArrow();
-                  return KeyEventResult.handled;
+                  widget.onDownArrow(); return KeyEventResult.handled;
                 }
                 if (event.logicalKey == LogicalKeyboardKey.arrowLeft && i > 0) {
-                  (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
+                  (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
                   return KeyEventResult.handled;
                 }
-                if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
-                    i < widget.categories.length - 1) {
-                  _nodes[i].requestFocus();
-                  return KeyEventResult.handled;
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight && i < cats.length - 1) {
+                  _nodeFor(i + 1).requestFocus(); return KeyEventResult.handled;
                 }
                 return KeyEventResult.ignored;
               },
@@ -579,6 +680,9 @@ class _CategoryBarState extends State<_CategoryBar> {
                 borderRadius:    AppSpacing.radiusPill,
                 showFocusBorder: false,
                 onTap:           () => widget.onSelect(cat.id),
+                onLongPress:     (i > 0 && widget.onReorderConfirm != null)
+                    ? () => _showReorderPopup(i)
+                    : null,
                 child: Padding(
                   padding: const EdgeInsets.only(right: 10),
                   child: Column(
@@ -645,24 +749,26 @@ class _ChannelList extends StatefulWidget {
 }
 
 class _ChannelListState extends State<_ChannelList> {
-  List<FocusNode>        _nodes      = [];
-  final ScrollController _scrollCtrl = ScrollController();
+  final Map<int, FocusNode> _nodes      = {};
+  final ScrollController    _scrollCtrl = ScrollController();
   int _restoreIndex = 0;
 
   static const double _rowH = 76.0;
+
+  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
 
   @override
   void initState() {
     super.initState();
     _restoreIndex = FocusMemoryService.instance.restore('live_tv') ?? 0;
     if (_restoreIndex >= widget.channels.length) _restoreIndex = 0;
-    _nodes = List.generate(widget.channels.length, (_) => FocusNode());
     if (_restoreIndex > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _restoreIndex < _nodes.length) {
-          _nodes[_restoreIndex].requestFocus();
-          _ensureVisible(_restoreIndex);
-        }
+        if (!mounted) return;
+        _ensureVisible(_restoreIndex);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _nodeFor(_restoreIndex).requestFocus();
+        });
       });
     }
   }
@@ -670,29 +776,29 @@ class _ChannelListState extends State<_ChannelList> {
   @override
   void didUpdateWidget(_ChannelList old) {
     super.didUpdateWidget(old);
-    if (widget.channels.length != _nodes.length) {
-      for (final n in _nodes) n.dispose();
-      _nodes = List.generate(widget.channels.length, (_) => FocusNode());
+    if (widget.channels != old.channels) {
+      for (final n in _nodes.values) n.dispose();
+      _nodes.clear();
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
   int get _focusedIndex {
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
 
   void _moveTo(int idx) {
-    if (idx < 0 || idx >= _nodes.length) return;
-    _nodes[idx].requestFocus();
+    if (idx < 0 || idx >= widget.channels.length) return;
+    _nodeFor(idx).requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
@@ -760,7 +866,7 @@ class _ChannelListState extends State<_ChannelList> {
             final ch = widget.channels[i];
             return _ChannelRow(
               channel:           ch,
-              focusNode:         _nodes[i],
+              focusNode:         _nodeFor(i),
               autofocus:         i == 0 && _restoreIndex == 0,
               onTap:             () => widget.onChannelTap(ch, i),
               onToggleFavourite: () => widget.onToggleFavourite(ch),

@@ -16,6 +16,7 @@ class SeriesItem {
     this.releaseDate,
     this.rating,
     this.isFavourite = false,
+    this.added,
   });
   final int     id;
   final String  name;
@@ -27,6 +28,7 @@ class SeriesItem {
   final String? releaseDate;
   final double? rating;
   final bool    isFavourite;
+  final int?    added; // Unix timestamp from API
 
   SeriesItem copyWith({bool? isFavourite}) => SeriesItem(
     id:          id,
@@ -39,6 +41,7 @@ class SeriesItem {
     releaseDate: releaseDate,
     rating:      rating,
     isFavourite: isFavourite ?? this.isFavourite,
+    added:       added,
   );
 }
 

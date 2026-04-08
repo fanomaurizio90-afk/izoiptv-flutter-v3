@@ -123,6 +123,7 @@ class XtreamApi {
         rating:             double.tryParse(info['rating']?.toString() ?? ''),
         durationSecs:       _parseDurationSecs(info['duration'] as String?),
         containerExtension: ext,
+        added:              int.tryParse(m['added']?.toString() ?? ''),
       );
     }).toList();
   }
@@ -193,6 +194,7 @@ class XtreamApi {
         genre:       _nullIfEmpty(info['genre']?.toString()),
         releaseDate: _nullIfEmpty(info['releaseDate']?.toString()),
         rating:      double.tryParse(info['rating']?.toString() ?? ''),
+        added:       int.tryParse(m['last_modified']?.toString() ?? ''),
       );
     }).toList();
   }
@@ -240,22 +242,24 @@ class XtreamApi {
     final result = <Episode>[];
     for (final seasonKey in episodes.keys) {
       final seasonNum = int.tryParse(seasonKey) ?? 0;
-      final epList    = episodes[seasonKey] as List;
-      for (final ep in epList) {
-        final e      = ep as Map<String, dynamic>;
-        final id     = int.tryParse(e['id']?.toString() ?? '') ?? 0;
-        final ext    = _nullIfEmpty(e['container_extension'] as String?) ?? 'mp4';
-        final epInfo = _infoMap(e['info']);
+      final rawList   = episodes[seasonKey];
+      if (rawList is! List) continue;
+      for (final ep in rawList) {
+        if (ep is! Map<String, dynamic>) continue;
+        final id  = int.tryParse(ep['id']?.toString() ?? '') ?? 0;
+        if (id <= 0) continue; // skip episodes with invalid/missing IDs
+        final ext    = _nullIfEmpty(ep['container_extension']?.toString()) ?? 'mkv';
+        final epInfo = _infoMap(ep['info']);
         result.add(Episode(
           id:                 id,
           seriesId:           seriesId,
           seasonNumber:       seasonNum,
-          episodeNumber:      int.tryParse(e['episode_num']?.toString() ?? '0') ?? 0,
-          title:              e['title'] as String? ?? 'Episode $id',
+          episodeNumber:      int.tryParse(ep['episode_num']?.toString() ?? '0') ?? 0,
+          title:              ep['title']?.toString() ?? 'Episode $id',
           streamUrl:          '$_serverUrl/series/$_username/$_password/$id.$ext',
-          thumbnailUrl:       _nullIfEmpty(epInfo['movie_image'] as String?),
-          plot:               _nullIfEmpty(epInfo['plot'] as String?),
-          durationSecs:       _parseDurationSecs(epInfo['duration'] as String?),
+          thumbnailUrl:       _nullIfEmpty(epInfo['movie_image']?.toString()),
+          plot:               _nullIfEmpty(epInfo['plot']?.toString()),
+          durationSecs:       _parseDurationSecs(epInfo['duration']?.toString()),
           containerExtension: ext,
         ));
       }

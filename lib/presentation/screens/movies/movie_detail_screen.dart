@@ -47,10 +47,7 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
   Widget build(BuildContext context) {
     final vodAsync = ref.watch(_vodDetailProvider(widget.vodId));
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/movies');
-      },
+      canPop: true,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: vodAsync.when(
@@ -190,7 +187,7 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
           child: FocusableWidget(
             focusNode:    _backNode,
             borderRadius: AppSpacing.radiusPill,
-            onTap: () => context.go('/movies'),
+            onTap: () => context.pop(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(

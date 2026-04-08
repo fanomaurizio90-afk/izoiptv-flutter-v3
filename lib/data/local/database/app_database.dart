@@ -28,6 +28,21 @@ class AppDatabase {
     // Keep migrations additive — never drop columns in the ALTER TABLE path,
     // only in a full table-recreate migration like v1→v2 below.
 
+    // v4 → v5: sort_order on category tables; added timestamp on content tables
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE channel_categories ADD COLUMN sort_order INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE vod_categories     ADD COLUMN sort_order INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE series_categories  ADD COLUMN sort_order INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE vod    ADD COLUMN added INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE series ADD COLUMN added INTEGER DEFAULT 0');
+    }
+
+    // v3 → v4: purge episodes whose id was stored as 0 due to bad API parsing.
+    // These rows can never play (URL = /series/user/pass/0.ext → 404).
+    if (oldVersion < 4) {
+      await db.execute('DELETE FROM episodes WHERE id <= 0');
+    }
+
     // v2 → v3: rename watch_history content_type 'vod' → 'movie' or 'episode'
     if (oldVersion < 3) {
       await db.execute('''
@@ -74,8 +89,9 @@ class AppDatabase {
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE channel_categories (
-        id   INTEGER PRIMARY KEY,
-        name TEXT NOT NULL
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL,
+        sort_order INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -94,8 +110,9 @@ class AppDatabase {
 
     await db.execute('''
       CREATE TABLE vod_categories (
-        id   INTEGER PRIMARY KEY,
-        name TEXT NOT NULL
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL,
+        sort_order INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -112,7 +129,8 @@ class AppDatabase {
         rating              REAL,
         duration_secs       INTEGER,
         container_extension TEXT,
-        is_favourite        INTEGER DEFAULT 0
+        is_favourite        INTEGER DEFAULT 0,
+      added               INTEGER DEFAULT 0
       )
     ''');
     await db.execute('CREATE INDEX idx_vod_category ON vod(category_id)');
@@ -120,8 +138,9 @@ class AppDatabase {
 
     await db.execute('''
       CREATE TABLE series_categories (
-        id   INTEGER PRIMARY KEY,
-        name TEXT NOT NULL
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL,
+        sort_order INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
@@ -135,7 +154,8 @@ class AppDatabase {
         genre        TEXT,
         release_date TEXT,
         rating       REAL,
-        is_favourite INTEGER DEFAULT 0
+        is_favourite INTEGER DEFAULT 0,
+      added        INTEGER DEFAULT 0
       )
     ''');
     await db.execute('CREATE INDEX idx_series_category ON series(category_id)');

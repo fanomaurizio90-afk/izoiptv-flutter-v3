@@ -1,3 +1,4 @@
+import '../../domain/entities/continue_watching.dart';
 import '../../domain/repositories/history_repository.dart';
 import '../local/database/daos/history_dao.dart';
 
@@ -37,4 +38,12 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
   @override
   Future<void> clearHistory() => _dao.clear();
+
+  @override
+  Future<List<ContinueWatchingItem>> getInProgressMovies({int limit = 20}) =>
+      _dao.getInProgressMovies(limit: limit);
+
+  @override
+  Future<List<ContinueWatchingItem>> getInProgressEpisodes({int limit = 20}) =>
+      _dao.getInProgressEpisodes(limit: limit);
 }

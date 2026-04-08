@@ -63,7 +63,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 focusNode:    _backNode,
                 autofocus:    true,
                 borderRadius: AppSpacing.radiusPill,
-                onTap:        () => context.go('/home'),
+                onTap:        () => context.pop(),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(

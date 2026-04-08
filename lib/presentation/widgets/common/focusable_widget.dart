@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
@@ -44,8 +45,10 @@ class _FocusableWidgetState extends State<FocusableWidget> {
   late FocusNode _ownNode;
   FocusNode get _node => widget.focusNode ?? _ownNode;
 
-  bool _focused = false;
-  bool _pressed = false;
+  bool   _focused          = false;
+  bool   _pressed          = false;
+  Timer? _longPressTimer;
+  bool   _longPressFired   = false;
 
   // ── Activate key detection ────────────────────────────────────────────────
 
@@ -96,6 +99,7 @@ class _FocusableWidgetState extends State<FocusableWidget> {
 
   @override
   void dispose() {
+    _longPressTimer?.cancel();
     if (widget.focusNode == null) _ownNode.dispose();
     super.dispose();
   }
@@ -116,12 +120,30 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         if (!widget.enabled) return KeyEventResult.ignored;
 
         if (event is KeyDownEvent && _isActivateKey(event)) {
-          setState(() => _pressed = true);
-          widget.onTap();
+          if (mounted) setState(() => _pressed = true);
+          if (widget.onLongPress != null) {
+            // Delay tap until key-up; fire longPress if held 500 ms
+            _longPressFired = false;
+            _longPressTimer?.cancel();
+            _longPressTimer = Timer(const Duration(milliseconds: 500), () {
+              _longPressTimer = null;
+              _longPressFired = true;
+              widget.onLongPress!();
+              if (mounted) setState(() => _pressed = false);
+            });
+          } else {
+            widget.onTap();
+          }
           return KeyEventResult.handled;
         }
         if (event is KeyUpEvent && _isActivateKey(event)) {
+          _longPressTimer?.cancel();
+          _longPressTimer = null;
           if (mounted) setState(() => _pressed = false);
+          if (widget.onLongPress != null && !_longPressFired) {
+            widget.onTap();
+          }
+          _longPressFired = false;
           return KeyEventResult.handled;
         }
 
@@ -155,7 +177,7 @@ class _FocusableWidgetState extends State<FocusableWidget> {
               boxShadow: _focused && widget.showFocusBorder
                   ? [BoxShadow(
                       color:      AppColors.focusGlow,
-                      blurRadius: 18,
+                      blurRadius: 8,
                       spreadRadius: 0,
                     )]
                   : null,

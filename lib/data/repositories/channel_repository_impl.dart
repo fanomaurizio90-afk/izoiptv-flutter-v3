@@ -32,4 +32,8 @@ class ChannelRepositoryImpl implements ChannelRepository {
 
   @override
   Future<List<Channel>> getFavourites() => _dao.getFavourites();
+
+  @override
+  Future<void> saveCategoryOrder(List<ChannelCategory> ordered) =>
+      _dao.saveCategoryOrder(ordered);
 }

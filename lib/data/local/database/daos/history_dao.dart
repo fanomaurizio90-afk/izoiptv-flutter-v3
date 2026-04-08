@@ -1,5 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../app_database.dart';
+import 'vod_dao.dart';
+import '../../../../domain/entities/continue_watching.dart';
 
 class HistoryDao {
   HistoryDao._();
@@ -64,4 +66,10 @@ class HistoryDao {
     final db = await _db;
     await db.delete('watch_history');
   }
+
+  Future<List<ContinueWatchingItem>> getInProgressMovies({int limit = 20}) =>
+      VodDao.instance.getInProgressMovies(limit: limit);
+
+  Future<List<ContinueWatchingItem>> getInProgressEpisodes({int limit = 20}) =>
+      VodDao.instance.getInProgressEpisodes(limit: limit);
 }

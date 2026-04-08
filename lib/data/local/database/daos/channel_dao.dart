@@ -11,7 +11,7 @@ class ChannelDao {
   // Categories
   Future<List<ChannelCategory>> getCategories() async {
     final db   = await _db;
-    final rows = await db.query('channel_categories', orderBy: 'name ASC');
+    final rows = await db.query('channel_categories', orderBy: 'sort_order ASC, name ASC');
     return rows.map(_rowToCategory).toList();
   }
 
@@ -22,7 +22,21 @@ class ChannelDao {
       batch.insert(
         'channel_categories',
         {'id': c.id, 'name': c.name},
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: ConflictAlgorithm.ignore, // preserve existing sort_order
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> saveCategoryOrder(List<ChannelCategory> ordered) async {
+    final db    = await _db;
+    final batch = db.batch();
+    for (var i = 0; i < ordered.length; i++) {
+      batch.update(
+        'channel_categories',
+        {'sort_order': i},
+        where: 'id = ?',
+        whereArgs: [ordered[i].id],
       );
     }
     await batch.commit(noResult: true);

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/debounce.dart';
 import '../../../domain/entities/vod.dart';
+import '../../../domain/entities/continue_watching.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 import '../../widgets/common/skeleton_widget.dart';
@@ -21,6 +22,9 @@ class MoviesScreen extends ConsumerStatefulWidget {
 }
 
 class _MoviesScreenState extends ConsumerState<MoviesScreen> {
+  static const _allCatId = 0;
+  static const _cwCatId  = -1;
+
   final _searchCtrl             = TextEditingController();
   final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
   final _firstCategoryFocusNode = FocusNode();
@@ -29,14 +33,15 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   final _contentListKey  = GlobalKey<_ContentListState>();
   final _categoryBarKey  = GlobalKey<_CategoryBarState>();
 
-  List<VodCategory> _categories    = [];
-  int?              _selectedCatId;
-  List<VodItem>     _items         = [];
-  List<VodItem>     _searchResults = [];
-  bool              _loading       = true;
-  bool              _syncing       = false;
-  String?           _error;
-  bool              _searching     = false;
+  List<VodCategory>    _categories     = [];
+  int?                 _selectedCatId;
+  List<VodItem>        _items          = [];
+  List<VodItem>        _searchResults  = [];
+  Map<int, double>     _progressMap    = {};
+  bool                 _loading        = true;
+  bool                 _syncing        = false;
+  String?              _error;
+  bool                 _searching      = false;
 
   @override
   void initState() {
@@ -92,14 +97,36 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       });
       if (!mounted) return;
       if (cats.isEmpty) { setState(() { _loading = false; }); return; }
+      cats.insert(0, const VodCategory(id: _allCatId, name: 'All'));
+
+      final histRepo = ref.read(historyRepositoryProvider);
+      final cwItems  = await histRepo.getInProgressMovies(limit: 20);
+      if (cwItems.isNotEmpty) {
+        cats.insert(1, const VodCategory(id: _cwCatId, name: 'Continue Watching'));
+      }
+
       final catId = (_selectedCatId != null && cats.any((c) => c.id == _selectedCatId))
-          ? _selectedCatId! : cats.first.id;
-      final items = await repo.getVodByCategory(catId);
+          ? _selectedCatId! : _allCatId;
+
+      List<VodItem> items;
+      Map<int, double> progress = {};
+      if (catId == _cwCatId) {
+        items = [];
+        for (final c in cwItems) {
+          final vod = await repo.getVodById(c.contentId);
+          if (vod != null) { items.add(vod); progress[vod.id] = c.progress; }
+        }
+      } else if (catId == _allCatId) {
+        items = await repo.getAllVod();
+      } else {
+        items = await repo.getVodByCategory(catId);
+      }
       if (!mounted) return;
       setState(() {
         _categories    = cats;
         _selectedCatId = catId;
         _items         = items;
+        _progressMap   = progress;
         _loading       = false;
       });
     } catch (e) {
@@ -112,11 +139,90 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     setState(() { _selectedCatId = catId; _loading = true; });
     _searchCtrl.clear();
     try {
-      final items = await ref.read(vodRepositoryProvider).getVodByCategory(catId);
-      if (!mounted) return;
-      setState(() { _items = items; _loading = false; });
+      if (catId == _cwCatId) {
+        final cwItems = await ref.read(historyRepositoryProvider).getInProgressMovies(limit: 20);
+        final repo = ref.read(vodRepositoryProvider);
+        final items = <VodItem>[];
+        final progress = <int, double>{};
+        for (final c in cwItems) {
+          final vod = await repo.getVodById(c.contentId);
+          if (vod != null) { items.add(vod); progress[vod.id] = c.progress; }
+        }
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = progress; _loading = false; });
+      } else {
+        final repo  = ref.read(vodRepositoryProvider);
+        final items = catId == _allCatId
+            ? await repo.getAllVod()
+            : await repo.getVodByCategory(catId);
+        if (!mounted) return;
+        setState(() { _items = items; _progressMap = {}; _loading = false; });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _onVodCategoryReorder(List<VodCategory> ordered) async {
+    final realOrdered = ordered.where((c) => c.id > 0).toList();
+    setState(() => _categories = ordered);
+    await ref.read(vodRepositoryProvider).saveVodCategoryOrder(realOrdered);
+  }
+
+  Future<void> _showItemPopup(VodItem vod) async {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FocusableWidget(
+                autofocus: true,
+                borderRadius: 8,
+                onTap: () => Navigator.of(ctx).pop('favourite'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(vod.isFavourite ? Icons.favorite : Icons.favorite_border,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        vod.isFavourite ? 'Remove from Favourites' : 'Add to Favourites',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == 'favourite') _toggleFavouriteVod(vod);
+  }
+
+  Future<void> _toggleFavouriteVod(VodItem vod) async {
+    final repo   = ref.read(vodRepositoryProvider);
+    final newVal = !vod.isFavourite;
+    await repo.toggleFavourite(vod.id, newVal);
+    VodItem update(VodItem v) => v.id == vod.id ? v.copyWith(isFavourite: newVal) : v;
+    if (mounted) {
+      setState(() {
+        _items         = _items.map(update).toList();
+        _searchResults = _searchResults.map(update).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF1A1A1A),
+      ));
     }
   }
 
@@ -141,6 +247,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
                 firstItemFocusNode: _firstCategoryFocusNode,
                 onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
                 onUpArrow:          () => _backFocusNode.requestFocus(),
+                onReorderConfirm:   _onVodCategoryReorder,
               ),
               Expanded(child: _buildContent()),
             ],
@@ -186,6 +293,8 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       columns:          cols,
       categories:       _categories,
       focusMemoryKey:   'movies',
+      onLongPress:      _showItemPopup,
+      progressMap:      _progressMap,
       onUpFromFirstRow: (x) => _categoryBarKey.currentState?.focusClosestTo(x),
       onTap:            (vod) async {
         final cat = _categories.firstWhere(
@@ -201,7 +310,10 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
           'vod':      vod,
           'backPath': '/movies',
         });
-        if (mounted) _contentListKey.currentState?.restoreFocus();
+        if (mounted) {
+          _contentListKey.currentState?.restoreFocus();
+          if (_selectedCatId == _cwCatId) _selectCategory(_cwCatId);
+        }
       },
     );
   }
@@ -215,14 +327,18 @@ class _ContentList extends StatefulWidget {
     required this.categories,
     required this.onTap,
     required this.onUpFromFirstRow,
+    this.onLongPress,
     this.focusMemoryKey,
+    this.progressMap,
   });
-  final List<VodItem>          items;
-  final int                    columns;
-  final List<VodCategory>      categories;
-  final void Function(VodItem) onTap;
-  final void Function(double)  onUpFromFirstRow;
-  final String?                focusMemoryKey;
+  final List<VodItem>           items;
+  final int                     columns;
+  final List<VodCategory>       categories;
+  final void Function(VodItem)  onTap;
+  final void Function(double)   onUpFromFirstRow;
+  final void Function(VodItem)? onLongPress;
+  final String?                 focusMemoryKey;
+  final Map<int, double>?       progressMap;
 
   @override
   State<_ContentList> createState() => _ContentListState();
@@ -405,7 +521,13 @@ class _ContentListState extends State<_ContentList> {
                 }
                 widget.onTap(widget.items[i]);
               },
-              child:        _PosterCard(vod: widget.items[i]),
+              onLongPress:  widget.onLongPress != null
+                  ? () => widget.onLongPress!(widget.items[i])
+                  : null,
+              child:        _PosterCard(
+                vod:      widget.items[i],
+                progress: widget.progressMap?[widget.items[i].id],
+              ),
             ),
           ),
         );
@@ -417,8 +539,9 @@ class _ContentListState extends State<_ContentList> {
 // ── Poster Card ────────────────────────────────────────────────────────────────
 
 class _PosterCard extends StatelessWidget {
-  const _PosterCard({required this.vod});
+  const _PosterCard({required this.vod, this.progress});
   final VodItem vod;
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
@@ -468,6 +591,32 @@ class _PosterCard extends StatelessWidget {
               ),
             ),
           ),
+
+          // Favourite heart
+          if (vod.isFavourite)
+            const Positioned(
+              top:   6,
+              right: 6,
+              child: Icon(Icons.favorite, color: Colors.white, size: 12),
+            ),
+
+          // Progress bar
+          if (progress != null)
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft:  Radius.circular(AppSpacing.radiusCard),
+                  bottomRight: Radius.circular(AppSpacing.radiusCard),
+                ),
+                child: LinearProgressIndicator(
+                  value:           progress!,
+                  minHeight:       3,
+                  backgroundColor: Colors.white24,
+                  valueColor:      const AlwaysStoppedAnimation<Color>(AppColors.accentPrimary),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -513,7 +662,7 @@ class _TopBar extends StatelessWidget {
           FocusableWidget(
             focusNode:    backFocusNode,
             borderRadius: AppSpacing.radiusPill,
-            onTap:        () => context.go('/home'),
+            onTap:        () => context.pop(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -543,53 +692,62 @@ class _TopBar extends StatelessWidget {
 
           // Search field
           Expanded(
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color:        AppColors.card,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border:       Border.all(color: AppColors.border, width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Focus(
-                      focusNode: searchFocusNode,
-                      onKeyEvent: (_, event) {
-                        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                            event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                          onDownArrow?.call();
-                          return KeyEventResult.handled;
-                        }
-                        return KeyEventResult.ignored;
-                      },
-                      child: TextField(
-                        controller: searchCtrl,
-                        style: const TextStyle(
-                          color:      AppColors.textPrimary,
-                          fontSize:   12,
-                          fontWeight: FontWeight.w300,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText:       'Search movies…',
-                          hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                          border:         InputBorder.none,
-                          enabledBorder:  InputBorder.none,
-                          focusedBorder:  InputBorder.none,
-                          contentPadding: EdgeInsets.only(bottom: 2),
-                          isDense:        true,
-                          filled:         true,
-                          fillColor:      Colors.transparent,
-                        ),
-                      ),
+            child: AnimatedBuilder(
+              animation: searchFocusNode,
+              builder: (context, _) {
+                final focused = searchFocusNode.hasFocus;
+                return Container(
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color:        AppColors.card,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(
+                      color: focused ? Colors.white : AppColors.border,
+                      width: focused ? 1.0 : 0.5,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Focus(
+                          focusNode: searchFocusNode,
+                          onKeyEvent: (_, event) {
+                            if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                                event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                              onDownArrow?.call();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: TextField(
+                            controller: searchCtrl,
+                            style: const TextStyle(
+                              color:      AppColors.textPrimary,
+                              fontSize:   12,
+                              fontWeight: FontWeight.w300,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText:       'Search movies…',
+                              hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              border:         InputBorder.none,
+                              enabledBorder:  InputBorder.none,
+                              focusedBorder:  InputBorder.none,
+                              contentPadding: EdgeInsets.only(bottom: 2),
+                              isDense:        true,
+                              filled:         true,
+                              fillColor:      Colors.transparent,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -609,34 +767,48 @@ class _CategoryBar extends StatefulWidget {
     required this.onDownArrow,
     required this.onUpArrow,
     this.firstItemFocusNode,
+    this.onReorderConfirm,
   });
-  final List<VodCategory>       categories;
-  final int?                    selectedId;
-  final void Function(int)      onSelect;
-  final void Function(double?)  onDownArrow;
-  final VoidCallback            onUpArrow;
-  final FocusNode?              firstItemFocusNode;
+  final List<VodCategory>                      categories;
+  final int?                                   selectedId;
+  final void Function(int)                     onSelect;
+  final void Function(double?)                 onDownArrow;
+  final VoidCallback                           onUpArrow;
+  final FocusNode?                             firstItemFocusNode;
+  final void Function(List<VodCategory>)?      onReorderConfirm;
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
 }
 
 class _CategoryBarState extends State<_CategoryBar> {
-  List<FocusNode> _nodes = [];
-  List<GlobalKey> _keys  = [];
-  int _focusedCatIdx     = -1;
+  final Map<int, FocusNode> _nodes         = {};
+  List<GlobalKey>           _keys          = [];
+  int                       _focusedCatIdx = -1;
+
+  FocusNode _nodeFor(int i) {
+    return _nodes.putIfAbsent(i, () {
+      final n = FocusNode();
+      n.addListener(() {
+        if (!mounted) return;
+        setState(() => _focusedCatIdx = n.hasFocus ? i : (_focusedCatIdx == i ? -1 : _focusedCatIdx));
+        if (n.hasFocus) _scrollToKey(_keys[i]);
+      });
+      return n;
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _rebuild();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
     widget.firstItemFocusNode?.addListener(_onFirstFocus);
   }
 
   @override
   void didUpdateWidget(_CategoryBar old) {
     super.didUpdateWidget(old);
-    if (widget.categories.length != _nodes.length + 1) _rebuild();
+    if (widget.categories.length != old.categories.length) _rebuild();
     if (widget.firstItemFocusNode != old.firstItemFocusNode) {
       old.firstItemFocusNode?.removeListener(_onFirstFocus);
       widget.firstItemFocusNode?.addListener(_onFirstFocus);
@@ -646,37 +818,25 @@ class _CategoryBarState extends State<_CategoryBar> {
   @override
   void dispose() {
     widget.firstItemFocusNode?.removeListener(_onFirstFocus);
-    for (final n in _nodes) n.dispose();
+    for (final n in _nodes.values) n.dispose();
     super.dispose();
   }
 
   void _onFirstFocus() {
     if (!mounted) return;
     final hasFocus = widget.firstItemFocusNode?.hasFocus == true;
-    setState(() => _focusedCatIdx = hasFocus ? 0 : (_focusedCatIdx == 0 ? -1 : _focusedCatIdx));
-    if (!hasFocus) return;
-    final selIdx = widget.categories.indexWhere((c) => c.id == widget.selectedId);
-    if (selIdx > 0 && selIdx <= _nodes.length) {
-      _nodes[selIdx - 1].requestFocus();
+    if (hasFocus) {
+      setState(() => _focusedCatIdx = 0);
+      if (_keys.isNotEmpty) _scrollToKey(_keys[0]);
     } else {
-      _scrollToKey(_keys[0]);
+      setState(() { if (_focusedCatIdx == 0) _focusedCatIdx = -1; });
     }
   }
 
   void _rebuild() {
-    for (final n in _nodes) n.dispose();
-    _keys  = List.generate(widget.categories.length, (_) => GlobalKey());
-    _nodes = [];
-    for (int i = 1; i < widget.categories.length; i++) {
-      final key  = _keys[i];
-      final idx  = i;
-      final n    = FocusNode();
-      n.addListener(() {
-        if (mounted) setState(() => _focusedCatIdx = n.hasFocus ? idx : (_focusedCatIdx == idx ? -1 : _focusedCatIdx));
-        if (n.hasFocus && mounted) _scrollToKey(key);
-      });
-      _nodes.add(n);
-    }
+    for (final n in _nodes.values) n.dispose();
+    _nodes.clear();
+    _keys = List.generate(widget.categories.length, (_) => GlobalKey());
   }
 
   void _scrollToKey(GlobalKey key) {
@@ -694,8 +854,8 @@ class _CategoryBarState extends State<_CategoryBar> {
 
   int get _focusedIndex {
     if (widget.firstItemFocusNode?.hasFocus == true) return 0;
-    for (int i = 0; i < _nodes.length; i++) {
-      if (_nodes[i].hasFocus) return i + 1;
+    for (final entry in _nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
     }
     return -1;
   }
@@ -718,47 +878,102 @@ class _CategoryBarState extends State<_CategoryBar> {
       final dist = (cx - targetX).abs();
       if (dist < bestDist) { bestDist = dist; bestIdx = i; }
     }
-    final node = bestIdx == 0 ? widget.firstItemFocusNode : _nodes[bestIdx - 1];
+    final node = bestIdx == 0 ? widget.firstItemFocusNode : _nodeFor(bestIdx);
     node?.requestFocus();
     _scrollToKey(_keys[bestIdx]);
   }
 
+  Future<void> _showReorderPopup(int idx) async {
+    if (idx <= 0) return;
+    final cats    = List<VodCategory>.from(widget.categories);
+    final canLeft = idx > 1;
+    final canRight = idx < cats.length - 1;
+    if (!canLeft && !canRight) return;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canLeft)
+                FocusableWidget(
+                  autofocus: true,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('left'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_back, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Left', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              if (canRight)
+                FocusableWidget(
+                  autofocus: !canLeft,
+                  borderRadius: 8,
+                  onTap: () => Navigator.of(ctx).pop('right'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Move Right', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == null) return;
+    if (action == 'left' && canLeft) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx - 1, item);
+    } else if (action == 'right' && canRight) {
+      final item = cats.removeAt(idx);
+      cats.insert(idx + 1, item);
+    }
+    widget.onReorderConfirm?.call(cats);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cats = widget.categories;
     return SizedBox(
       height: 46,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:         EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        itemCount:       widget.categories.length,
+        itemCount:       cats.length,
         itemBuilder:     (_, i) {
-          final cat        = widget.categories[i];
+          final cat        = cats[i];
           final isSelected = cat.id == widget.selectedId;
           final isFocused  = _focusedCatIdx == i;
-          final node       = i == 0 ? widget.firstItemFocusNode : _nodes[i - 1];
+          final node       = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
           return Focus(
             key: _keys[i],
             onKeyEvent: (_, event) {
               if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
               if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                if (i < widget.categories.length - 1) {
-                  _nodes[i].requestFocus();
-                }
+                if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                if (i > 0) {
-                  (i == 1 ? widget.firstItemFocusNode : _nodes[i - 2])?.requestFocus();
-                }
+                if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.onDownArrow(_getCenterX(i));
-                return KeyEventResult.handled;
+                widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                widget.onUpArrow();
-                return KeyEventResult.handled;
+                widget.onUpArrow(); return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
             },
@@ -767,6 +982,9 @@ class _CategoryBarState extends State<_CategoryBar> {
               focusNode:       node,
               showFocusBorder: false,
               onTap:           () => widget.onSelect(cat.id),
+              onLongPress:     (i > 0 && widget.onReorderConfirm != null)
+                  ? () => _showReorderPopup(i)
+                  : null,
               child: Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: Column(
@@ -783,8 +1001,8 @@ class _CategoryBarState extends State<_CategoryBar> {
                               : isFocused
                                   ? AppColors.textSecondary
                                   : AppColors.textMuted,
-                          fontSize:   12,
-                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                          fontSize:      12,
+                          fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
                           letterSpacing: 0.1,
                         ),
                       ),
@@ -810,3 +1028,4 @@ class _CategoryBarState extends State<_CategoryBar> {
     );
   }
 }
+

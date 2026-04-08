@@ -37,26 +37,55 @@ class SeriesRepositoryImpl implements SeriesRepository {
   Future<Episode?> getEpisodeById(int id) => _dao.getEpisodeById(id);
 
   @override
+  Future<List<SeriesItem>> getAllSeries({int limit = 500}) => _dao.getAllSeries(limit: limit);
+
+  @override
   Future<List<SeriesItem>> searchSeries(String query) => _dao.searchSeries(query);
 
   @override
   Future<List<Season>> getSeasons(int seriesId) async {
-    var episodes = await _dao.getEpisodesBySeries(seriesId);
-    if (episodes.isEmpty) {
-      try {
-        final (meta, apiEpisodes) = await _api.getSeriesInfo(seriesId);
-        // Best-effort metadata enrichment — must never block episode insertion
-        if (meta != null) {
-          try { await _dao.updateSeriesMeta(seriesId, meta); } catch (_) {}
-        }
-        episodes = apiEpisodes;
-        if (episodes.isNotEmpty) await _dao.insertEpisodes(seriesId, episodes);
-      } catch (e) {
-        // Timeout / 503 — return empty list; UI will show error state
-        rethrow;
+    // Always fetch from API — ensures episode IDs, extensions and URLs are
+    // never stale. DB is updated as a side-effect for offline fallback.
+    bool apiSucceeded = false;
+    try {
+      final (meta, apiEpisodes) = await _api.getSeriesInfo(seriesId);
+      apiSucceeded = true;
+      if (meta != null) {
+        try { await _dao.updateSeriesMeta(seriesId, meta); } catch (_) {}
       }
+      if (apiEpisodes.isNotEmpty) {
+        await _dao.insertEpisodes(seriesId, apiEpisodes);
+        return _groupIntoSeasons(apiEpisodes.map(_withFreshUrl).toList());
+      }
+      // API responded but returned no valid episodes — don't serve stale DB data
+      return [];
+    } catch (_) {
+      // API unavailable — fall back to DB only if we never got a response
     }
-    return _groupIntoSeasons(episodes);
+    if (apiSucceeded) return [];
+    // Offline fallback: use cached episodes with refreshed URLs
+    final cached = await _dao.getEpisodesBySeries(seriesId);
+    return _groupIntoSeasons(cached.map(_withFreshUrl).toList());
+  }
+
+  Episode _withFreshUrl(Episode ep) {
+    final ext = (ep.containerExtension?.isNotEmpty == true)
+        ? ep.containerExtension!
+        : 'mkv';
+    final url = _api.getEpisodeStreamUrl(ep.id, ext);
+    if (url == ep.streamUrl) return ep;
+    return Episode(
+      id:                 ep.id,
+      seriesId:           ep.seriesId,
+      seasonNumber:       ep.seasonNumber,
+      episodeNumber:      ep.episodeNumber,
+      title:              ep.title,
+      streamUrl:          url,
+      thumbnailUrl:       ep.thumbnailUrl,
+      plot:               ep.plot,
+      durationSecs:       ep.durationSecs,
+      containerExtension: ep.containerExtension,
+    );
   }
 
   @override
@@ -101,6 +130,11 @@ class SeriesRepositoryImpl implements SeriesRepository {
 
   @override
   Future<List<SeriesItem>> getFavourites() => _dao.getSeriesFavourites();
+
+  @override
+  Future<void> saveSeriesCategoryOrder(List<SeriesCategory> ordered) =>
+      _dao.saveSeriesCategoryOrder(ordered);
+
 
   List<Season> _groupIntoSeasons(List<Episode> episodes) {
     // Sort by season then episode first — insertion order into the map is correct

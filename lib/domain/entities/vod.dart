@@ -19,6 +19,7 @@ class VodItem {
     this.durationSecs,
     this.containerExtension,
     this.isFavourite = false,
+    this.added,
   });
   final int     id;
   final String  name;
@@ -33,6 +34,7 @@ class VodItem {
   final int?    durationSecs;
   final String? containerExtension;
   final bool    isFavourite;
+  final int?    added; // Unix timestamp from API
 
   VodItem copyWith({bool? isFavourite}) => VodItem(
     id:                 id,
@@ -48,5 +50,6 @@ class VodItem {
     durationSecs:       durationSecs,
     containerExtension: containerExtension,
     isFavourite:        isFavourite ?? this.isFavourite,
+    added:              added,
   );
 }
