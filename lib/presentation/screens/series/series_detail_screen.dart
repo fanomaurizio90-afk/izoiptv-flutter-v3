@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/series.dart';
 import '../../../domain/entities/vod.dart';
@@ -47,12 +48,21 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    onToggleFav(SeriesItem s) async {
+      final repo = ref.read(seriesRepositoryProvider);
+      await repo.toggleFavourite(s.id, !s.isFavourite);
+      ref.invalidate(_seriesDetailProvider(widget.seriesId));
+    }
+
     if (widget.series != null) {
       return PopScope(
         canPop: true,
         child: Scaffold(
           backgroundColor: AppColors.background,
-          body: _SeriesDetailBody(series: widget.series!),
+          body: _SeriesDetailBody(
+            series: widget.series!,
+            onToggleFavourite: () => onToggleFav(widget.series!),
+          ),
         ),
       );
     }
@@ -67,7 +77,10 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
               return Center(child: Text('Series not found',
                 style: TextStyle(color: AppColors.textSecondary)));
             }
-            return _SeriesDetailBody(series: series);
+            return _SeriesDetailBody(
+              series: series,
+              onToggleFavourite: () => onToggleFav(series),
+            );
           },
           loading: () => const SkeletonDetailBackdrop(),
           error:   (e, _) => Center(child: Text(e.toString(),
@@ -81,8 +94,9 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
 // ── Body ─────────────────────────────────────────────────────────────────────
 
 class _SeriesDetailBody extends ConsumerStatefulWidget {
-  const _SeriesDetailBody({required this.series});
+  const _SeriesDetailBody({required this.series, required this.onToggleFavourite});
   final SeriesItem series;
+  final VoidCallback onToggleFavourite;
 
   @override
   ConsumerState<_SeriesDetailBody> createState() => _SeriesDetailBodyState();
@@ -92,7 +106,9 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
     with SingleTickerProviderStateMixin {
   late SeriesItem _displaySeries;
 
-  final _backNode = FocusNode();
+  final _backNode    = FocusNode();
+  final _favNode     = FocusNode();
+  final _trailerNode = FocusNode();
   List<FocusNode> _seasonNodes = [];
   FocusNode? _firstEpisodeNode;
 
@@ -120,8 +136,19 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
   void dispose() {
     _entranceCtrl.dispose();
     _backNode.dispose();
+    _favNode.dispose();
+    _trailerNode.dispose();
     for (final n in _seasonNodes) n.dispose();
     super.dispose();
+  }
+
+  Future<void> _openTrailer() async {
+    final url = _displaySeries.youtubeTrailer;
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url.startsWith('http') ? url : 'https://www.youtube.com/watch?v=$url');
+    if (uri != null) {
+      try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (_) {}
+    }
   }
 
   void _rebuildSeasonNodes(int count) {
@@ -186,9 +213,9 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
         Positioned(
           top: 0, left: 0, right: 0,
           height: screenH * 0.55,
-          child: _displaySeries.posterUrl != null
+          child: (_displaySeries.backdropUrl ?? _displaySeries.posterUrl) != null
               ? CachedNetworkImage(
-                  imageUrl:       _displaySeries.posterUrl!,
+                  imageUrl:       (_displaySeries.backdropUrl ?? _displaySeries.posterUrl)!,
                   fit:            BoxFit.cover,
                   width:          screenW,
                   memCacheWidth:  800,
@@ -226,34 +253,86 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
           child: Container(color: AppColors.background),
         ),
 
-        // ── Back button ─────────────────────────────────────────────────
+        // ── Top bar: Back + Favourite ──────────────────────────────────
         Positioned(
           top:  topPad + AppSpacing.sm,
           left: AppSpacing.tvH,
-          child: FocusableWidget(
-            focusNode:    _backNode,
-            autofocus:    true,
-            borderRadius: AppSpacing.radiusPill,
-            onTap: () => context.pop(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color:        const Color(0x55000000),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          right: AppSpacing.tvH,
+          child: Row(
+            children: [
+              FocusableWidget(
+                focusNode:    _backNode,
+                autofocus:    true,
+                borderRadius: AppSpacing.radiusPill,
+                onTap: () => context.pop(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color:        const Color(0x55000000),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
+                      SizedBox(width: 2),
+                      Text('Back', style: TextStyle(
+                        color:      AppColors.textSecondary,
+                        fontSize:   11,
+                        fontWeight: FontWeight.w400,
+                      )),
+                    ],
+                  ),
+                ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chevron_left, color: AppColors.textSecondary, size: 16),
-                  SizedBox(width: 2),
-                  Text('Back', style: TextStyle(
-                    color:      AppColors.textSecondary,
-                    fontSize:   11,
-                    fontWeight: FontWeight.w400,
-                  )),
-                ],
+              const Spacer(),
+              // ── Favourite button ──
+              Focus(
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    _backNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    if (_seasonNodes.isNotEmpty) _seasonNodes[0].requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: FocusableWidget(
+                  focusNode:    _favNode,
+                  borderRadius: AppSpacing.radiusPill,
+                  onTap: widget.onToggleFavourite,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color:        const Color(0x55000000),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _displaySeries.isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: _displaySeries.isFavourite ? AppColors.accentPrimary : AppColors.textSecondary,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _displaySeries.isFavourite ? 'Favourited' : 'Favourite',
+                          style: TextStyle(
+                            color: _displaySeries.isFavourite ? AppColors.accentPrimary : AppColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
 
@@ -288,8 +367,18 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                           ),
                           const SizedBox(height: 10),
 
-                          // ── Meta ──────────────────────────────────────
+                          // ── Meta + rating badge ────────────────────────
                           _SeriesMeta(series: _displaySeries),
+
+                          // ── Trailer button ──────────────────────────────
+                          if (_displaySeries.youtubeTrailer != null &&
+                              _displaySeries.youtubeTrailer!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _TrailerButton(
+                              focusNode: _trailerNode,
+                              onTap:     _openTrailer,
+                            ),
+                          ],
 
                           if (_displaySeries.plot != null) ...[
                             const SizedBox(height: 14),
@@ -413,26 +502,115 @@ class _SeriesMeta extends StatelessWidget {
       if (series.releaseDate != null) series.releaseDate!,
       if (series.genre != null)       series.genre!,
     ];
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing:    8,
-      runSpacing: 6,
-      children: chips.map((label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          border:       Border.all(color: const Color(0x33FFFFFF), width: 0.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color:         AppColors.textSecondary,
-            fontSize:      11,
-            fontWeight:    FontWeight.w400,
-            letterSpacing: 0.4,
+
+    return Row(
+      children: [
+        // ── IMDB-style rating badge ──
+        if (series.rating != null && series.rating! > 0) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFF5C518),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.star_rounded, color: Color(0xFF000000), size: 13),
+                const SizedBox(width: 3),
+                Text(
+                  series.rating!.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color:      Color(0xFF000000),
+                    fontSize:   12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (chips.isNotEmpty) const SizedBox(width: 10),
+        ],
+        // ── Meta chips ──
+        if (chips.isNotEmpty)
+          Expanded(
+            child: Wrap(
+              spacing:    8,
+              runSpacing: 6,
+              children: chips.map((label) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  border:       Border.all(color: const Color(0x33FFFFFF), width: 0.5),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color:         AppColors.textSecondary,
+                    fontSize:      11,
+                    fontWeight:    FontWeight.w400,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              )).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Trailer Button ──────────────────────────────────────────────────────────
+
+class _TrailerButton extends StatefulWidget {
+  const _TrailerButton({required this.focusNode, required this.onTap});
+  final FocusNode    focusNode;
+  final VoidCallback onTap;
+
+  @override
+  State<_TrailerButton> createState() => _TrailerButtonState();
+}
+
+class _TrailerButtonState extends State<_TrailerButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableWidget(
+      focusNode:    widget.focusNode,
+      borderRadius: AppSpacing.radiusPill,
+      onTap:        widget.onTap,
+      child: Focus(
+        canRequestFocus: false,
+        onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
+        child: AnimatedContainer(
+          duration: AppDurations.focus,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: _focused ? const Color(0xFFFF0000) : const Color(0x14FFFFFF),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.play_circle_outline_rounded,
+                color: _focused ? Colors.white : AppColors.textSecondary,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Watch Trailer',
+                style: TextStyle(
+                  color:    _focused ? Colors.white : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
-      )).toList(),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -135,8 +136,8 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
         );
       case 1:
         return ref.watch(_favVodProvider).when(
-          data:    (items) => _SimpleList(
-            items: items.map((v) => v.name).toList(),
+          data:    (items) => _VodList(
+            items: items,
             onTap: (i) => context.push('/movies/${items[i].id}'),
           ),
           loading: () => const LoadingWidget(),
@@ -144,8 +145,8 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
         );
       case 2:
         return ref.watch(_favSeriesProvider).when(
-          data:    (items) => _SimpleList(
-            items: items.map((s) => s.name).toList(),
+          data:    (items) => _SeriesList(
+            items: items,
             onTap: (i) => context.push('/series/${items[i].id}'),
           ),
           loading: () => const LoadingWidget(),
@@ -267,6 +268,68 @@ class _TabState extends State<_Tab> {
   }
 }
 
+// ── Shared list key handler mixin ────────────────────────────────────────────
+
+mixin _FavListMixin<T extends StatefulWidget> on State<T> {
+  Map<int, FocusNode> get nodes;
+  ScrollController    get scrollCtrl;
+  int                 get itemCount;
+
+  FocusNode nodeFor(int i) => nodes.putIfAbsent(i, () => FocusNode());
+
+  int get focusedIndex {
+    for (final entry in nodes.entries) {
+      if (entry.value.hasFocus) return entry.key;
+    }
+    return -1;
+  }
+
+  void moveTo(int idx) {
+    if (idx < 0 || idx >= itemCount) return;
+    nodeFor(idx).requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
+  }
+
+  void _ensureVisible(int idx) {
+    if (!scrollCtrl.hasClients) return;
+    const h      = 72.0;
+    final top    = idx * h;
+    final bottom = top + h;
+    final vp     = scrollCtrl.position.viewportDimension;
+    final off    = scrollCtrl.offset;
+    double? target;
+    if (top < off) target = top;
+    else if (bottom > off + vp) target = bottom - vp;
+    if (target != null) {
+      scrollCtrl.animateTo(
+        target.clamp(0.0, scrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 150),
+        curve:    Curves.easeOut,
+      );
+    }
+  }
+
+  KeyEventResult handleKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final idx = focusedIndex;
+    if (idx < 0) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < itemCount) {
+      moveTo(idx + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp && idx > 0) {
+      moveTo(idx - 1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void disposeNodes() {
+    for (final n in nodes.values) n.dispose();
+    scrollCtrl.dispose();
+  }
+}
+
 // ── Channel List ──────────────────────────────────────────────────────────────
 
 class _ChannelList extends ConsumerStatefulWidget {
@@ -277,73 +340,28 @@ class _ChannelList extends ConsumerStatefulWidget {
   ConsumerState<_ChannelList> createState() => _ChannelListState();
 }
 
-class _ChannelListState extends ConsumerState<_ChannelList> {
-  final Map<int, FocusNode> _nodes      = {};
-  final ScrollController    _scrollCtrl = ScrollController();
-
-  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
+class _ChannelListState extends ConsumerState<_ChannelList>
+    with _FavListMixin {
+  @override
+  final Map<int, FocusNode> nodes      = {};
+  @override
+  final ScrollController    scrollCtrl = ScrollController();
+  @override
+  int get itemCount => widget.channels.length;
 
   @override
   void didUpdateWidget(_ChannelList old) {
     super.didUpdateWidget(old);
     if (widget.channels != old.channels) {
-      for (final n in _nodes.values) n.dispose();
-      _nodes.clear();
+      for (final n in nodes.values) n.dispose();
+      nodes.clear();
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes.values) n.dispose();
-    _scrollCtrl.dispose();
+    disposeNodes();
     super.dispose();
-  }
-
-  int get _focusedIndex {
-    for (final entry in _nodes.entries) {
-      if (entry.value.hasFocus) return entry.key;
-    }
-    return -1;
-  }
-
-  void _moveTo(int idx) {
-    if (idx < 0 || idx >= widget.channels.length) return;
-    _nodeFor(idx).requestFocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
-  }
-
-  void _ensureVisible(int idx) {
-    if (!_scrollCtrl.hasClients) return;
-    const h      = 56.0;
-    final top    = idx * h;
-    final bottom = top + h;
-    final vp     = _scrollCtrl.position.viewportDimension;
-    final off    = _scrollCtrl.offset;
-    double? target;
-    if (top < off) target = top;
-    else if (bottom > off + vp) target = bottom - vp;
-    if (target != null) {
-      _scrollCtrl.animateTo(
-        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 150),
-        curve:    Curves.easeOut,
-      );
-    }
-  }
-
-  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final idx = _focusedIndex;
-    if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < widget.channels.length) {
-      _moveTo(idx + 1);
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp && idx > 0) {
-      _moveTo(idx - 1);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   @override
@@ -355,16 +373,16 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
       );
     }
     return Focus(
-      onKeyEvent:    _handleKey,
+      onKeyEvent:    handleKey,
       skipTraversal: true,
       child: ListView.builder(
-        controller: _scrollCtrl,
+        controller: scrollCtrl,
         itemCount:  widget.channels.length,
-        itemExtent: 56,
+        itemExtent: 72,
         itemBuilder: (_, i) {
           final ch = widget.channels[i];
           return FocusableWidget(
-            focusNode: _nodeFor(i),
+            focusNode: nodeFor(i),
             autofocus: i == 0,
             onTap: () {
               ref.read(selectedChannelProvider.notifier).state     = ch;
@@ -373,28 +391,31 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
               context.push('/live/player');
             },
             child: Container(
-              height:  56,
+              height:  72,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
               decoration: const BoxDecoration(
                 border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color:        AppColors.card,
-                      borderRadius: BorderRadius.circular(8),
-                      border:       Border.all(color: AppColors.border, width: 0.5),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${i + 1}',
-                      style: const TextStyle(
-                        color:    AppColors.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
+                  // ── Channel logo ──
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color:        AppColors.card,
+                        borderRadius: BorderRadius.circular(8),
+                        border:       Border.all(color: AppColors.border, width: 0.5),
                       ),
+                      child: ch.logoUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl:    ch.logoUrl!,
+                              fit:         BoxFit.contain,
+                              memCacheWidth: 96,
+                              errorWidget: (_, __, ___) => _LetterAvatar(ch.name),
+                            )
+                          : _LetterAvatar(ch.name),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -410,7 +431,7 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
                       ),
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
+                  const Icon(Icons.play_arrow_rounded, color: AppColors.textMuted, size: 16),
                 ],
               ),
             ),
@@ -421,84 +442,38 @@ class _ChannelListState extends ConsumerState<_ChannelList> {
   }
 }
 
-// ── Simple List (Movies / Series) ─────────────────────────────────────────────
+// ── VOD (Movies) List ────────────────────────────────────────────────────────
 
-class _SimpleList extends StatefulWidget {
-  const _SimpleList({required this.items, required this.onTap});
-  final List<String>       items;
+class _VodList extends StatefulWidget {
+  const _VodList({required this.items, required this.onTap});
+  final List<VodItem>      items;
   final void Function(int) onTap;
 
   @override
-  State<_SimpleList> createState() => _SimpleListState();
+  State<_VodList> createState() => _VodListState();
 }
 
-class _SimpleListState extends State<_SimpleList> {
-  final Map<int, FocusNode> _nodes      = {};
-  final ScrollController    _scrollCtrl = ScrollController();
-
-  FocusNode _nodeFor(int i) => _nodes.putIfAbsent(i, () => FocusNode());
+class _VodListState extends State<_VodList> with _FavListMixin {
+  @override
+  final Map<int, FocusNode> nodes      = {};
+  @override
+  final ScrollController    scrollCtrl = ScrollController();
+  @override
+  int get itemCount => widget.items.length;
 
   @override
-  void didUpdateWidget(_SimpleList old) {
+  void didUpdateWidget(_VodList old) {
     super.didUpdateWidget(old);
     if (widget.items != old.items) {
-      for (final n in _nodes.values) n.dispose();
-      _nodes.clear();
+      for (final n in nodes.values) n.dispose();
+      nodes.clear();
     }
   }
 
   @override
   void dispose() {
-    for (final n in _nodes.values) n.dispose();
-    _scrollCtrl.dispose();
+    disposeNodes();
     super.dispose();
-  }
-
-  int get _focusedIndex {
-    for (final entry in _nodes.entries) {
-      if (entry.value.hasFocus) return entry.key;
-    }
-    return -1;
-  }
-
-  void _moveTo(int idx) {
-    if (idx < 0 || idx >= widget.items.length) return;
-    _nodeFor(idx).requestFocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
-  }
-
-  void _ensureVisible(int idx) {
-    if (!_scrollCtrl.hasClients) return;
-    const h      = 56.0;
-    final top    = idx * h;
-    final bottom = top + h;
-    final vp     = _scrollCtrl.position.viewportDimension;
-    final off    = _scrollCtrl.offset;
-    double? target;
-    if (top < off) target = top;
-    else if (bottom > off + vp) target = bottom - vp;
-    if (target != null) {
-      _scrollCtrl.animateTo(
-        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 150),
-        curve:    Curves.easeOut,
-      );
-    }
-  }
-
-  KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final idx = _focusedIndex;
-    if (idx < 0) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown && idx + 1 < widget.items.length) {
-      _moveTo(idx + 1);
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp && idx > 0) {
-      _moveTo(idx - 1);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   @override
@@ -510,35 +485,98 @@ class _SimpleListState extends State<_SimpleList> {
       );
     }
     return Focus(
-      onKeyEvent:    _handleKey,
+      onKeyEvent:    handleKey,
       skipTraversal: true,
       child: ListView.builder(
-        controller: _scrollCtrl,
+        controller: scrollCtrl,
         itemCount:  widget.items.length,
-        itemExtent: 56,
+        itemExtent: 72,
         itemBuilder: (_, i) {
+          final vod = widget.items[i];
           return FocusableWidget(
-            focusNode: _nodeFor(i),
+            focusNode: nodeFor(i),
             autofocus: i == 0,
             onTap:     () => widget.onTap(i),
             child: Container(
-              height:  56,
+              height:  72,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
               decoration: const BoxDecoration(
                 border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
               ),
               child: Row(
                 children: [
+                  // ── Poster ──
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 40, height: 56,
+                      child: vod.posterUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl:    vod.posterUrl!,
+                              fit:         BoxFit.cover,
+                              memCacheWidth: 80,
+                              placeholder: (_, __) => Container(color: AppColors.card),
+                              errorWidget: (_, __, ___) => Container(
+                                color: AppColors.card,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.movie_outlined, color: AppColors.textMuted, size: 16),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.card,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.movie_outlined, color: AppColors.textMuted, size: 16),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
-                    child: Text(
-                      widget.items[i],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color:      AppColors.textPrimary,
-                        fontSize:   13,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:  MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          vod.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color:      AppColors.textPrimary,
+                            fontSize:   13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        if (vod.genre != null || vod.rating != null) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              if (vod.rating != null && vod.rating! > 0) ...[
+                                const Icon(Icons.star_rounded, color: Color(0xFFF5C518), size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  vod.rating!.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color:    AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                if (vod.genre != null) const SizedBox(width: 8),
+                              ],
+                              if (vod.genre != null)
+                                Expanded(
+                                  child: Text(
+                                    vod.genre!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color:    AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
@@ -547,6 +585,177 @@ class _SimpleListState extends State<_SimpleList> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Series List ──────────────────────────────────────────────────────────────
+
+class _SeriesList extends StatefulWidget {
+  const _SeriesList({required this.items, required this.onTap});
+  final List<SeriesItem>    items;
+  final void Function(int)  onTap;
+
+  @override
+  State<_SeriesList> createState() => _SeriesListState();
+}
+
+class _SeriesListState extends State<_SeriesList> with _FavListMixin {
+  @override
+  final Map<int, FocusNode> nodes      = {};
+  @override
+  final ScrollController    scrollCtrl = ScrollController();
+  @override
+  int get itemCount => widget.items.length;
+
+  @override
+  void didUpdateWidget(_SeriesList old) {
+    super.didUpdateWidget(old);
+    if (widget.items != old.items) {
+      for (final n in nodes.values) n.dispose();
+      nodes.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    disposeNodes();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) {
+      return const Center(
+        child: Text('No favourites',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+      );
+    }
+    return Focus(
+      onKeyEvent:    handleKey,
+      skipTraversal: true,
+      child: ListView.builder(
+        controller: scrollCtrl,
+        itemCount:  widget.items.length,
+        itemExtent: 72,
+        itemBuilder: (_, i) {
+          final series = widget.items[i];
+          return FocusableWidget(
+            focusNode: nodeFor(i),
+            autofocus: i == 0,
+            onTap:     () => widget.onTap(i),
+            child: Container(
+              height:  72,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  // ── Poster ──
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 40, height: 56,
+                      child: series.posterUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl:    series.posterUrl!,
+                              fit:         BoxFit.cover,
+                              memCacheWidth: 80,
+                              placeholder: (_, __) => Container(color: AppColors.card),
+                              errorWidget: (_, __, ___) => Container(
+                                color: AppColors.card,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.tv_outlined, color: AppColors.textMuted, size: 16),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.card,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.tv_outlined, color: AppColors.textMuted, size: 16),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:  MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          series.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color:      AppColors.textPrimary,
+                            fontSize:   13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        if (series.genre != null || series.rating != null) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              if (series.rating != null && series.rating! > 0) ...[
+                                const Icon(Icons.star_rounded, color: Color(0xFFF5C518), size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  series.rating!.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color:    AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                if (series.genre != null) const SizedBox(width: 8),
+                              ],
+                              if (series.genre != null)
+                                Expanded(
+                                  child: Text(
+                                    series.genre!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color:    AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 14),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ── Letter Avatar ────────────────────────────────────────────────────────────
+
+class _LetterAvatar extends StatelessWidget {
+  const _LetterAvatar(this.name);
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color:     AppColors.card,
+      alignment: Alignment.center,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        style: const TextStyle(
+          color:      AppColors.textMuted,
+          fontSize:   18,
+          fontWeight: FontWeight.w300,
+        ),
       ),
     );
   }

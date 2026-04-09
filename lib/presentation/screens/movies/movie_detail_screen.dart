@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
 import '../../providers/providers.dart';
@@ -36,7 +37,9 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
     if (!mounted) return;
     final repo = ref.read(vodRepositoryProvider);
     final vod  = await repo.getVodById(widget.vodId);
-    if (!mounted || vod == null || vod.posterUrl != null || vod.plot != null) return;
+    if (!mounted || vod == null) return;
+    // Enrich if we're missing any metadata (not just poster/plot)
+    if (vod.posterUrl != null && vod.plot != null && vod.cast != null) return;
     try {
       await repo.fetchVodInfo(widget.vodId);
       if (mounted) ref.invalidate(_vodDetailProvider(widget.vodId));
@@ -56,7 +59,14 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
               return Center(child: Text('Movie not found',
                 style: TextStyle(color: AppColors.textSecondary)));
             }
-            return _MovieDetailBody(vod: vod);
+            return _MovieDetailBody(
+              vod: vod,
+              onToggleFavourite: () async {
+                final repo = ref.read(vodRepositoryProvider);
+                await repo.toggleFavourite(vod.id, !vod.isFavourite);
+                ref.invalidate(_vodDetailProvider(widget.vodId));
+              },
+            );
           },
           loading: () => const SkeletonDetailBackdrop(),
           error:   (e, _) => Center(child: Text(e.toString(),
@@ -70,8 +80,9 @@ class _MovieDetailScreenState extends ConsumerState<MovieDetailScreen> {
 // ── Body ─────────────────────────────────────────────────────────────────────
 
 class _MovieDetailBody extends StatefulWidget {
-  const _MovieDetailBody({required this.vod});
+  const _MovieDetailBody({required this.vod, required this.onToggleFavourite});
   final VodItem vod;
+  final VoidCallback onToggleFavourite;
 
   @override
   State<_MovieDetailBody> createState() => _MovieDetailBodyState();
@@ -79,8 +90,10 @@ class _MovieDetailBody extends StatefulWidget {
 
 class _MovieDetailBodyState extends State<_MovieDetailBody>
     with SingleTickerProviderStateMixin {
-  final _backNode = FocusNode();
-  final _playNode = FocusNode();
+  final _backNode    = FocusNode();
+  final _favNode     = FocusNode();
+  final _playNode    = FocusNode();
+  final _trailerNode = FocusNode();
   late final AnimationController _entranceCtrl;
   late final Animation<double>   _fadeIn;
   late final Animation<Offset>   _slideUp;
@@ -102,7 +115,9 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
   void dispose() {
     _entranceCtrl.dispose();
     _backNode.dispose();
+    _favNode.dispose();
     _playNode.dispose();
+    _trailerNode.dispose();
     super.dispose();
   }
 
@@ -115,12 +130,24 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
     return '${m}m';
   }
 
+  Future<void> _openTrailer() async {
+    final url = widget.vod.youtubeTrailer;
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url.startsWith('http') ? url : 'https://www.youtube.com/watch?v=$url');
+    if (uri != null) {
+      try { await launchUrl(uri, mode: LaunchMode.externalApplication); } catch (_) {}
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
     final screenW = MediaQuery.of(context).size.width;
     final topPad  = MediaQuery.of(context).padding.top;
     final vod     = widget.vod;
+    // Use backdrop if available, fall back to poster
+    final heroImage = vod.backdropUrl ?? vod.posterUrl;
+    final hasTrailer = vod.youtubeTrailer != null && vod.youtubeTrailer!.isNotEmpty;
 
     return Stack(
       children: [
@@ -128,9 +155,9 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
         Positioned(
           top: 0, left: 0, right: 0,
           height: screenH * 0.60,
-          child: vod.posterUrl != null
+          child: heroImage != null
               ? CachedNetworkImage(
-                  imageUrl:       vod.posterUrl!,
+                  imageUrl:       heroImage,
                   fit:            BoxFit.cover,
                   width:          screenW,
                   memCacheWidth:  800,
@@ -183,30 +210,83 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
           child: Container(color: AppColors.background),
         ),
 
-        // ── Back chevron ───────────────────────────────────────────────────
+        // ── Top bar: Back + Favourite ──────────────────────────────────────
         Positioned(
           top:  topPad + AppSpacing.md,
           left: AppSpacing.tvH,
-          child: FocusableWidget(
-            focusNode:    _backNode,
-            borderRadius: AppSpacing.radiusPill,
-            onTap: () => context.pop(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color:        const Color(0x30000000),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border:       Border.all(color: const Color(0x15FFFFFF), width: 0.5),
+          right: AppSpacing.tvH,
+          child: Row(
+            children: [
+              FocusableWidget(
+                focusNode:    _backNode,
+                borderRadius: AppSpacing.radiusPill,
+                onTap: () => context.pop(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color:        const Color(0x30000000),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                    border:       Border.all(color: const Color(0x15FFFFFF), width: 0.5),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textSecondary, size: 11),
+                      SizedBox(width: 6),
+                      Text('Movies', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w400)),
+                    ],
+                  ),
+                ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textSecondary, size: 11),
-                  SizedBox(width: 6),
-                  Text('Movies', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w400)),
-                ],
+              const Spacer(),
+              // ── Favourite button ──
+              Focus(
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    _backNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    _playNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: FocusableWidget(
+                  focusNode:    _favNode,
+                  borderRadius: AppSpacing.radiusPill,
+                  onTap: widget.onToggleFavourite,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color:        const Color(0x30000000),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      border:       Border.all(color: const Color(0x15FFFFFF), width: 0.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          vod.isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: vod.isFavourite ? AppColors.accentPrimary : AppColors.textSecondary,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          vod.isFavourite ? 'Favourited' : 'Favourite',
+                          style: TextStyle(
+                            color: vod.isFavourite ? AppColors.accentPrimary : AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
 
@@ -239,16 +319,9 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                           ),
                           const SizedBox(height: AppSpacing.md),
 
-                          // ── Meta chips ─────────────────────────────────────
+                          // ── Meta chips + IMDB badge ────────────────────────
                           _MetaRow(vod: vod, duration: _duration),
-                          const SizedBox(height: AppSpacing.sm),
-
-                          // ── Rating ─────────────────────────────────────────
-                          if (vod.rating != null) ...[
-                            _RatingBar(rating: vod.rating!),
-                            const SizedBox(height: AppSpacing.xl),
-                          ] else
-                            const SizedBox(height: AppSpacing.md),
+                          const SizedBox(height: AppSpacing.md),
 
                           // ── Plot ───────────────────────────────────────────
                           if (vod.plot != null) ...[
@@ -274,18 +347,22 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                           ],
                           if (vod.cast != null) ...[
                             _InfoLine(label: 'Cast', value: vod.cast!),
-                            const SizedBox(height: AppSpacing.xl2),
+                            const SizedBox(height: AppSpacing.xl),
                           ] else
                             const SizedBox(height: AppSpacing.md),
 
-                          // ── Play button ────────────────────────────────────
-                          _PlayButton(
-                            focusNode: _playNode,
-                            backNode:  _backNode,
+                          // ── Action buttons ─────────────────────────────────
+                          _ActionButtons(
+                            playNode:    _playNode,
+                            trailerNode: _trailerNode,
+                            backNode:    _backNode,
+                            favNode:     _favNode,
+                            hasTrailer:  hasTrailer,
                             onPlay: () => context.push('/movies/player', extra: {
                               'vod':      vod,
                               'backPath': '/movies/${vod.id}',
                             }),
+                            onTrailer: _openTrailer,
                           ),
                           const SizedBox(height: AppSpacing.xl3),
                         ],
@@ -316,58 +393,56 @@ class _MetaRow extends StatelessWidget {
       if (vod.genre != null)       vod.genre!,
       if (duration.isNotEmpty)     duration,
     ];
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing:    6,
-      runSpacing: 5,
-      children: chips.map((label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          border:       Border.all(color: const Color(0x20FFFFFF), width: 0.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color:         AppColors.textMuted,
-            fontSize:      11,
-            fontWeight:    FontWeight.w400,
-            letterSpacing: 0.3,
-          ),
-        ),
-      )).toList(),
-    );
-  }
-}
 
-// ── Rating Bar ───────────────────────────────────────────────────────────────
-
-class _RatingBar extends StatelessWidget {
-  const _RatingBar({required this.rating});
-  final double rating;
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = (rating / 2).round().clamp(0, 5);
     return Row(
       children: [
-        ...List.generate(5, (i) => Padding(
-          padding: const EdgeInsets.only(right: 3),
-          child: Icon(
-            i < filled ? Icons.star_rounded : Icons.star_outline_rounded,
-            color: i < filled
-                ? AppColors.accentPrimary
-                : const Color(0x33FFFFFF),
-            size: 13,
+        // ── IMDB-style rating badge ──
+        if (vod.rating != null && vod.rating! > 0) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFF5C518), // IMDB yellow
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.star_rounded, color: Color(0xFF000000), size: 13),
+                const SizedBox(width: 3),
+                Text(
+                  vod.rating!.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color:      Color(0xFF000000),
+                    fontSize:   12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
-        )),
-        const SizedBox(width: 8),
-        Text(
-          rating.toStringAsFixed(1),
-          style: const TextStyle(
-            color:    AppColors.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
+          const SizedBox(width: 10),
+        ],
+        // ── Meta chips ──
+        Expanded(
+          child: Wrap(
+            spacing:    6,
+            runSpacing: 5,
+            children: chips.map((label) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                border:       Border.all(color: const Color(0x20FFFFFF), width: 0.5),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color:         AppColors.textMuted,
+                  fontSize:      11,
+                  fontWeight:    FontWeight.w400,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            )).toList(),
           ),
         ),
       ],
@@ -375,78 +450,164 @@ class _RatingBar extends StatelessWidget {
   }
 }
 
-// ── Play Button ──────────────────────────────────────────────────────────────
+// ── Action Buttons (Play + Trailer) ─────────────────────────────────────────
 
-class _PlayButton extends StatefulWidget {
-  const _PlayButton({
-    required this.focusNode,
+class _ActionButtons extends StatefulWidget {
+  const _ActionButtons({
+    required this.playNode,
+    required this.trailerNode,
     required this.backNode,
+    required this.favNode,
+    required this.hasTrailer,
     required this.onPlay,
+    required this.onTrailer,
   });
-  final FocusNode    focusNode;
+  final FocusNode    playNode;
+  final FocusNode    trailerNode;
   final FocusNode    backNode;
+  final FocusNode    favNode;
+  final bool         hasTrailer;
   final VoidCallback onPlay;
+  final VoidCallback onTrailer;
 
   @override
-  State<_PlayButton> createState() => _PlayButtonState();
+  State<_ActionButtons> createState() => _ActionButtonsState();
 }
 
-class _PlayButtonState extends State<_PlayButton> {
-  bool _focused = false;
+class _ActionButtonsState extends State<_ActionButtons> {
+  bool _playFocused    = false;
+  bool _trailerFocused = false;
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onKeyEvent: (_, event) {
-        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-            event.logicalKey == LogicalKeyboardKey.arrowUp) {
-          widget.backNode.requestFocus();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: FocusableWidget(
-        focusNode:    widget.focusNode,
-        autofocus:    true,
-        borderRadius: AppSpacing.radiusPill,
-        onTap:        widget.onPlay,
-        child: Focus(
-          canRequestFocus: false,
-          onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
-          child: AnimatedContainer(
-            duration: AppDurations.focus,
-            width:    double.infinity,
-            padding:  const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: _focused
-                  ? AppColors.accentPrimary
-                  : const Color(0x14FFFFFF),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-            ),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.play_arrow_rounded,
-                  color: _focused ? AppColors.background : AppColors.textPrimary,
-                  size:  22,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Play',
-                  style: TextStyle(
-                    color:         _focused ? AppColors.background : AppColors.textPrimary,
-                    fontSize:      14,
-                    fontWeight:    FontWeight.w500,
-                    letterSpacing: 0.3,
+    return Row(
+      children: [
+        // ── Play button ──
+        Expanded(
+          flex: 3,
+          child: Focus(
+            onKeyEvent: (_, event) {
+              if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                widget.backNode.requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.arrowRight && widget.hasTrailer) {
+                widget.trailerNode.requestFocus();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: FocusableWidget(
+              focusNode:    widget.playNode,
+              autofocus:    true,
+              borderRadius: AppSpacing.radiusPill,
+              onTap:        widget.onPlay,
+              child: Focus(
+                canRequestFocus: false,
+                onFocusChange: (f) { if (mounted) setState(() => _playFocused = f); },
+                child: AnimatedContainer(
+                  duration: AppDurations.focus,
+                  padding:  const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _playFocused
+                        ? AppColors.accentPrimary
+                        : const Color(0x14FFFFFF),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.play_arrow_rounded,
+                        color: _playFocused ? AppColors.background : AppColors.textPrimary,
+                        size:  22,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Play',
+                        style: TextStyle(
+                          color:         _playFocused ? AppColors.background : AppColors.textPrimary,
+                          fontSize:      14,
+                          fontWeight:    FontWeight.w500,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+
+        // ── Trailer button ──
+        if (widget.hasTrailer) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Focus(
+              onKeyEvent: (_, event) {
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                  widget.favNode.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  widget.playNode.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: FocusableWidget(
+                focusNode:    widget.trailerNode,
+                borderRadius: AppSpacing.radiusPill,
+                onTap:        widget.onTrailer,
+                child: Focus(
+                  canRequestFocus: false,
+                  onFocusChange: (f) { if (mounted) setState(() => _trailerFocused = f); },
+                  child: AnimatedContainer(
+                    duration: AppDurations.focus,
+                    padding:  const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: _trailerFocused
+                          ? const Color(0xFFFF0000) // YouTube red
+                          : const Color(0x14FFFFFF),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                      border: Border.all(
+                        color: _trailerFocused ? const Color(0xFFFF0000) : const Color(0x10FFFFFF),
+                        width: 0.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.play_circle_outline_rounded,
+                          color: _trailerFocused ? Colors.white : AppColors.textSecondary,
+                          size:  20,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Trailer',
+                          style: TextStyle(
+                            color:         _trailerFocused ? Colors.white : AppColors.textSecondary,
+                            fontSize:      13,
+                            fontWeight:    FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
