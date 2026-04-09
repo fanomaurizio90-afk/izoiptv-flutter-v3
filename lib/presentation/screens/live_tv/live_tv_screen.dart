@@ -636,7 +636,8 @@ class _CategoryBarState extends State<_CategoryBar> {
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
           _cancelReorder(); return KeyEventResult.handled;
         }
-        return KeyEventResult.handled;
+        // Let Select/Enter propagate to FocusableWidget.onTap for confirm
+        return KeyEventResult.ignored;
       },
       child: SizedBox(
         height: 46,
