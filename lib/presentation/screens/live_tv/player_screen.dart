@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/channel.dart';
@@ -124,6 +125,133 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     if (!mounted) return;
     if (_usingExo) setState(() => _usingExo = false);
     _playerNotifier.openUrl(url);
+  }
+
+  // ── Track selection ──────────────────────────────────────────────────────
+
+  mk.Player get _mkPlayer => _playerNotifier.player;
+
+  void _showSubtitlePicker() {
+    if (_usingExo) {
+      _showToast('Subtitles not available with this player');
+      return;
+    }
+    final tracks = _mkPlayer.state.tracks.subtitle;
+    if (tracks.isEmpty) {
+      _showToast('No subtitle tracks found');
+      return;
+    }
+    _showTrackDialog<mk.SubtitleTrack>(
+      title: 'Subtitles',
+      items: [mk.SubtitleTrack.no(), ...tracks],
+      labelOf: (t) {
+        if (t.id == 'no') return 'Off';
+        final lang  = t.language ?? '';
+        final title = t.title ?? '';
+        if (lang.isNotEmpty && title.isNotEmpty) return '$lang — $title';
+        return lang.isNotEmpty ? lang : (title.isNotEmpty ? title : 'Track ${t.id}');
+      },
+      selectedId: _mkPlayer.state.track.subtitle.id,
+      onSelect: (t) => _mkPlayer.setSubtitleTrack(t),
+    );
+  }
+
+  void _showAudioPicker() {
+    if (_usingExo) {
+      _showToast('Audio tracks not available with this player');
+      return;
+    }
+    final tracks = _mkPlayer.state.tracks.audio;
+    if (tracks.length <= 1) {
+      _showToast('Only one audio track available');
+      return;
+    }
+    _showTrackDialog<mk.AudioTrack>(
+      title: 'Audio',
+      items: tracks,
+      labelOf: (t) {
+        final lang  = t.language ?? '';
+        final title = t.title ?? '';
+        if (lang.isNotEmpty && title.isNotEmpty) return '$lang — $title';
+        return lang.isNotEmpty ? lang : (title.isNotEmpty ? title : 'Track ${t.id}');
+      },
+      selectedId: _mkPlayer.state.track.audio.id,
+      onSelect: (t) => _mkPlayer.setAudioTrack(t),
+    );
+  }
+
+  void _showTrackDialog<T>({
+    required String title,
+    required List<T> items,
+    required String Function(T) labelOf,
+    required String selectedId,
+    required void Function(T) onSelect,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: items.map((t) {
+                        final id = (t is mk.SubtitleTrack) ? t.id : (t as mk.AudioTrack).id;
+                        final isSel = id == selectedId;
+                        return FocusableWidget(
+                          autofocus: isSel,
+                          borderRadius: 8,
+                          onTap: () {
+                            onSelect(t);
+                            Navigator.of(ctx).pop();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Row(
+                              children: [
+                                if (isSel)
+                                  const Icon(Icons.check, color: Colors.white, size: 14)
+                                else
+                                  const SizedBox(width: 14),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(labelOf(t),
+                                  style: const TextStyle(color: Colors.white, fontSize: 14))),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    _showControlsTemporarily();
+  }
+
+  void _showToast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      duration: const Duration(seconds: 2),
+      backgroundColor: const Color(0xFF1A1A1A),
+    ));
   }
 
   // ── Controls ──────────────────────────────────────────────────────────────
@@ -282,6 +410,8 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     onNext:      _nextChannel,
                     onBack:      () => context.pop(),
                     onTogglePlay: _togglePlay,
+                    onSubtitles: _showSubtitlePicker,
+                    onAudio:     _showAudioPicker,
                     isPlaying:   _usingExo
                         ? (_exoController?.value.isPlaying ?? false)
                         : ref.watch(playerProvider.select((s) => s.isPlaying)),
@@ -306,6 +436,8 @@ class _ControlsOverlay extends StatelessWidget {
     required this.onNext,
     required this.onBack,
     required this.onTogglePlay,
+    required this.onSubtitles,
+    required this.onAudio,
     required this.isPlaying,
     this.epgNow,
     this.epgNext,
@@ -316,6 +448,8 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
   final VoidCallback onTogglePlay;
+  final VoidCallback onSubtitles;
+  final VoidCallback onAudio;
   final bool         isPlaying;
   final String?      epgNow;
   final String?      epgNext;
@@ -456,6 +590,10 @@ class _ControlsOverlay extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  _CtrlBtn(icon: Icons.subtitles_outlined, onTap: onSubtitles),
+                  const SizedBox(width: AppSpacing.lg),
+                  _CtrlBtn(icon: Icons.audiotrack_outlined, onTap: onAudio),
+                  const SizedBox(width: AppSpacing.xl2),
                   _CtrlBtn(icon: Icons.skip_previous_outlined, onTap: onPrev),
                   const SizedBox(width: AppSpacing.xl2),
                   FocusableWidget(

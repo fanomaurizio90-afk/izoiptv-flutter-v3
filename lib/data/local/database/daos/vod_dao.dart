@@ -144,7 +144,8 @@ class VodDao {
 
   Future<List<int>> getVodIdsMissingMeta() async {
     final db   = await _db;
-    final rows = await db.query('vod', columns: ['id'], where: 'poster_url IS NULL');
+    final rows = await db.query('vod', columns: ['id'],
+      where: 'poster_url IS NULL OR cast IS NULL OR youtube_trailer IS NULL');
     return rows.map((r) => r['id'] as int).toList();
   }
 
@@ -276,7 +277,8 @@ class VodDao {
 
   Future<List<int>> getSeriesIdsMissingMeta() async {
     final db   = await _db;
-    final rows = await db.query('series', columns: ['id'], where: 'poster_url IS NULL');
+    final rows = await db.query('series', columns: ['id'],
+      where: 'poster_url IS NULL OR rating IS NULL OR cast IS NULL');
     return rows.map((r) => r['id'] as int).toList();
   }
 

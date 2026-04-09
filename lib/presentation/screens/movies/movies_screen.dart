@@ -323,10 +323,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
           if (!ok || !mounted) return;
         }
         if (!mounted) return;
-        await context.push('/movies/player', extra: {
-          'vod':      vod,
-          'backPath': '/movies',
-        });
+        await context.push('/movies/${vod.id}');
         if (mounted) {
           _contentListKey.currentState?.restoreFocus();
           if (_selectedCatId == _cwCatId) _selectCategory(_cwCatId);

@@ -789,10 +789,21 @@ class _ChannelListState extends State<_ChannelList> {
   @override
   void didUpdateWidget(_ChannelList old) {
     super.didUpdateWidget(old);
-    if (widget.channels != old.channels) {
+    // Only clear nodes when the channel list structurally changes (different
+    // length or different IDs), not on mere isFavourite flag updates.
+    if (widget.channels.length != old.channels.length ||
+        !_sameChannelIds(widget.channels, old.channels)) {
       for (final n in _nodes.values) n.dispose();
       _nodes.clear();
     }
+  }
+
+  bool _sameChannelIds(List<Channel> a, List<Channel> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
   }
 
   @override

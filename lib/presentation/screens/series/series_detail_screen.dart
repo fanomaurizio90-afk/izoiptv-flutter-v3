@@ -202,7 +202,10 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
     final seasonsAsync   = ref.watch(seasonsProvider(widget.series.id));
 
     ref.listen(seasonsProvider(widget.series.id), (_, next) {
-      if (next.hasValue && _displaySeries.posterUrl == null) {
+      if (next.hasValue &&
+          (_displaySeries.posterUrl == null ||
+           _displaySeries.rating == null ||
+           _displaySeries.cast == null)) {
         _refreshMetadataFromDb();
       }
     });
