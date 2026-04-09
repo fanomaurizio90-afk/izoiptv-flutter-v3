@@ -116,7 +116,11 @@ class XtreamApi {
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:          _nullIfEmpty(m['stream_icon']?.toString())
-                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['movie_image'] : null)?.toString()),
+                            ?? _nullIfEmpty(m['cover']?.toString())
+                            ?? _nullIfEmpty(m['cover_big']?.toString())
+                            ?? _nullIfEmpty(m['thumbnail']?.toString())
+                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['movie_image'] : null)?.toString())
+                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['cover_big'] : null)?.toString()),
         backdropUrl:        _firstString(info['backdrop_path']),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
@@ -191,7 +195,9 @@ class XtreamApi {
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
         posterUrl:   _nullIfEmpty(m['cover']?.toString())
-                     ?? _nullIfEmpty(m['cover_big']?.toString()),
+                     ?? _nullIfEmpty(m['cover_big']?.toString())
+                     ?? _nullIfEmpty(m['stream_icon']?.toString())
+                     ?? _nullIfEmpty(m['thumbnail']?.toString()),
         backdropUrl: _firstString(info['backdrop_path']),
         plot:        _nullIfEmpty(info['plot']?.toString()),
         genre:       _nullIfEmpty(info['genre']?.toString()),
@@ -226,7 +232,9 @@ class XtreamApi {
           name:        seriesInfo['name']?.toString() ?? '',
           categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
           posterUrl:   _nullIfEmpty(seriesInfo['cover']?.toString())
-                       ?? _nullIfEmpty(seriesInfo['cover_big']?.toString()),
+                       ?? _nullIfEmpty(seriesInfo['cover_big']?.toString())
+                       ?? _nullIfEmpty(seriesInfo['stream_icon']?.toString())
+                       ?? _nullIfEmpty(seriesInfo['thumbnail']?.toString()),
           backdropUrl: _firstString(seriesInfo['backdrop_path']),
           plot:        _nullIfEmpty(seriesInfo['plot']?.toString()),
           genre:       _nullIfEmpty(seriesInfo['genre']?.toString()),
@@ -286,7 +294,8 @@ class XtreamApi {
 
   /// Returns null for null or empty strings — prevents CachedNetworkImage from
   /// trying to load an empty URL and silently failing.
-  String? _nullIfEmpty(String? s) => (s == null || s.isEmpty) ? null : s;
+  String? _nullIfEmpty(String? s) =>
+      (s == null || s.isEmpty || s == 'null' || s == 'N/A') ? null : s;
 
   /// Safely extract the 'info' sub-object. Some providers return false/[]/""
   /// instead of a Map — treat anything that isn't a Map as empty.
