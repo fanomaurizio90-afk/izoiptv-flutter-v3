@@ -7,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/channel.dart';
 import '../../providers/channel_provider.dart';
+import '../../providers/providers.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/player_provider.dart';
 import '../../widgets/common/focusable_widget.dart';
@@ -27,6 +28,10 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
 
   // ExoPlayer (video_player)
   VideoPlayerController? _exoController;
+
+  // EPG
+  String? _epgNow;
+  String? _epgNext;
 
   @override
   void initState() {
@@ -59,7 +64,37 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
 
   Future<void> _playCurrentChannel() async {
     final ch = ref.read(selectedChannelProvider);
-    if (ch != null) await _playUrl(ch.streamUrl);
+    if (ch != null) {
+      await _playUrl(ch.streamUrl);
+      _fetchEpg(ch);
+    }
+  }
+
+  Future<void> _fetchEpg(Channel ch) async {
+    if (ch.epgChannelId == null || ch.epgChannelId!.isEmpty) {
+      if (mounted) setState(() { _epgNow = null; _epgNext = null; });
+      return;
+    }
+    try {
+      final repo = ref.read(channelRepositoryProvider);
+      final epg  = await repo.getShortEpg(ch.id);
+      if (!mounted) return;
+      final now = DateTime.now();
+      String? nowTitle;
+      String? nextTitle;
+      for (var i = 0; i < epg.length; i++) {
+        final start = DateTime.tryParse(epg[i]['start'] ?? '');
+        final end   = DateTime.tryParse(epg[i]['end'] ?? '');
+        if (start != null && end != null && now.isAfter(start) && now.isBefore(end)) {
+          nowTitle = epg[i]['title'];
+          if (i + 1 < epg.length) nextTitle = epg[i + 1]['title'];
+          break;
+        }
+      }
+      if (mounted) setState(() { _epgNow = nowTitle; _epgNext = nextTitle; });
+    } catch (_) {
+      if (mounted) setState(() { _epgNow = null; _epgNext = null; });
+    }
   }
 
   Future<void> _playUrl(String url) async {
@@ -125,6 +160,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
     ref.read(selectedChannelProvider.notifier).state     = channel;
     _playUrl(channel.streamUrl);
+    _fetchEpg(channel);
     _showControlsTemporarily();
   }
 
@@ -137,6 +173,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
     ref.read(selectedChannelProvider.notifier).state     = channel;
     _playUrl(channel.streamUrl);
+    _fetchEpg(channel);
     _showControlsTemporarily();
   }
 
@@ -248,6 +285,8 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                     isPlaying:   _usingExo
                         ? (_exoController?.value.isPlaying ?? false)
                         : ref.watch(playerProvider.select((s) => s.isPlaying)),
+                    epgNow:      _epgNow,
+                    epgNext:     _epgNext,
                   ),
                 ),
               ),
@@ -268,6 +307,8 @@ class _ControlsOverlay extends StatelessWidget {
     required this.onBack,
     required this.onTogglePlay,
     required this.isPlaying,
+    this.epgNow,
+    this.epgNext,
   });
   final Channel?    channel;
   final bool        usingExo;
@@ -276,6 +317,8 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onTogglePlay;
   final bool         isPlaying;
+  final String?      epgNow;
+  final String?      epgNext;
 
   @override
   Widget build(BuildContext context) {
@@ -345,6 +388,64 @@ class _ControlsOverlay extends StatelessWidget {
               ),
             ),
           ),
+          // EPG info
+          if (epgNow != null)
+            Positioned(
+              bottom: 70,
+              left:   AppSpacing.lg,
+              right:  AppSpacing.lg,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentPrimary.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: const Text('NOW', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          epgNow!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w400),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (epgNext != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white12,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Text('NEXT', style: TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            epgNext!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w300),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           // Bottom controls
           Positioned(
             bottom: 0,

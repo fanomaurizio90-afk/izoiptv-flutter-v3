@@ -305,6 +305,15 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                               ),
                             ),
                           ],
+                          if (_displaySeries.director != null || _displaySeries.cast != null) ...[
+                            const SizedBox(height: 12),
+                            if (_displaySeries.director != null)
+                              _SeriesInfoLine(label: 'Director', value: _displaySeries.director!),
+                            if (_displaySeries.director != null && _displaySeries.cast != null)
+                              const SizedBox(height: 4),
+                            if (_displaySeries.cast != null)
+                              _SeriesInfoLine(label: 'Cast', value: _displaySeries.cast!),
+                          ],
                           const SizedBox(height: 24),
                         ],
                       ),
@@ -424,6 +433,37 @@ class _SeriesMeta extends StatelessWidget {
           ),
         ),
       )).toList(),
+    );
+  }
+}
+
+// ── Series Info Line ────────────────────────────────────────────────────────
+
+class _SeriesInfoLine extends StatelessWidget {
+  const _SeriesInfoLine({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 65,
+          child: Text(label, style: const TextStyle(
+            color: AppColors.textMuted, fontSize: 11,
+            fontWeight: FontWeight.w500, letterSpacing: 0.5,
+          )),
+        ),
+        Expanded(
+          child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textSecondary, fontSize: 11,
+              fontWeight: FontWeight.w300, height: 1.5,
+            )),
+        ),
+      ],
     );
   }
 }

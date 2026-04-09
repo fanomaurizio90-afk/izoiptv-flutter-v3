@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../../domain/entities/channel.dart';
 import '../../../domain/entities/vod.dart';
@@ -77,12 +78,15 @@ class XtreamApi {
       final id  = int.tryParse(m['stream_id']?.toString() ?? '') ?? 0;
       final ext = _nullIfEmpty(m['container_extension'] as String?) ?? _liveFormat;
       return Channel(
-        id:         id,
-        name:       m['name'] as String? ?? '',
-        streamUrl:  '$_serverUrl/live/$_username/$_password/$id.$ext',
-        categoryId: int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        logoUrl:    _fixImageUrl(_nullIfEmpty(m['stream_icon'] as String?)),
-        sortOrder:  int.tryParse(m['num']?.toString() ?? '0') ?? 0,
+        id:                 id,
+        name:               m['name'] as String? ?? '',
+        streamUrl:          '$_serverUrl/live/$_username/$_password/$id.$ext',
+        categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
+        logoUrl:            _fixImageUrl(_nullIfEmpty(m['stream_icon'] as String?)),
+        sortOrder:          int.tryParse(m['num']?.toString() ?? '0') ?? 0,
+        epgChannelId:       _nullIfEmpty(m['epg_channel_id']?.toString()),
+        tvArchive:          m['tv_archive'] == 1 || m['tv_archive'] == '1',
+        tvArchiveDuration:  int.tryParse(m['tv_archive_duration']?.toString() ?? '0') ?? 0,
       );
     }).toList();
   }
@@ -161,8 +165,14 @@ class XtreamApi {
         genre:              _nullIfEmpty(info['genre'] as String?),
         releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
         rating:             double.tryParse(info['rating']?.toString() ?? ''),
-        durationSecs:       _parseDurationSecs(info['duration'] as String?),
+        durationSecs:       info['duration_secs'] is int
+                            ? info['duration_secs'] as int
+                            : _parseDurationSecs(info['duration'] as String?),
         containerExtension: ext,
+        cast:               _nullIfEmpty(info['cast']?.toString()),
+        director:           _nullIfEmpty(info['director']?.toString()),
+        tmdbId:             _nullIfEmpty(info['tmdb_id']?.toString()),
+        youtubeTrailer:     _nullIfEmpty(info['youtube_trailer']?.toString()),
       );
     } catch (_) {
       return null;
@@ -199,11 +209,14 @@ class XtreamApi {
                      ?? _nullIfEmpty(m['stream_icon']?.toString())
                      ?? _nullIfEmpty(m['thumbnail']?.toString())),
         backdropUrl: _fixImageUrl(_firstString(info['backdrop_path'])),
-        plot:        _nullIfEmpty(info['plot']?.toString()),
-        genre:       _nullIfEmpty(info['genre']?.toString()),
-        releaseDate: _nullIfEmpty(info['releaseDate']?.toString()),
-        rating:      double.tryParse(info['rating']?.toString() ?? ''),
-        added:       int.tryParse(m['last_modified']?.toString() ?? ''),
+        plot:           _nullIfEmpty(m['plot']?.toString()),
+        genre:          _nullIfEmpty(m['genre']?.toString()),
+        releaseDate:    _nullIfEmpty(m['releaseDate']?.toString()),
+        rating:         double.tryParse(m['rating']?.toString() ?? ''),
+        added:          int.tryParse(m['last_modified']?.toString() ?? ''),
+        cast:           _nullIfEmpty(m['cast']?.toString()),
+        director:       _nullIfEmpty(m['director']?.toString()),
+        youtubeTrailer: _nullIfEmpty(m['youtube_trailer']?.toString()),
       );
     }).toList();
   }
@@ -236,10 +249,13 @@ class XtreamApi {
                        ?? _nullIfEmpty(seriesInfo['stream_icon']?.toString())
                        ?? _nullIfEmpty(seriesInfo['thumbnail']?.toString())),
           backdropUrl: _fixImageUrl(_firstString(seriesInfo['backdrop_path'])),
-          plot:        _nullIfEmpty(seriesInfo['plot']?.toString()),
-          genre:       _nullIfEmpty(seriesInfo['genre']?.toString()),
-          releaseDate: _nullIfEmpty(seriesInfo['releaseDate']?.toString()),
-          rating:      double.tryParse(seriesInfo['rating']?.toString() ?? ''),
+          plot:           _nullIfEmpty(seriesInfo['plot']?.toString()),
+          genre:          _nullIfEmpty(seriesInfo['genre']?.toString()),
+          releaseDate:    _nullIfEmpty(seriesInfo['releaseDate']?.toString()),
+          rating:         double.tryParse(seriesInfo['rating']?.toString() ?? ''),
+          cast:           _nullIfEmpty(seriesInfo['cast']?.toString()),
+          director:       _nullIfEmpty(seriesInfo['director']?.toString()),
+          youtubeTrailer: _nullIfEmpty(seriesInfo['youtube_trailer']?.toString()),
         );
       }
     } catch (_) {
@@ -277,6 +293,33 @@ class XtreamApi {
       }
     }
     return (meta, result);
+  }
+
+  // ─── EPG ─────────────────────────────────────────────────────────────────────
+
+  /// Fetch short EPG (current + upcoming) for a live stream.
+  /// Returns a list of {title, start, end, description}.
+  /// Titles and descriptions are base64-encoded by many providers.
+  Future<List<Map<String, String>>> getShortEpg(int streamId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '$_base&action=get_short_epg&stream_id=$streamId',
+        options: Options(receiveTimeout: const Duration(seconds: 10)),
+      );
+      final listings = response.data?['epg_listings'];
+      if (listings is! List) return [];
+      return listings.map((e) {
+        final m = e as Map<String, dynamic>;
+        return <String, String>{
+          'title':       _decodeBase64(m['title']?.toString() ?? ''),
+          'start':       m['start']?.toString() ?? '',
+          'end':         m['end']?.toString() ?? '',
+          'description': _decodeBase64(m['description']?.toString() ?? ''),
+        };
+      }).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   // ─── Stream URL builders ──────────────────────────────────────────────────────
@@ -346,5 +389,15 @@ class XtreamApi {
       return m * 60 + s;
     }
     return int.tryParse(raw);
+  }
+
+  /// EPG titles/descriptions are often base64-encoded.
+  String _decodeBase64(String s) {
+    if (s.isEmpty) return s;
+    try {
+      return utf8.decode(base64Decode(s));
+    } catch (_) {
+      return s; // Not base64 — return as-is
+    }
   }
 }

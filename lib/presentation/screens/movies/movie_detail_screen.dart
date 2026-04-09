@@ -263,9 +263,20 @@ class _MovieDetailBodyState extends State<_MovieDetailBody>
                                 height:     1.7,
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.xl3),
+                            const SizedBox(height: AppSpacing.lg),
                           ] else
+                            const SizedBox(height: AppSpacing.md),
+
+                          // ── Cast & Director ─────────────────────────────────
+                          if (vod.director != null) ...[
+                            _InfoLine(label: 'Director', value: vod.director!),
+                            const SizedBox(height: 6),
+                          ],
+                          if (vod.cast != null) ...[
+                            _InfoLine(label: 'Cast', value: vod.cast!),
                             const SizedBox(height: AppSpacing.xl2),
+                          ] else
+                            const SizedBox(height: AppSpacing.md),
 
                           // ── Play button ────────────────────────────────────
                           _PlayButton(
@@ -436,6 +447,48 @@ class _PlayButtonState extends State<_PlayButton> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Info Line ────────────────────────────────────────────────────────────────
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 65,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color:      AppColors.textMuted,
+              fontSize:   11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color:      AppColors.textSecondary,
+              fontSize:   11,
+              fontWeight: FontWeight.w300,
+              height:     1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

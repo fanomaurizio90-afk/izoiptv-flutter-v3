@@ -8,4 +8,5 @@ abstract interface class ChannelRepository {
   Future<void> toggleFavourite(int channelId, bool isFav);
   Future<List<Channel>>         getFavourites();
   Future<void>                  saveCategoryOrder(List<ChannelCategory> ordered);
+  Future<List<Map<String, String>>> getShortEpg(int streamId);
 }

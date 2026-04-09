@@ -28,6 +28,20 @@ class AppDatabase {
     // Keep migrations additive — never drop columns in the ALTER TABLE path,
     // only in a full table-recreate migration like v1→v2 below.
 
+    // v5 → v6: cast/director/tmdb on vod & series; epg on channels
+    if (oldVersion < 6) {
+      await db.execute('ALTER TABLE vod     ADD COLUMN cast     TEXT');
+      await db.execute('ALTER TABLE vod     ADD COLUMN director TEXT');
+      await db.execute('ALTER TABLE vod     ADD COLUMN tmdb_id  TEXT');
+      await db.execute('ALTER TABLE vod     ADD COLUMN youtube_trailer TEXT');
+      await db.execute('ALTER TABLE series  ADD COLUMN cast     TEXT');
+      await db.execute('ALTER TABLE series  ADD COLUMN director TEXT');
+      await db.execute('ALTER TABLE series  ADD COLUMN youtube_trailer TEXT');
+      await db.execute('ALTER TABLE channels ADD COLUMN epg_channel_id      TEXT');
+      await db.execute('ALTER TABLE channels ADD COLUMN tv_archive          INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE channels ADD COLUMN tv_archive_duration INTEGER DEFAULT 0');
+    }
+
     // v4 → v5: sort_order on category tables; added timestamp on content tables
     if (oldVersion < 5) {
       await db.execute('ALTER TABLE channel_categories ADD COLUMN sort_order INTEGER DEFAULT 0');
@@ -96,13 +110,16 @@ class AppDatabase {
     ''');
     await db.execute('''
       CREATE TABLE channels (
-        id           INTEGER PRIMARY KEY,
-        name         TEXT NOT NULL,
-        stream_url   TEXT NOT NULL,
-        category_id  INTEGER NOT NULL,
-        logo_url     TEXT,
-        is_favourite INTEGER DEFAULT 0,
-        sort_order   INTEGER DEFAULT 0
+        id                  INTEGER PRIMARY KEY,
+        name                TEXT NOT NULL,
+        stream_url          TEXT NOT NULL,
+        category_id         INTEGER NOT NULL,
+        logo_url            TEXT,
+        is_favourite        INTEGER DEFAULT 0,
+        sort_order          INTEGER DEFAULT 0,
+        epg_channel_id      TEXT,
+        tv_archive          INTEGER DEFAULT 0,
+        tv_archive_duration INTEGER DEFAULT 0
       )
     ''');
     await db.execute('CREATE INDEX idx_channels_category ON channels(category_id)');
@@ -130,7 +147,11 @@ class AppDatabase {
         duration_secs       INTEGER,
         container_extension TEXT,
         is_favourite        INTEGER DEFAULT 0,
-      added               INTEGER DEFAULT 0
+        added               INTEGER DEFAULT 0,
+        cast                TEXT,
+        director            TEXT,
+        tmdb_id             TEXT,
+        youtube_trailer     TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_vod_category ON vod(category_id)');
@@ -145,17 +166,20 @@ class AppDatabase {
     ''');
     await db.execute('''
       CREATE TABLE series (
-        id           INTEGER PRIMARY KEY,
-        name         TEXT NOT NULL,
-        category_id  INTEGER NOT NULL,
-        poster_url   TEXT,
-        backdrop_url TEXT,
-        plot         TEXT,
-        genre        TEXT,
-        release_date TEXT,
-        rating       REAL,
-        is_favourite INTEGER DEFAULT 0,
-      added        INTEGER DEFAULT 0
+        id              INTEGER PRIMARY KEY,
+        name            TEXT NOT NULL,
+        category_id     INTEGER NOT NULL,
+        poster_url      TEXT,
+        backdrop_url    TEXT,
+        plot            TEXT,
+        genre           TEXT,
+        release_date    TEXT,
+        rating          REAL,
+        is_favourite    INTEGER DEFAULT 0,
+        added           INTEGER DEFAULT 0,
+        cast            TEXT,
+        director        TEXT,
+        youtube_trailer TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_series_category ON series(category_id)');

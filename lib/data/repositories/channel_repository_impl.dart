@@ -36,4 +36,8 @@ class ChannelRepositoryImpl implements ChannelRepository {
   @override
   Future<void> saveCategoryOrder(List<ChannelCategory> ordered) =>
       _dao.saveCategoryOrder(ordered);
+
+  @override
+  Future<List<Map<String, String>>> getShortEpg(int streamId) =>
+      _api.getShortEpg(streamId);
 }

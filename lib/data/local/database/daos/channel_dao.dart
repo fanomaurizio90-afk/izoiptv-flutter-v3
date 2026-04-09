@@ -84,9 +84,12 @@ class ChannelDao {
           'name':         ch.name,
           'stream_url':   ch.streamUrl,
           'category_id':  ch.categoryId,
-          'logo_url':     ch.logoUrl,
-          'is_favourite': ch.isFavourite ? 1 : 0,
-          'sort_order':   ch.sortOrder,
+          'logo_url':            ch.logoUrl,
+          'is_favourite':        ch.isFavourite ? 1 : 0,
+          'sort_order':          ch.sortOrder,
+          'epg_channel_id':      ch.epgChannelId,
+          'tv_archive':          ch.tvArchive ? 1 : 0,
+          'tv_archive_duration': ch.tvArchiveDuration,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -114,13 +117,16 @@ class ChannelDao {
       ChannelCategory(id: r['id'] as int, name: r['name'] as String);
 
   Channel _rowToChannel(Map<String, dynamic> r) => Channel(
-    id:          r['id'] as int,
-    name:        r['name'] as String,
-    streamUrl:   r['stream_url'] as String,
-    categoryId:  r['category_id'] as int,
-    logoUrl:     _nullIfEmpty(r['logo_url'] as String?),
-    isFavourite: (r['is_favourite'] as int) == 1,
-    sortOrder:   r['sort_order'] as int? ?? 0,
+    id:                 r['id'] as int,
+    name:               r['name'] as String,
+    streamUrl:          r['stream_url'] as String,
+    categoryId:         r['category_id'] as int,
+    logoUrl:            _nullIfEmpty(r['logo_url'] as String?),
+    isFavourite:        (r['is_favourite'] as int) == 1,
+    sortOrder:          r['sort_order'] as int? ?? 0,
+    epgChannelId:       _nullIfEmpty(r['epg_channel_id'] as String?),
+    tvArchive:          (r['tv_archive'] as int? ?? 0) == 1,
+    tvArchiveDuration:  r['tv_archive_duration'] as int? ?? 0,
   );
 
   String? _nullIfEmpty(String? s) => (s == null || s.isEmpty) ? null : s;

@@ -17,6 +17,9 @@ class SeriesItem {
     this.rating,
     this.isFavourite = false,
     this.added,
+    this.cast,
+    this.director,
+    this.youtubeTrailer,
   });
   final int     id;
   final String  name;
@@ -29,19 +32,25 @@ class SeriesItem {
   final double? rating;
   final bool    isFavourite;
   final int?    added; // Unix timestamp from API
+  final String? cast;
+  final String? director;
+  final String? youtubeTrailer;
 
   SeriesItem copyWith({bool? isFavourite}) => SeriesItem(
-    id:          id,
-    name:        name,
-    categoryId:  categoryId,
-    posterUrl:   posterUrl,
-    backdropUrl: backdropUrl,
-    plot:        plot,
-    genre:       genre,
-    releaseDate: releaseDate,
-    rating:      rating,
-    isFavourite: isFavourite ?? this.isFavourite,
-    added:       added,
+    id:              id,
+    name:            name,
+    categoryId:      categoryId,
+    posterUrl:       posterUrl,
+    backdropUrl:     backdropUrl,
+    plot:            plot,
+    genre:           genre,
+    releaseDate:     releaseDate,
+    rating:          rating,
+    isFavourite:     isFavourite ?? this.isFavourite,
+    added:           added,
+    cast:            cast,
+    director:        director,
+    youtubeTrailer:  youtubeTrailer,
   );
 }
 

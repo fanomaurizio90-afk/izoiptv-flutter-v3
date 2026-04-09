@@ -20,6 +20,10 @@ class VodItem {
     this.containerExtension,
     this.isFavourite = false,
     this.added,
+    this.cast,
+    this.director,
+    this.tmdbId,
+    this.youtubeTrailer,
   });
   final int     id;
   final String  name;
@@ -35,6 +39,10 @@ class VodItem {
   final String? containerExtension;
   final bool    isFavourite;
   final int?    added; // Unix timestamp from API
+  final String? cast;
+  final String? director;
+  final String? tmdbId;
+  final String? youtubeTrailer;
 
   VodItem copyWith({bool? isFavourite}) => VodItem(
     id:                 id,
@@ -51,5 +59,9 @@ class VodItem {
     containerExtension: containerExtension,
     isFavourite:        isFavourite ?? this.isFavourite,
     added:              added,
+    cast:               cast,
+    director:           director,
+    tmdbId:             tmdbId,
+    youtubeTrailer:     youtubeTrailer,
   );
 }

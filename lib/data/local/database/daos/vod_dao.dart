@@ -101,6 +101,10 @@ class VodDao {
           'container_extension': v.containerExtension,
           'is_favourite':        v.isFavourite ? 1 : 0,
           'added':               v.added ?? 0,
+          'cast':                v.cast,
+          'director':            v.director,
+          'tmdb_id':             v.tmdbId,
+          'youtube_trailer':     v.youtubeTrailer,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -112,13 +116,17 @@ class VodDao {
   Future<void> updateVodMeta(int id, VodItem meta) async {
     final db  = await _db;
     final map = <String, Object?>{};
-    if (meta.posterUrl   != null) map['poster_url']    = meta.posterUrl;
-    if (meta.backdropUrl != null) map['backdrop_url']  = meta.backdropUrl;
-    if (meta.plot        != null) map['plot']          = meta.plot;
-    if (meta.genre       != null) map['genre']         = meta.genre;
-    if (meta.releaseDate != null) map['release_date']  = meta.releaseDate;
-    if (meta.rating      != null) map['rating']        = meta.rating;
-    if (meta.durationSecs!= null) map['duration_secs'] = meta.durationSecs;
+    if (meta.posterUrl      != null) map['poster_url']       = meta.posterUrl;
+    if (meta.backdropUrl   != null) map['backdrop_url']     = meta.backdropUrl;
+    if (meta.plot          != null) map['plot']             = meta.plot;
+    if (meta.genre         != null) map['genre']            = meta.genre;
+    if (meta.releaseDate   != null) map['release_date']     = meta.releaseDate;
+    if (meta.rating        != null) map['rating']           = meta.rating;
+    if (meta.durationSecs  != null) map['duration_secs']    = meta.durationSecs;
+    if (meta.cast          != null) map['cast']             = meta.cast;
+    if (meta.director      != null) map['director']         = meta.director;
+    if (meta.tmdbId        != null) map['tmdb_id']          = meta.tmdbId;
+    if (meta.youtubeTrailer!= null) map['youtube_trailer']  = meta.youtubeTrailer;
     if (map.isEmpty) return;
     await db.update('vod', map, where: 'id = ?', whereArgs: [id]);
   }
@@ -226,8 +234,11 @@ class VodDao {
           'genre':        s.genre,
           'release_date': s.releaseDate,
           'rating':       s.rating,
-          'is_favourite': s.isFavourite ? 1 : 0,
-          'added':        s.added ?? 0,
+          'is_favourite':    s.isFavourite ? 1 : 0,
+          'added':           s.added ?? 0,
+          'cast':            s.cast,
+          'director':        s.director,
+          'youtube_trailer': s.youtubeTrailer,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -239,12 +250,15 @@ class VodDao {
   Future<void> updateSeriesMeta(int id, SeriesItem meta) async {
     final db  = await _db;
     final map = <String, Object?>{};
-    if (meta.posterUrl   != null) map['poster_url']   = meta.posterUrl;
-    if (meta.backdropUrl != null) map['backdrop_url'] = meta.backdropUrl;
-    if (meta.plot        != null) map['plot']         = meta.plot;
-    if (meta.genre       != null) map['genre']        = meta.genre;
-    if (meta.releaseDate != null) map['release_date'] = meta.releaseDate;
-    if (meta.rating      != null) map['rating']       = meta.rating;
+    if (meta.posterUrl      != null) map['poster_url']       = meta.posterUrl;
+    if (meta.backdropUrl   != null) map['backdrop_url']     = meta.backdropUrl;
+    if (meta.plot          != null) map['plot']             = meta.plot;
+    if (meta.genre         != null) map['genre']            = meta.genre;
+    if (meta.releaseDate   != null) map['release_date']     = meta.releaseDate;
+    if (meta.rating        != null) map['rating']           = meta.rating;
+    if (meta.cast          != null) map['cast']             = meta.cast;
+    if (meta.director      != null) map['director']         = meta.director;
+    if (meta.youtubeTrailer!= null) map['youtube_trailer']  = meta.youtubeTrailer;
     if (map.isEmpty) return;
     await db.update('series', map, where: 'id = ?', whereArgs: [id]);
   }
@@ -394,20 +408,27 @@ class VodDao {
     containerExtension: r['container_extension'] as String?,
     isFavourite:        (r['is_favourite'] as int? ?? 0) == 1,
     added:              r['added'] as int?,
+    cast:               _s(r, 'cast'),
+    director:           _s(r, 'director'),
+    tmdbId:             _s(r, 'tmdb_id'),
+    youtubeTrailer:     _s(r, 'youtube_trailer'),
   );
 
   SeriesItem _rowToSeries(Map<String, dynamic> r) => SeriesItem(
-    id:          r['id'] as int,
-    name:        r['name'] as String,
-    categoryId:  r['category_id'] as int,
-    posterUrl:   _s(r, 'poster_url'),
-    backdropUrl: _s(r, 'backdrop_url'),
-    plot:        _s(r, 'plot'),
-    genre:       _s(r, 'genre'),
-    releaseDate: _s(r, 'release_date'),
-    rating:      _d(r, 'rating'),
-    isFavourite: (r['is_favourite'] as int? ?? 0) == 1,
-    added:       r['added'] as int?,
+    id:              r['id'] as int,
+    name:            r['name'] as String,
+    categoryId:      r['category_id'] as int,
+    posterUrl:       _s(r, 'poster_url'),
+    backdropUrl:     _s(r, 'backdrop_url'),
+    plot:            _s(r, 'plot'),
+    genre:           _s(r, 'genre'),
+    releaseDate:     _s(r, 'release_date'),
+    rating:          _d(r, 'rating'),
+    isFavourite:     (r['is_favourite'] as int? ?? 0) == 1,
+    added:           r['added'] as int?,
+    cast:            _s(r, 'cast'),
+    director:        _s(r, 'director'),
+    youtubeTrailer:  _s(r, 'youtube_trailer'),
   );
 
   Episode _rowToEpisode(Map<String, dynamic> r) => Episode(
