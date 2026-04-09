@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:video_player/video_player.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/channel.dart';
@@ -18,10 +19,14 @@ class LivePlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
-  late VideoController _videoController;
-  late PlayerNotifier  _playerNotifier; // saved in initState — safe to use in dispose
-  bool   _showControls = true;
+  late VideoController  _mkVideoController;
+  late PlayerNotifier   _playerNotifier;
+  bool   _showControls  = true;
+  bool   _usingExo      = false;
   Timer? _hideTimer;
+
+  // ExoPlayer (video_player)
+  VideoPlayerController? _exoController;
 
   @override
   void initState() {
@@ -32,7 +37,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _videoController = VideoController(
+    _mkVideoController = VideoController(
       _playerNotifier.player,
       configuration: const VideoControllerConfiguration(enableHardwareAcceleration: false),
     );
@@ -43,18 +48,50 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   @override
   void dispose() {
     _hideTimer?.cancel();
-    _playerNotifier.stop(); // use saved reference — always safe
+    _exoController?.dispose();
+    _playerNotifier.stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([]); // clear override — TV stays landscape
+    SystemChrome.setPreferredOrientations([]);
     super.dispose();
   }
 
-  void _playCurrentChannel() {
+  // ── Channel playback ────────────────────────────────────────────────────────
+
+  Future<void> _playCurrentChannel() async {
     final ch = ref.read(selectedChannelProvider);
-    if (ch != null) {
-      ref.read(playerProvider.notifier).openUrl(ch.streamUrl);
-    }
+    if (ch != null) await _playUrl(ch.streamUrl);
   }
+
+  Future<void> _playUrl(String url) async {
+    // Dispose previous ExoPlayer if any
+    _exoController?.dispose();
+    _exoController = null;
+
+    // Try ExoPlayer first
+    try {
+      final ctrl = VideoPlayerController.networkUrl(Uri.parse(url));
+      await ctrl.initialize().timeout(const Duration(seconds: 5));
+      if (!mounted) { ctrl.dispose(); return; }
+      await ctrl.play();
+      if (mounted) {
+        setState(() {
+          _exoController = ctrl;
+          _usingExo = true;
+        });
+      } else {
+        ctrl.dispose();
+      }
+      return;
+    } catch (_) {
+      // ExoPlayer failed — fall back to media_kit
+    }
+
+    if (!mounted) return;
+    if (_usingExo) setState(() => _usingExo = false);
+    _playerNotifier.openUrl(url);
+  }
+
+  // ── Controls ──────────────────────────────────────────────────────────────
 
   void _startHideTimer() {
     _hideTimer?.cancel();
@@ -68,9 +105,18 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     _startHideTimer();
   }
 
+  void _togglePlay() {
+    if (_usingExo) {
+      final ctrl = _exoController;
+      if (ctrl == null) return;
+      ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+    } else {
+      _playerNotifier.togglePlay();
+    }
+    _showControlsTemporarily();
+  }
+
   void _previousChannel() {
-    // Snapshot list and index atomically — a sync could replace the list
-    // between reads, making the index stale and out-of-bounds.
     final list  = ref.read(currentChannelListProvider);
     final index = ref.read(currentChannelIndexProvider);
     if (list.isEmpty || index <= 0 || index >= list.length) return;
@@ -78,7 +124,8 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     final channel  = list[newIndex];
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
     ref.read(selectedChannelProvider.notifier).state     = channel;
-    ref.read(playerProvider.notifier).openUrl(channel.streamUrl);
+    _playUrl(channel.streamUrl);
+    _showControlsTemporarily();
   }
 
   void _nextChannel() {
@@ -89,7 +136,21 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     final channel  = list[newIndex];
     ref.read(currentChannelIndexProvider.notifier).state = newIndex;
     ref.read(selectedChannelProvider.notifier).state     = channel;
-    ref.read(playerProvider.notifier).openUrl(channel.streamUrl);
+    _playUrl(channel.streamUrl);
+    _showControlsTemporarily();
+  }
+
+  void _seek(Duration offset) {
+    if (_usingExo) {
+      final ctrl = _exoController;
+      if (ctrl == null) return;
+      final newPos = ctrl.value.position + offset;
+      ctrl.seekTo(newPos.isNegative ? Duration.zero : newPos);
+    } else {
+      final pos = ref.read(playerProvider).position;
+      _playerNotifier.seek(pos + offset);
+    }
+    _showControlsTemporarily();
   }
 
   @override
@@ -114,8 +175,7 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               key == LogicalKeyboardKey.numpadEnter ||
               key == LogicalKeyboardKey.gameButtonA ||
               key == LogicalKeyboardKey.mediaPlayPause) {
-            ref.read(playerProvider.notifier).togglePlay();
-            _showControlsTemporarily();
+            _togglePlay();
             return KeyEventResult.handled;
           }
           // Channel navigation
@@ -123,29 +183,23 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
               key == LogicalKeyboardKey.channelUp ||
               key == LogicalKeyboardKey.mediaTrackPrevious) {
             _previousChannel();
-            _showControlsTemporarily();
             return KeyEventResult.handled;
           }
           if (key == LogicalKeyboardKey.arrowDown ||
               key == LogicalKeyboardKey.channelDown ||
               key == LogicalKeyboardKey.mediaTrackNext) {
             _nextChannel();
-            _showControlsTemporarily();
             return KeyEventResult.handled;
           }
           // Seek
           if (key == LogicalKeyboardKey.arrowLeft ||
               key == LogicalKeyboardKey.mediaRewind) {
-            final pos = ref.read(playerProvider).position;
-            ref.read(playerProvider.notifier).seek(pos - const Duration(seconds: 10));
-            _showControlsTemporarily();
+            _seek(const Duration(seconds: -10));
             return KeyEventResult.handled;
           }
           if (key == LogicalKeyboardKey.arrowRight ||
               key == LogicalKeyboardKey.mediaFastForward) {
-            final pos = ref.read(playerProvider).position;
-            ref.read(playerProvider.notifier).seek(pos + const Duration(seconds: 10));
-            _showControlsTemporarily();
+            _seek(const Duration(seconds: 10));
             return KeyEventResult.handled;
           }
           // Menu — show/hide controls
@@ -159,27 +213,41 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
           onTap: _showControlsTemporarily,
           child: Stack(
             children: [
-              // Video
-              RepaintBoundary(
-                child: Video(
-                  controller: _videoController,
-                  fit:        BoxFit.contain,
-                  fill:       AppColors.background,
-                  controls:   NoVideoControls,
+              // Video surface — ExoPlayer or media_kit
+              if (_usingExo && _exoController != null)
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: _exoController!.value.aspectRatio > 0
+                        ? _exoController!.value.aspectRatio
+                        : 16 / 9,
+                    child: VideoPlayer(_exoController!),
+                  ),
+                )
+              else
+                RepaintBoundary(
+                  child: Video(
+                    controller: _mkVideoController,
+                    fit:        BoxFit.contain,
+                    fill:       AppColors.background,
+                    controls:   NoVideoControls,
+                  ),
                 ),
-              ),
-              // Controls overlay — AnimatedOpacity lives outside the if-guard
-              // so the fade-out animation actually plays when hiding
+              // Controls overlay
               AnimatedOpacity(
                 opacity:  _showControls ? 1.0 : 0.0,
                 duration: AppDurations.fast,
                 child: IgnorePointer(
                   ignoring: !_showControls,
                   child: _ControlsOverlay(
-                    channel:   ch,
-                    onPrev:    _previousChannel,
-                    onNext:    _nextChannel,
-                    onBack:    () => context.pop(),
+                    channel:     ch,
+                    usingExo:    _usingExo,
+                    onPrev:      _previousChannel,
+                    onNext:      _nextChannel,
+                    onBack:      () => context.pop(),
+                    onTogglePlay: _togglePlay,
+                    isPlaying:   _usingExo
+                        ? (_exoController?.value.isPlaying ?? false)
+                        : ref.watch(playerProvider.select((s) => s.isPlaying)),
                   ),
                 ),
               ),
@@ -191,20 +259,26 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   }
 }
 
-class _ControlsOverlay extends ConsumerWidget {
+class _ControlsOverlay extends StatelessWidget {
   const _ControlsOverlay({
     required this.channel,
+    required this.usingExo,
     required this.onPrev,
     required this.onNext,
     required this.onBack,
+    required this.onTogglePlay,
+    required this.isPlaying,
   });
-  final Channel?  channel;
+  final Channel?    channel;
+  final bool        usingExo;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onBack;
+  final VoidCallback onTogglePlay;
+  final bool         isPlaying;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final now = DateTime.now();
     final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
@@ -243,6 +317,26 @@ class _ControlsOverlay extends ConsumerWidget {
                       ),
                     ),
                   const Spacer(),
+                  if (usingExo)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('EXO', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w600)),
+                    )
+                  else
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('MK', style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w600)),
+                    ),
                   Text(
                     timeStr,
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
@@ -263,7 +357,17 @@ class _ControlsOverlay extends ConsumerWidget {
                 children: [
                   _CtrlBtn(icon: Icons.skip_previous_outlined, onTap: onPrev),
                   const SizedBox(width: AppSpacing.xl2),
-                  _PlayPauseBtn(),
+                  FocusableWidget(
+                    onTap: onTogglePlay,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
+                        color: AppColors.textPrimary,
+                        size:  AppSpacing.iconLg,
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: AppSpacing.xl2),
                   _CtrlBtn(icon: Icons.skip_next_outlined, onTap: onNext),
                 ],
@@ -288,24 +392,6 @@ class _CtrlBtn extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(4),
         child: Icon(icon, color: AppColors.textPrimary, size: AppSpacing.iconMd),
-      ),
-    );
-  }
-}
-
-class _PlayPauseBtn extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isPlaying = ref.watch(playerProvider.select((s) => s.isPlaying));
-    return FocusableWidget(
-      onTap: () => ref.read(playerProvider.notifier).togglePlay(),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Icon(
-          isPlaying ? Icons.pause_outlined : Icons.play_arrow_outlined,
-          color: AppColors.textPrimary,
-          size:  AppSpacing.iconLg,
-        ),
       ),
     );
   }

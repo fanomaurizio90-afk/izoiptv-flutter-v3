@@ -115,7 +115,8 @@ class XtreamApi {
         name:               m['name'] as String? ?? '',
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:          _nullIfEmpty(m['stream_icon'] as String?),
+        posterUrl:          _nullIfEmpty(m['stream_icon']?.toString())
+                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['movie_image'] : null)?.toString()),
         backdropUrl:        _firstString(info['backdrop_path']),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
@@ -148,8 +149,9 @@ class XtreamApi {
         name:               _nullIfEmpty(info['name'] as String?) ?? '',
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(movieData['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:          _nullIfEmpty(info['movie_image'] as String?)
-                            ?? _nullIfEmpty(info['cover_big'] as String?),
+        posterUrl:          _nullIfEmpty(info['movie_image']?.toString())
+                            ?? _nullIfEmpty(info['cover_big']?.toString())
+                            ?? _nullIfEmpty(movieData['stream_icon']?.toString()),
         backdropUrl:        _firstString(info['backdrop_path']),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
@@ -188,7 +190,8 @@ class XtreamApi {
         id:          int.tryParse(m['series_id']?.toString() ?? '') ?? 0,
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:   _nullIfEmpty(m['cover']?.toString()),
+        posterUrl:   _nullIfEmpty(m['cover']?.toString())
+                     ?? _nullIfEmpty(m['cover_big']?.toString()),
         backdropUrl: _firstString(info['backdrop_path']),
         plot:        _nullIfEmpty(info['plot']?.toString()),
         genre:       _nullIfEmpty(info['genre']?.toString()),
@@ -222,7 +225,8 @@ class XtreamApi {
           id:          seriesId,
           name:        seriesInfo['name']?.toString() ?? '',
           categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
-          posterUrl:   _nullIfEmpty(seriesInfo['cover']?.toString()),
+          posterUrl:   _nullIfEmpty(seriesInfo['cover']?.toString())
+                       ?? _nullIfEmpty(seriesInfo['cover_big']?.toString()),
           backdropUrl: _firstString(seriesInfo['backdrop_path']),
           plot:        _nullIfEmpty(seriesInfo['plot']?.toString()),
           genre:       _nullIfEmpty(seriesInfo['genre']?.toString()),

@@ -568,12 +568,20 @@ class _PosterCard extends StatelessWidget {
               memCacheWidth:  300,
               fadeInDuration: const Duration(milliseconds: 200),
               placeholder:    (_, __) => const SizedBox.shrink(),
-              errorWidget:    (_, __, ___) => const Center(
-                child: Icon(Icons.tv, color: AppColors.textMuted, size: 22),
+              errorWidget:    (_, __, ___) => Center(
+                child: Text(
+                  series.name.isNotEmpty ? series.name[0].toUpperCase() : '?',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 28, fontWeight: FontWeight.w300),
+                ),
               ),
             )
           else
-            const Center(child: Icon(Icons.tv, color: AppColors.textMuted, size: 22)),
+            Center(
+              child: Text(
+                series.name.isNotEmpty ? series.name[0].toUpperCase() : '?',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 28, fontWeight: FontWeight.w300),
+              ),
+            ),
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -878,147 +886,153 @@ class _CategoryBarState extends State<_CategoryBar> {
     _scrollToKey(_keys[bestIdx]);
   }
 
-  Future<void> _showReorderPopup(int idx) async {
-    if (idx <= 0) return;
-    final cats     = List<SeriesCategory>.from(widget.categories);
-    final canLeft  = idx > 1;
-    final canRight = idx < cats.length - 1;
-    if (!canLeft && !canRight) return;
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (canLeft)
-                FocusableWidget(
-                  autofocus: true,
-                  borderRadius: 8,
-                  onTap: () => Navigator.of(ctx).pop('left'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                      Icon(Icons.arrow_back, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
-                      Text('Move Left', style: TextStyle(color: Colors.white, fontSize: 14)),
-                    ]),
-                  ),
-                ),
-              if (canRight)
-                FocusableWidget(
-                  autofocus: !canLeft,
-                  borderRadius: 8,
-                  onTap: () => Navigator.of(ctx).pop('right'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                      Icon(Icons.arrow_forward, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
-                      Text('Move Right', style: TextStyle(color: Colors.white, fontSize: 14)),
-                    ]),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (action == null) return;
-    if (action == 'left' && canLeft) {
-      final item = cats.removeAt(idx);
-      cats.insert(idx - 1, item);
-    } else if (action == 'right' && canRight) {
-      final item = cats.removeAt(idx);
-      cats.insert(idx + 1, item);
-    }
-    widget.onReorderConfirm?.call(cats);
+  // ── Reorder state machine ──────────────────────────────────────────────────
+
+  bool                _reorderMode = false;
+  int                 _reorderIdx  = -1;
+  List<SeriesCategory> _reorderList = [];
+
+  void _startReorder(int idx) {
+    setState(() {
+      _reorderMode = true;
+      _reorderIdx  = idx;
+      _reorderList = List.from(widget.categories);
+    });
+  }
+
+  void _moveReorder(int direction) {
+    final newIdx = _reorderIdx + direction;
+    if (newIdx < 0 || newIdx >= _reorderList.length) return;
+    if (_reorderList[newIdx].id <= 0) return;
+    setState(() {
+      final item = _reorderList.removeAt(_reorderIdx);
+      _reorderList.insert(newIdx, item);
+      _reorderIdx = newIdx;
+    });
+    if (newIdx < _keys.length) _scrollToKey(_keys[newIdx]);
+  }
+
+  void _confirmReorder() {
+    final list = _reorderList;
+    setState(() { _reorderMode = false; _reorderIdx = -1; _reorderList = []; });
+    widget.onReorderConfirm?.call(list);
+  }
+
+  void _cancelReorder() {
+    setState(() { _reorderMode = false; _reorderIdx = -1; _reorderList = []; });
   }
 
   @override
   Widget build(BuildContext context) {
-    final cats = widget.categories;
-    return SizedBox(
-      height: 46,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        itemCount:       cats.length,
-        itemBuilder:     (_, i) {
-          final cat        = cats[i];
-          final isSelected = cat.id == widget.selectedId;
-          final isFocused  = _focusedCatIdx == i;
-          final node       = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
-          return Focus(
-            key: _keys[i],
-            onKeyEvent: (_, event) {
-              if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-              if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
-                return KeyEventResult.handled;
-              }
-              if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
-                return KeyEventResult.handled;
-              }
-              if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
-              }
-              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                widget.onUpArrow(); return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: FocusableWidget(
-              autofocus:       i == 0,
-              focusNode:       node,
-              showFocusBorder: false,
-              onTap:           () => widget.onSelect(cat.id),
-              onLongPress:     (cat.id > 0 && widget.onReorderConfirm != null)
-                  ? () => _showReorderPopup(i)
-                  : null,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize:      MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Text(
-                        cat.name,
-                        style: TextStyle(
-                          color: isSelected
-                              ? AppColors.textPrimary
-                              : isFocused
-                                  ? AppColors.textSecondary
-                                  : AppColors.textMuted,
-                          fontSize:      12,
-                          fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
-                          letterSpacing: 0.1,
+    final cats = _reorderMode ? _reorderList : widget.categories;
+    return Focus(
+      onKeyEvent: (_, event) {
+        if (!_reorderMode) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          _moveReorder(1); return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          _moveReorder(-1); return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.escape ||
+            event.logicalKey == LogicalKeyboardKey.arrowUp ||
+            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _cancelReorder(); return KeyEventResult.handled;
+        }
+        return KeyEventResult.handled;
+      },
+      child: SizedBox(
+        height: 46,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+          itemCount:       cats.length,
+          itemBuilder:     (_, i) {
+            final cat          = cats[i];
+            final isSelected   = cat.id == widget.selectedId;
+            final isFocused    = _focusedCatIdx == i;
+            final isReordering = _reorderMode && i == _reorderIdx;
+            final node         = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
+            return Focus(
+              key: _keys[i],
+              onKeyEvent: (_, event) {
+                if (_reorderMode) return KeyEventResult.ignored;
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                  widget.onUpArrow(); return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: FocusableWidget(
+                autofocus:       i == 0,
+                focusNode:       node,
+                showFocusBorder: false,
+                onTap:           _reorderMode
+                    ? (i == _reorderIdx ? _confirmReorder : () {})
+                    : () => widget.onSelect(cat.id),
+                onLongPress:     (!_reorderMode && cat.id > 0 && widget.onReorderConfirm != null)
+                    ? () => _startReorder(i)
+                    : null,
+                child: Container(
+                  decoration: isReordering ? BoxDecoration(
+                    border:       Border.all(color: AppColors.accentPrimary, width: 1.5),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  ) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize:      MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Text(
+                            cat.name,
+                            style: TextStyle(
+                              color: isReordering
+                                  ? AppColors.accentPrimary
+                                  : isSelected
+                                      ? AppColors.textPrimary
+                                      : isFocused
+                                          ? AppColors.textSecondary
+                                          : AppColors.textMuted,
+                              fontSize:      12,
+                              fontWeight:    (isSelected || isReordering) ? FontWeight.w500 : FontWeight.w300,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 4),
+                        AnimatedContainer(
+                          duration: AppDurations.medium,
+                          curve:    Curves.easeOut,
+                          height:   1.5,
+                          width:    isSelected ? 16 : 0,
+                          decoration: BoxDecoration(
+                            color:        AppColors.accentPrimary,
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    AnimatedContainer(
-                      duration: AppDurations.medium,
-                      curve:    Curves.easeOut,
-                      height:   1.5,
-                      width:    isSelected ? 16 : 0,
-                      decoration: BoxDecoration(
-                        color:        AppColors.accentPrimary,
-                        borderRadius: BorderRadius.circular(1),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
