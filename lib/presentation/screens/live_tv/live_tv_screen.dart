@@ -593,6 +593,9 @@ class _CategoryBarState extends State<_CategoryBar> {
       _reorderList.insert(newIdx, item);
       _reorderIdx = newIdx;
     });
+    // Move focus to follow the reordered item
+    final node = newIdx == 0 ? widget.firstItemFocusNode : _nodeFor(newIdx);
+    node?.requestFocus();
     if (newIdx < _keys.length) _scrollToKey(_keys[newIdx]);
   }
 
