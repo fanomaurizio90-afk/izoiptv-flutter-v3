@@ -81,7 +81,7 @@ class XtreamApi {
         name:       m['name'] as String? ?? '',
         streamUrl:  '$_serverUrl/live/$_username/$_password/$id.$ext',
         categoryId: int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        logoUrl:    _nullIfEmpty(m['stream_icon'] as String?),
+        logoUrl:    _fixImageUrl(_nullIfEmpty(m['stream_icon'] as String?)),
         sortOrder:  int.tryParse(m['num']?.toString() ?? '0') ?? 0,
       );
     }).toList();
@@ -115,13 +115,13 @@ class XtreamApi {
         name:               m['name'] as String? ?? '',
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:          _nullIfEmpty(m['stream_icon']?.toString())
+        posterUrl:          _fixImageUrl(_nullIfEmpty(m['stream_icon']?.toString())
                             ?? _nullIfEmpty(m['cover']?.toString())
                             ?? _nullIfEmpty(m['cover_big']?.toString())
                             ?? _nullIfEmpty(m['thumbnail']?.toString())
                             ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['movie_image'] : null)?.toString())
-                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['cover_big'] : null)?.toString()),
-        backdropUrl:        _firstString(info['backdrop_path']),
+                            ?? _nullIfEmpty((m['info'] is Map ? (m['info'] as Map)['cover_big'] : null)?.toString())),
+        backdropUrl:        _fixImageUrl(_firstString(info['backdrop_path'])),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
         releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
@@ -153,10 +153,10 @@ class XtreamApi {
         name:               _nullIfEmpty(info['name'] as String?) ?? '',
         streamUrl:          '$_serverUrl/movie/$_username/$_password/$id.$ext',
         categoryId:         int.tryParse(movieData['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:          _nullIfEmpty(info['movie_image']?.toString())
+        posterUrl:          _fixImageUrl(_nullIfEmpty(info['movie_image']?.toString())
                             ?? _nullIfEmpty(info['cover_big']?.toString())
-                            ?? _nullIfEmpty(movieData['stream_icon']?.toString()),
-        backdropUrl:        _firstString(info['backdrop_path']),
+                            ?? _nullIfEmpty(movieData['stream_icon']?.toString())),
+        backdropUrl:        _fixImageUrl(_firstString(info['backdrop_path'])),
         plot:               _nullIfEmpty(info['plot'] as String?),
         genre:              _nullIfEmpty(info['genre'] as String?),
         releaseDate:        _nullIfEmpty(info['releasedate'] as String?),
@@ -194,11 +194,11 @@ class XtreamApi {
         id:          int.tryParse(m['series_id']?.toString() ?? '') ?? 0,
         name:        m['name'] as String? ?? '',
         categoryId:  int.tryParse(m['category_id']?.toString() ?? '0') ?? 0,
-        posterUrl:   _nullIfEmpty(m['cover']?.toString())
+        posterUrl:   _fixImageUrl(_nullIfEmpty(m['cover']?.toString())
                      ?? _nullIfEmpty(m['cover_big']?.toString())
                      ?? _nullIfEmpty(m['stream_icon']?.toString())
-                     ?? _nullIfEmpty(m['thumbnail']?.toString()),
-        backdropUrl: _firstString(info['backdrop_path']),
+                     ?? _nullIfEmpty(m['thumbnail']?.toString())),
+        backdropUrl: _fixImageUrl(_firstString(info['backdrop_path'])),
         plot:        _nullIfEmpty(info['plot']?.toString()),
         genre:       _nullIfEmpty(info['genre']?.toString()),
         releaseDate: _nullIfEmpty(info['releaseDate']?.toString()),
@@ -231,11 +231,11 @@ class XtreamApi {
           id:          seriesId,
           name:        seriesInfo['name']?.toString() ?? '',
           categoryId:  int.tryParse(seriesInfo['category_id']?.toString() ?? '0') ?? 0,
-          posterUrl:   _nullIfEmpty(seriesInfo['cover']?.toString())
+          posterUrl:   _fixImageUrl(_nullIfEmpty(seriesInfo['cover']?.toString())
                        ?? _nullIfEmpty(seriesInfo['cover_big']?.toString())
                        ?? _nullIfEmpty(seriesInfo['stream_icon']?.toString())
-                       ?? _nullIfEmpty(seriesInfo['thumbnail']?.toString()),
-          backdropUrl: _firstString(seriesInfo['backdrop_path']),
+                       ?? _nullIfEmpty(seriesInfo['thumbnail']?.toString())),
+          backdropUrl: _fixImageUrl(_firstString(seriesInfo['backdrop_path'])),
           plot:        _nullIfEmpty(seriesInfo['plot']?.toString()),
           genre:       _nullIfEmpty(seriesInfo['genre']?.toString()),
           releaseDate: _nullIfEmpty(seriesInfo['releaseDate']?.toString()),
@@ -269,7 +269,7 @@ class XtreamApi {
           episodeNumber:      int.tryParse(ep['episode_num']?.toString() ?? '0') ?? 0,
           title:              ep['title']?.toString() ?? 'Episode $id',
           streamUrl:          '$_serverUrl/series/$_username/$_password/$id.$ext',
-          thumbnailUrl:       _nullIfEmpty(epInfo['movie_image']?.toString()),
+          thumbnailUrl:       _fixImageUrl(_nullIfEmpty(epInfo['movie_image']?.toString())),
           plot:               _nullIfEmpty(epInfo['plot']?.toString()),
           durationSecs:       _parseDurationSecs(epInfo['duration']?.toString()),
           containerExtension: ext,
@@ -296,6 +296,22 @@ class XtreamApi {
   /// trying to load an empty URL and silently failing.
   String? _nullIfEmpty(String? s) =>
       (s == null || s.isEmpty || s == 'null' || s == 'N/A') ? null : s;
+
+  /// Many IPTV providers store TMDB images behind their own proxy which is
+  /// often broken (302 with empty Location).  Detect the common pattern
+  /// `/images/{hash}_{size}.{ext}` and rewrite to a direct TMDB URL.
+  /// Non-matching URLs are returned unchanged.
+  static final _tmdbProxyRe = RegExp(
+    r'/images/([a-zA-Z0-9]{20,})_(big|small|original)\.(jpg|png|webp)$',
+  );
+  String? _fixImageUrl(String? url) {
+    if (url == null || url.isEmpty) return url;
+    final m = _tmdbProxyRe.firstMatch(url);
+    if (m != null) {
+      return 'https://image.tmdb.org/t/p/w500/${m.group(1)}.${m.group(3)}';
+    }
+    return url;
+  }
 
   /// Safely extract the 'info' sub-object. Some providers return false/[]/""
   /// instead of a Map — treat anything that isn't a Map as empty.
