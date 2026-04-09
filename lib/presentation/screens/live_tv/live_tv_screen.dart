@@ -359,6 +359,10 @@ class _TopBar extends StatelessWidget {
                   onDownArrow();
                   return KeyEventResult.handled;
                 }
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                  searchFocusNode.unfocus();
+                  return KeyEventResult.handled;
+                }
                 return KeyEventResult.ignored;
               },
               child: AnimatedBuilder(
@@ -606,7 +610,11 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 
   void _cancelReorder() {
+    final idx = _lastFocusedIdx;
     setState(() { _reorderMode = false; _reorderIdx = -1; _reorderList = []; });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (idx >= 0) _nodeFor(idx).requestFocus();
+    });
   }
 
   void focusSelected() {

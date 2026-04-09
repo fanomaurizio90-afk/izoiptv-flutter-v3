@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../data/local/database/daos/history_dao.dart';
 import '../domain/repositories/channel_repository.dart';
 import '../domain/repositories/series_repository.dart';
 import '../domain/repositories/vod_repository.dart';
@@ -90,6 +91,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
         await _series.syncSeries();
         await _channels.syncChannels();
         await _markSynced();
+        // Prune watch history older than 90 days
+        try { await HistoryDao.instance.pruneOld(); } catch (_) {}
         return true;
       } catch (_) {
         if (attempt < maxAttempts - 1) await Future.delayed(retryDelay);

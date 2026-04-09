@@ -40,11 +40,12 @@ class VodDao {
 
   // ─── VOD ────────────────────────────────────────────────────────────────────
 
-  Future<List<VodItem>> getVodByCategory(int categoryId) async {
+  Future<List<VodItem>> getVodByCategory(int categoryId, {int limit = 500, int offset = 0}) async {
     final db   = await _db;
     final rows = await db.query('vod',
         where: 'category_id = ?', whereArgs: [categoryId],
-        orderBy: 'added DESC, id DESC');
+        orderBy: 'added DESC, id DESC',
+        limit: limit, offset: offset);
     return rows.map(_rowToVod).toList();
   }
 
@@ -179,11 +180,12 @@ class VodDao {
 
   // ─── Series ──────────────────────────────────────────────────────────────────
 
-  Future<List<SeriesItem>> getSeriesByCategory(int categoryId) async {
+  Future<List<SeriesItem>> getSeriesByCategory(int categoryId, {int limit = 500, int offset = 0}) async {
     final db   = await _db;
     final rows = await db.query('series',
         where: 'category_id = ?', whereArgs: [categoryId],
-        orderBy: 'added DESC, id DESC');
+        orderBy: 'added DESC, id DESC',
+        limit: limit, offset: offset);
     return rows.map(_rowToSeries).toList();
   }
 
@@ -339,7 +341,7 @@ class VodDao {
       WHERE wh.content_type = 'movie'
         AND wh.position_secs > 30
         AND wh.duration_secs > 0
-        AND wh.position_secs < (wh.duration_secs - 30)
+        AND wh.position_secs < (wh.duration_secs * 9 / 10)
       ORDER BY wh.updated_at DESC
       LIMIT $limit
     ''');
@@ -367,7 +369,7 @@ class VodDao {
       WHERE wh.content_type = 'episode'
         AND wh.position_secs > 30
         AND wh.duration_secs > 0
-        AND wh.position_secs < (wh.duration_secs - 30)
+        AND wh.position_secs < (wh.duration_secs * 9 / 10)
       ORDER BY wh.updated_at DESC
       LIMIT $limit
     ''');

@@ -102,45 +102,95 @@ class _PinDialogState extends State<_PinDialog> {
   }
 }
 
-class _NumPad extends StatelessWidget {
+class _NumPad extends StatefulWidget {
   const _NumPad({required this.onDigit, required this.onDelete});
   final void Function(String) onDigit;
   final VoidCallback           onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    // Layout: [1][2][3] / [4][5][6] / [7][8][9] / [←][0][  ]
-    final rows = [
-      ['1','2','3'],
-      ['4','5','6'],
-      ['7','8','9'],
-      ['⌫','0',''],
-    ];
+  State<_NumPad> createState() => _NumPadState();
+}
 
+class _NumPadState extends State<_NumPad> {
+  // Grid: [1][2][3] / [4][5][6] / [7][8][9] / [⌫][0][  ]
+  static const _grid = [
+    ['1','2','3'],
+    ['4','5','6'],
+    ['7','8','9'],
+    ['⌫','0',''],
+  ];
+
+  late final List<List<FocusNode?>> _nodes;
+  int _row = 0, _col = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _nodes = List.generate(4, (r) =>
+      List.generate(3, (c) => _grid[r][c].isEmpty ? null : FocusNode()),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final row in _nodes) {
+      for (final n in row) { n?.dispose(); }
+    }
+    super.dispose();
+  }
+
+  void _move(int dr, int dc) {
+    var nr = _row + dr, nc = _col + dc;
+    // Clamp within grid bounds
+    nr = nr.clamp(0, 3);
+    nc = nc.clamp(0, 2);
+    // Skip empty cell (row 3, col 2)
+    if (_grid[nr][nc].isEmpty) {
+      if (dc > 0) return;      // can't move right into empty
+      if (dr > 0) nc = 1;      // moving down into last row, go to '0'
+    }
+    _row = nr;
+    _col = nc;
+    _nodes[_row][_col]?.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: rows.map((row) {
+      children: List.generate(4, (r) {
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: row.map((label) {
+          children: List.generate(3, (c) {
+            final label = _grid[r][c];
             if (label.isEmpty) return const SizedBox(width: 56, height: 48);
             final isDelete = label == '⌫';
             return _NumKey(
-              label:    label,
-              autofocus: label == '1',
-              onTap: () => isDelete ? onDelete() : onDigit(label),
+              label:     label,
+              focusNode: _nodes[r][c]!,
+              autofocus: r == 0 && c == 0,
+              onTap: () => isDelete ? widget.onDelete() : widget.onDigit(label),
+              onArrow: (dr, dc) { _move(dr, dc); },
             );
-          }).toList(),
+          }),
         );
-      }).toList(),
+      }),
     );
   }
 }
 
 class _NumKey extends StatefulWidget {
-  const _NumKey({required this.label, required this.onTap, this.autofocus = false});
+  const _NumKey({
+    required this.label,
+    required this.onTap,
+    required this.focusNode,
+    required this.onArrow,
+    this.autofocus = false,
+  });
   final String       label;
   final VoidCallback onTap;
+  final FocusNode    focusNode;
+  final void Function(int dr, int dc) onArrow;
   final bool         autofocus;
 
   @override
@@ -153,15 +203,22 @@ class _NumKeyState extends State<_NumKey> {
   @override
   Widget build(BuildContext context) {
     return Focus(
+      focusNode: widget.focusNode,
       autofocus: widget.autofocus,
       onFocusChange: (v) => setState(() => _focused = v),
       onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.select ||
-             event.logicalKey == LogicalKeyboardKey.enter)) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.select ||
+            key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter) {
           widget.onTap();
           return KeyEventResult.handled;
         }
+        if (key == LogicalKeyboardKey.arrowUp)    { widget.onArrow(-1,  0); return KeyEventResult.handled; }
+        if (key == LogicalKeyboardKey.arrowDown)  { widget.onArrow( 1,  0); return KeyEventResult.handled; }
+        if (key == LogicalKeyboardKey.arrowLeft)  { widget.onArrow( 0, -1); return KeyEventResult.handled; }
+        if (key == LogicalKeyboardKey.arrowRight) { widget.onArrow( 0,  1); return KeyEventResult.handled; }
         return KeyEventResult.ignored;
       },
       child: GestureDetector(

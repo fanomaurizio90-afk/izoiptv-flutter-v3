@@ -50,6 +50,11 @@ class VodRepositoryImpl implements VodRepository {
       durationSecs:       v.durationSecs,
       containerExtension: v.containerExtension,
       isFavourite:        v.isFavourite,
+      added:              v.added,
+      cast:               v.cast,
+      director:           v.director,
+      tmdbId:             v.tmdbId,
+      youtubeTrailer:     v.youtubeTrailer,
     );
   }
 

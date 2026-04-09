@@ -697,9 +697,14 @@ class _TopBar extends StatelessWidget {
               skipTraversal: true,
               canRequestFocus: false,
               onKeyEvent: (_, event) {
-                if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                   onDownArrow?.call();
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                    event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  searchFocusNode.unfocus();
                   return KeyEventResult.handled;
                 }
                 return KeyEventResult.ignored;
@@ -922,7 +927,14 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 
   void _cancelReorder() {
+    final idx = _reorderIdx;
     setState(() { _reorderMode = false; _reorderIdx = -1; _reorderList = []; });
+    if (idx >= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final node = idx == 0 ? widget.firstItemFocusNode : _nodeFor(idx);
+        node?.requestFocus();
+      });
+    }
   }
 
   @override

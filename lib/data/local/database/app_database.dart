@@ -28,6 +28,13 @@ class AppDatabase {
     // Keep migrations additive — never drop columns in the ALTER TABLE path,
     // only in a full table-recreate migration like v1→v2 below.
 
+    // v6 → v7: performance indexes on watch_history and series name
+    if (oldVersion < 7) {
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_history_content_lookup ON watch_history(content_id, content_type, episode_id)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_history_content_progress ON watch_history(content_type, position_secs, updated_at DESC)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_series_name ON series(name COLLATE NOCASE)');
+    }
+
     // v5 → v6: cast/director/tmdb on vod & series; epg on channels
     if (oldVersion < 6) {
       await db.execute('ALTER TABLE vod     ADD COLUMN cast     TEXT');
@@ -220,5 +227,8 @@ class AppDatabase {
       )
     ''');
     await db.execute('CREATE INDEX idx_history_updated ON watch_history(updated_at DESC)');
+    await db.execute('CREATE INDEX idx_history_content_lookup ON watch_history(content_id, content_type, episode_id)');
+    await db.execute('CREATE INDEX idx_history_content_progress ON watch_history(content_type, position_secs, updated_at DESC)');
+    await db.execute('CREATE INDEX idx_series_name ON series(name COLLATE NOCASE)');
   }
 }

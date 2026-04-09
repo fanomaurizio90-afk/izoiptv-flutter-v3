@@ -5,7 +5,7 @@ abstract final class AppConstants {
 
   // Database
   static const dbName    = 'izo_iptv.db';
-  static const dbVersion = 6;
+  static const dbVersion = 7;
 
   // Secure storage keys (used by AuthRepositoryImpl)
   static const keyLoginType = 'login_type';

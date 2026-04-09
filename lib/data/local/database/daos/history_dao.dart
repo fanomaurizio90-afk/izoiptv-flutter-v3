@@ -62,6 +62,13 @@ class HistoryDao {
     return rows.isEmpty ? null : rows.first;
   }
 
+  /// Remove watch history records older than [days] (default 90).
+  Future<void> pruneOld({int days = 90}) async {
+    final db = await _db;
+    final cutoff = DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    await db.delete('watch_history', where: 'updated_at < ?', whereArgs: [cutoff]);
+  }
+
   Future<void> clear() async {
     final db = await _db;
     await db.delete('watch_history');
