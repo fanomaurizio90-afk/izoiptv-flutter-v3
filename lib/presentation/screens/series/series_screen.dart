@@ -184,6 +184,34 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     }
   }
 
+  Future<void> _refreshAfterReturn() async {
+    if (!mounted) return;
+    final histRepo   = ref.read(historyRepositoryProvider);
+    final seriesRepo = ref.read(seriesRepositoryProvider);
+    final cwItems    = await histRepo.getInProgressEpisodes(limit: 20);
+    final seen = <int>{};
+    final cwUnique = cwItems.where((c) => seen.add(c.contentId)).toList();
+    final favItems   = await seriesRepo.getFavourites();
+    if (!mounted) return;
+
+    final hasCw  = cwUnique.isNotEmpty;
+    final hasFav = favItems.isNotEmpty;
+    final hadCw  = _categories.any((c) => c.id == _cwCatId);
+    final hadFav = _categories.any((c) => c.id == _favCatId);
+
+    if (hasCw != hadCw || hasFav != hadFav) {
+      final cats = _categories.where((c) => c.id != _cwCatId && c.id != _favCatId).toList();
+      int insertIdx = cats.indexWhere((c) => c.id == _allCatId) + 1;
+      if (hasCw)  cats.insert(insertIdx++, const SeriesCategory(id: _cwCatId, name: 'Continue Watching'));
+      if (hasFav) cats.insert(insertIdx, const SeriesCategory(id: _favCatId, name: 'Favourites'));
+      setState(() => _categories = cats);
+    }
+
+    if (_selectedCatId == _cwCatId || _selectedCatId == _favCatId) {
+      _selectCategory(_selectedCatId!);
+    }
+  }
+
   Future<void> _onSeriesCategoryReorder(List<SeriesCategory> ordered) async {
     final realOrdered = ordered.where((c) => c.id > 0).toList();
     setState(() => _categories = ordered);
@@ -234,22 +262,41 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
     final newVal = !series.isFavourite;
     await repo.toggleFavourite(series.id, newVal);
     SeriesItem update(SeriesItem s) => s.id == series.id ? s.copyWith(isFavourite: newVal) : s;
-    if (mounted) {
-      setState(() {
-        if (_selectedCatId == _favCatId && !newVal) {
-          _items.removeWhere((s) => s.id == series.id);
-          _searchResults.removeWhere((s) => s.id == series.id);
-        } else {
-          _items         = _items.map(update).toList();
-          _searchResults = _searchResults.map(update).toList();
+    if (!mounted) return;
+
+    final favs = await repo.getFavourites();
+    final hasFavCat = _categories.any((c) => c.id == _favCatId);
+
+    setState(() {
+      if (_selectedCatId == _favCatId && !newVal) {
+        _items.removeWhere((s) => s.id == series.id);
+        _searchResults.removeWhere((s) => s.id == series.id);
+      } else {
+        _items         = _items.map(update).toList();
+        _searchResults = _searchResults.map(update).toList();
+      }
+
+      if (favs.isNotEmpty && !hasFavCat) {
+        final cwIdx = _categories.indexWhere((c) => c.id == _cwCatId);
+        final insertAt = cwIdx >= 0 ? cwIdx + 1 : 1;
+        _categories.insert(insertAt, const SeriesCategory(id: _favCatId, name: 'Favourites'));
+      } else if (favs.isEmpty && hasFavCat) {
+        _categories.removeWhere((c) => c.id == _favCatId);
+        if (_selectedCatId == _favCatId) {
+          _selectedCatId = _allCatId;
         }
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(newVal ? '${series.name} added to Favourites' : '${series.name} removed from Favourites'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF1A1A1A),
-      ));
+      }
+    });
+
+    if (favs.isEmpty && _selectedCatId == _allCatId) {
+      _selectCategory(_allCatId);
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(newVal ? '${series.name} added to Favourites' : '${series.name} removed from Favourites'),
+      duration: const Duration(seconds: 2),
+      backgroundColor: const Color(0xFF1A1A1A),
+    ));
   }
 
   @override
@@ -322,7 +369,7 @@ class _SeriesScreenState extends ConsumerState<SeriesScreen> {
         await context.push('/series/${s.id}', extra: s);
         if (mounted) {
           _contentListKey.currentState?.restoreFocus();
-          if (_selectedCatId == _cwCatId) _selectCategory(_cwCatId);
+          _refreshAfterReturn();
         }
       },
     );

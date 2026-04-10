@@ -28,6 +28,17 @@ class AppDatabase {
     // Keep migrations additive — never drop columns in the ALTER TABLE path,
     // only in a full table-recreate migration like v1→v2 below.
 
+    // v7 → v8: deduplicate watch_history rows (NULL != NULL in UNIQUE broke upsert for movies)
+    if (oldVersion < 8) {
+      await db.execute('''
+        DELETE FROM watch_history
+        WHERE id NOT IN (
+          SELECT MAX(id) FROM watch_history
+          GROUP BY content_id, content_type, COALESCE(episode_id, -1)
+        )
+      ''');
+    }
+
     // v6 → v7: performance indexes on watch_history and series name
     if (oldVersion < 7) {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_history_content_lookup ON watch_history(content_id, content_type, episode_id)');

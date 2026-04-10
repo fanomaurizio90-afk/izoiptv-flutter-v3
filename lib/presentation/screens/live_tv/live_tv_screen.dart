@@ -128,11 +128,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
         _loading  = false;
       });
       _searchCtrl.clear();
-      // Delay focus to avoid the select key-up from the category tap
-      // leaking into the first channel row and triggering playback.
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted) _channelListKey.currentState?.focusFirst();
-      });
+      // Do NOT auto-focus the first channel here — the select key-up from
+      // the category tap would leak into the channel row and trigger playback.
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -899,7 +896,7 @@ class _ChannelListState extends State<_ChannelList> {
             return _ChannelRow(
               channel:           ch,
               focusNode:         _nodeFor(i),
-              autofocus:         i == 0 && _restoreIndex == 0,
+              autofocus:         false,
               onTap:             () => widget.onChannelTap(ch, i),
               onToggleFavourite: () => widget.onToggleFavourite(ch),
             );

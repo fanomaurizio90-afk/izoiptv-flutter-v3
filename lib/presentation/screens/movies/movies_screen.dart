@@ -175,6 +175,32 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     }
   }
 
+  Future<void> _refreshAfterReturn() async {
+    if (!mounted) return;
+    final histRepo = ref.read(historyRepositoryProvider);
+    final vodRepo  = ref.read(vodRepositoryProvider);
+    final cwItems  = await histRepo.getInProgressMovies(limit: 20);
+    final favItems = await vodRepo.getFavourites();
+    if (!mounted) return;
+
+    final hasCw  = cwItems.isNotEmpty;
+    final hasFav = favItems.isNotEmpty;
+    final hadCw  = _categories.any((c) => c.id == _cwCatId);
+    final hadFav = _categories.any((c) => c.id == _favCatId);
+
+    if (hasCw != hadCw || hasFav != hadFav) {
+      final cats = _categories.where((c) => c.id != _cwCatId && c.id != _favCatId).toList();
+      int insertIdx = cats.indexWhere((c) => c.id == _allCatId) + 1;
+      if (hasCw)  cats.insert(insertIdx++, const VodCategory(id: _cwCatId, name: 'Continue Watching'));
+      if (hasFav) cats.insert(insertIdx, const VodCategory(id: _favCatId, name: 'Favourites'));
+      setState(() => _categories = cats);
+    }
+
+    if (_selectedCatId == _cwCatId || _selectedCatId == _favCatId) {
+      _selectCategory(_selectedCatId!);
+    }
+  }
+
   Future<void> _onVodCategoryReorder(List<VodCategory> ordered) async {
     final realOrdered = ordered.where((c) => c.id > 0).toList();
     setState(() => _categories = ordered);
@@ -225,22 +251,41 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     final newVal = !vod.isFavourite;
     await repo.toggleFavourite(vod.id, newVal);
     VodItem update(VodItem v) => v.id == vod.id ? v.copyWith(isFavourite: newVal) : v;
-    if (mounted) {
-      setState(() {
-        if (_selectedCatId == _favCatId && !newVal) {
-          _items.removeWhere((v) => v.id == vod.id);
-          _searchResults.removeWhere((v) => v.id == vod.id);
-        } else {
-          _items         = _items.map(update).toList();
-          _searchResults = _searchResults.map(update).toList();
+    if (!mounted) return;
+
+    final favs = await repo.getFavourites();
+    final hasFavCat = _categories.any((c) => c.id == _favCatId);
+
+    setState(() {
+      if (_selectedCatId == _favCatId && !newVal) {
+        _items.removeWhere((v) => v.id == vod.id);
+        _searchResults.removeWhere((v) => v.id == vod.id);
+      } else {
+        _items         = _items.map(update).toList();
+        _searchResults = _searchResults.map(update).toList();
+      }
+
+      if (favs.isNotEmpty && !hasFavCat) {
+        final cwIdx = _categories.indexWhere((c) => c.id == _cwCatId);
+        final insertAt = cwIdx >= 0 ? cwIdx + 1 : 1;
+        _categories.insert(insertAt, const VodCategory(id: _favCatId, name: 'Favourites'));
+      } else if (favs.isEmpty && hasFavCat) {
+        _categories.removeWhere((c) => c.id == _favCatId);
+        if (_selectedCatId == _favCatId) {
+          _selectedCatId = _allCatId;
         }
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF1A1A1A),
-      ));
+      }
+    });
+
+    if (favs.isEmpty && _selectedCatId == _allCatId) {
+      _selectCategory(_allCatId);
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites'),
+      duration: const Duration(seconds: 2),
+      backgroundColor: const Color(0xFF1A1A1A),
+    ));
   }
 
   @override
@@ -326,7 +371,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
         await context.push('/movies/${vod.id}');
         if (mounted) {
           _contentListKey.currentState?.restoreFocus();
-          if (_selectedCatId == _cwCatId) _selectCategory(_cwCatId);
+          _refreshAfterReturn();
         }
       },
     );

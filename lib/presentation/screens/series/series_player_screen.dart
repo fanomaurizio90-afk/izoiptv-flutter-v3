@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
 import '../../../domain/entities/series.dart';
@@ -71,6 +72,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
   void initState() {
     super.initState();
     _historyRepo = ref.read(historyRepositoryProvider);
+    WakelockPlus.enable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -170,6 +172,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     _mkPlayer?.dispose();
     _topFocusNode.dispose();
     _playPauseFocusNode.dispose();
+    WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
     super.dispose();
