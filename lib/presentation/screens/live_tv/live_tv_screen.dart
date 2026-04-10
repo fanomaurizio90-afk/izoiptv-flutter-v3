@@ -780,15 +780,6 @@ class _ChannelListState extends State<_ChannelList> {
     super.initState();
     _restoreIndex = FocusMemoryService.instance.restore('live_tv') ?? 0;
     if (_restoreIndex >= widget.channels.length) _restoreIndex = 0;
-    if (_restoreIndex > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _ensureVisible(_restoreIndex);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _nodeFor(_restoreIndex).requestFocus();
-        });
-      });
-    }
   }
 
   @override
@@ -831,7 +822,7 @@ class _ChannelListState extends State<_ChannelList> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(idx));
   }
 
-  void focusFirst() => _moveTo(0);
+  void focusFirst() => _moveTo(_restoreIndex > 0 ? _restoreIndex : 0);
 
   void _ensureVisible(int idx) {
     if (!_scrollCtrl.hasClients) return;
