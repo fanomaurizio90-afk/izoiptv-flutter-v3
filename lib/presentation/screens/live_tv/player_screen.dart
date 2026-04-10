@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/channel.dart';
 import '../../providers/channel_provider.dart';
@@ -47,12 +48,14 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
       _playerNotifier.player,
       configuration: const VideoControllerConfiguration(enableHardwareAcceleration: false),
     );
+    WakelockPlus.enable();
     WidgetsBinding.instance.addPostFrameCallback((_) => _playCurrentChannel());
     _startHideTimer();
   }
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _hideTimer?.cancel();
     _exoController?.dispose();
     _playerNotifier.stop();
