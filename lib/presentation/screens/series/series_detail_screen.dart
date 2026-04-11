@@ -156,7 +156,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
 
   KeyEventResult _handleSeasonKey(int i, int total, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       if (i > 0) {
         _seasonNodes[i - 1].requestFocus();
       } else {
@@ -164,17 +164,17 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
       }
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
       if (i < total - 1) {
         _seasonNodes[i + 1].requestFocus();
       }
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       _firstEpisodeNode?.requestFocus();
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       _favNode.requestFocus();
       return KeyEventResult.handled;
     }
@@ -232,7 +232,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
               child: SlideTransition(
                 position: posterSlide,
                 child: SizedBox(
-                  width: 220,
+                  width: 280,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,20 +245,20 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                               child: _displaySeries.posterUrl != null
                                   ? CachedNetworkImage(
                                       imageUrl:       _displaySeries.posterUrl!,
-                                      width:          220,
-                                      height:         320,
+                                      width:          280,
+                                      height:         400,
                                       fit:            BoxFit.cover,
-                                      memCacheWidth:  440,
+                                      memCacheWidth:  560,
                                       fadeInDuration: const Duration(milliseconds: 200),
                                       placeholder:    (_, __) => Container(
-                                        width: 220, height: 320,
+                                        width: 280, height: 400,
                                         decoration: BoxDecoration(
                                           color: AppColors.card,
                                           borderRadius: BorderRadius.circular(12),
                                         ),
                                       ),
                                       errorWidget: (_, __, ___) => Container(
-                                        width: 220, height: 320,
+                                        width: 280, height: 400,
                                         decoration: BoxDecoration(
                                           color: AppColors.card,
                                           borderRadius: BorderRadius.circular(12),
@@ -268,7 +268,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                                       ),
                                     )
                                   : Container(
-                                      width: 220, height: 320,
+                                      width: 280, height: 400,
                                       decoration: BoxDecoration(
                                         color: AppColors.card,
                                         borderRadius: BorderRadius.circular(12),
@@ -285,14 +285,14 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                                   if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                                     if (_seasonNodes.isNotEmpty) {
                                       _seasonNodes[0].requestFocus();
+                                    } else {
+                                      _firstEpisodeNode?.requestFocus();
                                     }
                                     return KeyEventResult.handled;
                                   }
                                   if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                                     if (hasTrailer) {
                                       _trailerNode.requestFocus();
-                                    } else if (_seasonNodes.isNotEmpty) {
-                                      _seasonNodes[0].requestFocus();
                                     }
                                     return KeyEventResult.handled;
                                   }
@@ -441,12 +441,11 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                             orElse: () => seasons.first,
                           );
                           return Expanded(
-                            child: Row(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Vertical season strip
                                 if (seasons.length > 1)
-                                  _SeasonStrip(
+                                  _SeasonTabs(
                                     seasons:        seasons,
                                     selectedNumber: selectedSeason,
                                     nodes:          _seasonNodes,
@@ -456,14 +455,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                                     onKey: _handleSeasonKey,
                                   ),
                                 if (seasons.length > 1)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    child: Container(
-                                      width: 0.5,
-                                      color: AppColors.borderSubtle,
-                                    ),
-                                  ),
-                                // Episode list
+                                  const SizedBox(height: 8),
                                 Expanded(
                                   child: _EpisodeList(
                                     key: ValueKey(
@@ -650,10 +642,10 @@ class _TrailerButtonState extends State<_TrailerButton> {
   }
 }
 
-// ── Season Strip (vertical) ─────────────────────────────────────────────────
+// ── Season Tabs (horizontal) ────────────────────────────────────────────────
 
-class _SeasonStrip extends StatefulWidget {
-  const _SeasonStrip({
+class _SeasonTabs extends StatefulWidget {
+  const _SeasonTabs({
     required this.seasons,
     required this.selectedNumber,
     required this.nodes,
@@ -667,10 +659,10 @@ class _SeasonStrip extends StatefulWidget {
   final KeyEventResult Function(int, int, KeyEvent)   onKey;
 
   @override
-  State<_SeasonStrip> createState() => _SeasonStripState();
+  State<_SeasonTabs> createState() => _SeasonTabsState();
 }
 
-class _SeasonStripState extends State<_SeasonStrip> {
+class _SeasonTabsState extends State<_SeasonTabs> {
   int _focusedIdx = -1;
 
   void _onFocusChange() {
@@ -687,7 +679,7 @@ class _SeasonStripState extends State<_SeasonStrip> {
   }
 
   @override
-  void didUpdateWidget(_SeasonStrip old) {
+  void didUpdateWidget(_SeasonTabs old) {
     super.didUpdateWidget(old);
     if (old.nodes != widget.nodes) {
       for (final n in old.nodes) n.removeListener(_onFocusChange);
@@ -704,62 +696,60 @@ class _SeasonStripState extends State<_SeasonStrip> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 52,
+      height: 38,
       child: ListView.builder(
-        padding:   const EdgeInsets.only(top: 4),
+        scrollDirection: Axis.horizontal,
+        padding:   const EdgeInsets.only(left: 4),
         itemCount: widget.seasons.length,
         itemBuilder: (_, i) {
           final s          = widget.seasons[i];
           final isSelected = s.number == widget.selectedNumber;
           final isFocused  = _focusedIdx == i;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 2),
+            padding: const EdgeInsets.only(right: 4),
             child: Focus(
               onKeyEvent: (_, e) => widget.onKey(i, widget.seasons.length, e),
               child: FocusableWidget(
                 focusNode:       widget.nodes[i],
-                borderRadius:    6,
+                borderRadius:    8,
                 showFocusBorder: false,
                 onTap:           () => widget.onSelect(s.number),
                 child: AnimatedContainer(
                   duration: AppDurations.fast,
                   curve:    AppCurves.easeOut,
-                  height:   36,
+                  padding:  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: isFocused
                         ? AppColors.accentSoft
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      Text(
+                        'Season ${s.number}',
+                        style: TextStyle(
+                          color: isSelected
+                              ? AppColors.accentPrimary
+                              : isFocused
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
+                          fontSize:   13,
+                          fontWeight: isSelected
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         curve:    AppCurves.easeOut,
-                        width:    2.5,
-                        height:   isSelected ? 18 : 0,
+                        width:    isSelected ? 16 : 0,
+                        height:   2,
                         decoration: BoxDecoration(
                           color: AppColors.accentPrimary,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: Text(
-                            'S${s.number}',
-                            style: TextStyle(
-                              color: isSelected
-                                  ? AppColors.accentPrimary
-                                  : isFocused
-                                      ? AppColors.textPrimary
-                                      : AppColors.textMuted,
-                              fontSize:      12,
-                              fontWeight:    isSelected
-                                  ? FontWeight.w500
-                                  : FontWeight.w400,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
+                          borderRadius: BorderRadius.circular(1),
                         ),
                       ),
                     ],
@@ -873,10 +863,6 @@ class _EpisodeListState extends ConsumerState<_EpisodeList> {
       } else {
         widget.firstSeasonNode?.requestFocus();
       }
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      widget.firstSeasonNode?.requestFocus();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -995,144 +981,98 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       child: AnimatedContainer(
         duration: AppDurations.fast,
         curve:    AppCurves.easeOut,
-        margin:  const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: _focused
-              ? AppColors.accentSoft
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          color: _focused ? AppColors.accentSoft : Colors.transparent,
+          border: Border(
+            bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
+          ),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Thumbnail
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                width:  120,
-                height: 68,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    widget.episode.thumbnailUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl:       widget.episode.thumbnailUrl!,
-                            fit:            BoxFit.cover,
-                            memCacheWidth:  240,
-                            fadeInDuration: const Duration(milliseconds: 150),
-                            placeholder: (_, __) =>
-                                _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
-                            errorWidget: (_, __, ___) =>
-                                _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
-                          )
-                        : _ThumbnailPlaceholder(number: widget.episode.episodeNumber),
-                    if (_focused)
-                      Container(
-                        color: AppColors.background.withValues(alpha: 0.4),
-                        child: const Center(
-                          child: Icon(Icons.play_arrow_rounded,
-                            color: AppColors.textPrimary, size: 28),
-                        ),
-                      ),
-                    if (_isInProgress)
-                      Positioned(
-                        left: 0, right: 0, bottom: 0,
-                        child: LinearProgressIndicator(
-                          value:           _progress,
-                          minHeight:       2.5,
-                          backgroundColor: Colors.transparent,
-                          valueColor:      const AlwaysStoppedAnimation(
-                              AppColors.accentPrimary),
-                        ),
-                      ),
-                    if (_isWatched)
-                      Positioned(
-                        top: 4, right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: AppColors.background.withValues(alpha: 0.7),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.check_rounded,
-                            color: AppColors.accentPrimary, size: 10),
-                        ),
-                      ),
-                  ],
+            // Episode number
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${widget.episode.episodeNumber}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _focused
+                      ? AppColors.accentPrimary
+                      : _isWatched
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary,
+                  fontSize:   13,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
             const SizedBox(width: 12),
 
-            // Info
+            // Title + duration
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  // Episode label + duration
-                  Row(
-                    children: [
-                      Text(
-                        'E${widget.episode.episodeNumber}',
-                        style: TextStyle(
-                          color: _focused
-                              ? AppColors.accentPrimary
-                              : AppColors.textMuted,
-                          fontSize:      10,
-                          fontWeight:    FontWeight.w500,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      if (_epDuration.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _epDuration,
-                          style: const TextStyle(
-                            color:      AppColors.textMuted,
-                            fontSize:   10,
-                            fontWeight: FontWeight.w300,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-
-                  // Title
-                  Text(
-                    widget.episode.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _isWatched
-                          ? AppColors.textMuted
-                          : AppColors.textPrimary,
-                      fontSize:   13,
-                      fontWeight: FontWeight.w400,
-                      height:     1.2,
-                    ),
-                  ),
-
-                  // Plot snippet
-                  if (widget.episode.plot != null &&
-                      widget.episode.plot!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.episode.plot!,
-                      maxLines: 2,
+                  Expanded(
+                    child: Text(
+                      widget.episode.title,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color:      AppColors.textSecondary,
-                        fontSize:   11,
-                        fontWeight: FontWeight.w300,
-                        height:     1.4,
+                      style: TextStyle(
+                        color: _isWatched
+                            ? AppColors.textMuted
+                            : AppColors.textPrimary,
+                        fontSize:   13,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
-                  ],
+                  ),
+                  if (_epDuration.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Text(
+                        _epDuration,
+                        style: const TextStyle(
+                          color:      AppColors.textMuted,
+                          fontSize:   11,
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
+
+            // Progress or status
+            if (_isInProgress)
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: SizedBox(
+                  width: 40,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(1),
+                    child: LinearProgressIndicator(
+                      value:           _progress,
+                      minHeight:       2,
+                      backgroundColor: AppColors.accentSoft,
+                      valueColor:      const AlwaysStoppedAnimation(
+                          AppColors.accentPrimary),
+                    ),
+                  ),
+                ),
+              ),
+            if (_isWatched)
+              const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: Icon(Icons.check_circle_outline_rounded,
+                  color: AppColors.textMuted, size: 14),
+              ),
+            if (_focused && !_isWatched)
+              const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: Icon(Icons.play_arrow_rounded,
+                  color: AppColors.accentPrimary, size: 16),
+              ),
           ],
         ),
       ),

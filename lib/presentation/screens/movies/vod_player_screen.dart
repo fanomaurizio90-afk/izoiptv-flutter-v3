@@ -305,8 +305,12 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                                     canRequestFocus: false,
                                     onKeyEvent: (_, event) {
                                       if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                                      if (event.logicalKey == LogicalKeyboardKey.arrowRight && _hasNextEpisode) {
-                                        _topNextNode.requestFocus();
+                                      if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                                        if (_hasNextEpisode) {
+                                          _topNextNode.requestFocus();
+                                        } else {
+                                          _playPauseNode.requestFocus();
+                                        }
                                         return KeyEventResult.handled;
                                       }
                                       if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -543,8 +547,8 @@ class _VodControls extends ConsumerWidget {
                     playPauseNode.requestFocus();
                     return KeyEventResult.handled;
                   }
-                  if (event.logicalKey == LogicalKeyboardKey.arrowRight && hasNext) {
-                    nextEpNode.requestFocus();
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                    if (hasNext) nextEpNode.requestFocus();
                     return KeyEventResult.handled;
                   }
                   if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
