@@ -53,7 +53,10 @@ class _PinDialogState extends State<_PinDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusCard)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        side: BorderSide(color: AppColors.glassBorder, width: 0.5),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl2),
         child: Column(
@@ -83,10 +86,10 @@ class _PinDialogState extends State<_PinDialog> {
                   height: 12,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:  filled ? AppColors.textPrimary : Colors.transparent,
+                    color:  filled ? AppColors.accentPrimary : Colors.transparent,
                     border: Border.all(
-                      color: _wrong ? AppColors.error : AppColors.textSecondary,
-                      width: 1,
+                      color: _wrong ? AppColors.error : AppColors.glassBorder,
+                      width: filled ? 1.5 : 1,
                     ),
                   ),
                 );
@@ -229,11 +232,11 @@ class _NumKeyState extends State<_NumKey> {
           height: 48,
           margin: const EdgeInsets.all(AppSpacing.xs),
           decoration: BoxDecoration(
-            color:        _focused ? AppColors.border : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+            color:        _focused ? AppColors.accentSoft : AppColors.card,
+            borderRadius: BorderRadius.circular(10),
             border:       Border.all(
-              color: _focused ? AppColors.textPrimary : AppColors.border,
-              width: _focused ? 1 : 0.5,
+              color: _focused ? AppColors.accentPrimary.withValues(alpha: 0.5) : AppColors.glassBorder,
+              width: 0.5,
             ),
           ),
           alignment: Alignment.center,

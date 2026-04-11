@@ -3,18 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Universal D-pad + touch widget for Fire Stick & Android TV.
-///
-/// Handles every remote key that means "activate":
-///   select, enter, numpadEnter, gameButtonA,
-///   DPAD_CENTER (keycode 23), BUTTON_A (keycode 96).
-///
-/// Focus visual  : 1.5px gold border + ambient glow + 1.03 scale (Apple TV style).
-/// Press visual  : AnimatedScale to 0.96 on key/tap down.
-/// Auto-scroll   : ensures focused element is visible in nearest Scrollable.
-/// Long-press    : contextMenu key fires onLongPress (TV menu button).
-///
-/// NEVER use InkWell or GestureDetector alone — always FocusableWidget.
 class FocusableWidget extends StatefulWidget {
   const FocusableWidget({
     super.key,
@@ -22,9 +10,9 @@ class FocusableWidget extends StatefulWidget {
     required this.onTap,
     this.onLongPress,
     this.focusNode,
-    this.autofocus      = false,
-    this.borderRadius   = 0.0,
-    this.enabled        = true,
+    this.autofocus       = false,
+    this.borderRadius    = 0.0,
+    this.enabled         = true,
     this.showFocusBorder = true,
   });
 
@@ -50,8 +38,6 @@ class _FocusableWidgetState extends State<FocusableWidget> {
   Timer? _longPressTimer;
   bool   _longPressFired   = false;
 
-  // ── Activate key detection ────────────────────────────────────────────────
-
   static bool _isActivateKey(KeyEvent event) {
     final lk = event.logicalKey;
     if (lk == LogicalKeyboardKey.select)       return true;
@@ -71,8 +57,6 @@ class _FocusableWidgetState extends State<FocusableWidget> {
     return event.logicalKey == LogicalKeyboardKey.contextMenu;
   }
 
-  // ── Auto-scroll ───────────────────────────────────────────────────────────
-
   void _ensureVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -81,15 +65,13 @@ class _FocusableWidgetState extends State<FocusableWidget> {
       if (scrollable == null) return;
       Scrollable.ensureVisible(
         ctx,
-        alignment:  0.5,
-        duration:   AppDurations.medium,
-        curve:      Curves.easeOut,
+        alignment:       0.5,
+        duration:        AppDurations.medium,
+        curve:           AppCurves.easeOut,
         alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
       );
     });
   }
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -103,8 +85,6 @@ class _FocusableWidgetState extends State<FocusableWidget> {
     if (widget.focusNode == null) _ownNode.dispose();
     super.dispose();
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +102,6 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         if (event is KeyDownEvent && _isActivateKey(event)) {
           if (mounted) setState(() => _pressed = true);
           if (widget.onLongPress != null) {
-            // Delay tap until key-up; fire longPress if held 500 ms
             _longPressFired = false;
             _longPressTimer?.cancel();
             _longPressTimer = Timer(const Duration(milliseconds: 500), () {
@@ -163,23 +142,37 @@ class _FocusableWidgetState extends State<FocusableWidget> {
         onTapUp:     widget.enabled ? (_) { if (mounted) setState(() => _pressed = false); } : null,
         onTapCancel: widget.enabled ? ()  { if (mounted) setState(() => _pressed = false); } : null,
         child: AnimatedScale(
-          scale:    _pressed ? 0.96 : (_focused && widget.showFocusBorder ? 1.03 : 1.0),
+          scale: _pressed
+              ? 0.96
+              : (_focused && widget.showFocusBorder ? 1.02 : 1.0),
           duration: AppDurations.press,
-          curve:    Curves.easeOutCubic,
+          curve:    AppCurves.easeOut,
           child: AnimatedContainer(
             duration: AppDurations.focus,
-            curve:    Curves.easeOut,
+            curve:    AppCurves.easeOut,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(widget.borderRadius),
-              border: _focused && widget.showFocusBorder
-                  ? Border.all(color: AppColors.focusBorder, width: AppSpacing.focusBorderWidth)
-                  : Border.all(color: Colors.transparent,    width: AppSpacing.focusBorderWidth),
+              border: Border.all(
+                color: _focused && widget.showFocusBorder
+                    ? AppColors.focusBorder
+                    : widget.showFocusBorder
+                        ? AppColors.glassBorder
+                        : Colors.transparent,
+                width: AppSpacing.focusBorderWidth,
+              ),
               boxShadow: _focused && widget.showFocusBorder
-                  ? [BoxShadow(
-                      color:      AppColors.focusGlow,
-                      blurRadius: 8,
-                      spreadRadius: 0,
-                    )]
+                  ? [
+                      BoxShadow(
+                        color:        AppColors.focusGlow,
+                        blurRadius:   20,
+                        spreadRadius: -2,
+                      ),
+                      BoxShadow(
+                        color:        AppColors.focusGlow.withValues(alpha: 0.12),
+                        blurRadius:   48,
+                        spreadRadius: 0,
+                      ),
+                    ]
                   : null,
             ),
             child: widget.child,

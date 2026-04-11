@@ -16,7 +16,7 @@ class LoadingWidget extends StatelessWidget {
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color:       AppColors.accentPrimary.withOpacity(0.6),
+              color:       AppColors.accentPrimary.withValues(alpha: 0.6),
             ),
           ),
           if (message != null) ...[

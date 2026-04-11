@@ -29,14 +29,12 @@ class FavouritesScreen extends ConsumerStatefulWidget {
 class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
   int _tab = 0; // 0=Channels 1=Movies 2=Series
 
-  final _backNode  = FocusNode();
   final _tabNode0  = FocusNode();
   final _tabNode1  = FocusNode();
   final _tabNode2  = FocusNode();
 
   @override
   void dispose() {
-    _backNode.dispose();
     _tabNode0.dispose();
     _tabNode1.dispose();
     _tabNode2.dispose();
@@ -55,33 +53,13 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.tvH, AppSpacing.xl, AppSpacing.tvH, AppSpacing.sm,
               ),
-              child: FocusableWidget(
-                focusNode:    _backNode,
-                autofocus:    true,
-                borderRadius: AppSpacing.radiusPill,
-                onTap:        () => context.pop(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border:       Border.all(color: AppColors.border, width: 0.5),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
-                      SizedBox(width: 6),
-                      Text(
-                        'Favourites',
-                        style: TextStyle(
-                          color:         AppColors.textSecondary,
-                          fontSize:      13,
-                          fontWeight:    FontWeight.w400,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                  ),
+              child: const Text(
+                'Favourites',
+                style: TextStyle(
+                  color:         AppColors.textPrimary,
+                  fontSize:      15,
+                  fontWeight:    FontWeight.w500,
+                  letterSpacing: -0.2,
                 ),
               ),
             ),
@@ -95,8 +73,9 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
                     label:     'Channels',
                     selected:  _tab == 0,
                     focusNode: _tabNode0,
+                    autofocus: true,
                     onTap: () => setState(() => _tab = 0),
-                    onLeft:  () => _backNode.requestFocus(),
+                    onLeft:  () {},
                     onRight: () => _tabNode1.requestFocus(),
                   ),
                   _Tab(
@@ -118,7 +97,7 @@ class _FavouritesScreenState extends ConsumerState<FavouritesScreen> {
                 ],
               ),
             ),
-            Container(height: 0.5, color: AppColors.border),
+            Container(height: 0.5, color: AppColors.borderSubtle),
             Expanded(child: _buildContent()),
           ],
         ),
@@ -168,6 +147,7 @@ class _Tab extends StatefulWidget {
     required this.onTap,
     required this.onLeft,
     required this.onRight,
+    this.autofocus = false,
   });
   final String        label;
   final bool          selected;
@@ -175,6 +155,7 @@ class _Tab extends StatefulWidget {
   final VoidCallback  onTap;
   final VoidCallback  onLeft;
   final VoidCallback? onRight;
+  final bool          autofocus;
 
   @override
   State<_Tab> createState() => _TabState();
@@ -225,6 +206,7 @@ class _TabState extends State<_Tab> {
       },
       child: FocusableWidget(
         focusNode:       widget.focusNode,
+        autofocus:       widget.autofocus,
         onTap:           widget.onTap,
         showFocusBorder: false,
         child: Padding(
@@ -235,29 +217,33 @@ class _TabState extends State<_Tab> {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.selected
-                        ? AppColors.textPrimary
-                        : _focused
-                            ? AppColors.textSecondary
-                            : AppColors.textMuted,
-                    fontSize:   12,
-                    fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w300,
-                    letterSpacing: 0.1,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              AnimatedContainer(
-                duration: AppDurations.medium,
-                curve:    Curves.easeOut,
-                height:   1.5,
-                width:    widget.selected ? 16 : 0,
-                decoration: BoxDecoration(
-                  color:        AppColors.accentPrimary,
-                  borderRadius: BorderRadius.circular(1),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: widget.selected
+                            ? AppColors.textPrimary
+                            : _focused
+                                ? AppColors.textSecondary
+                                : AppColors.textMuted,
+                        fontSize:   12,
+                        fontWeight: widget.selected ? FontWeight.w500 : FontWeight.w300,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                    if (widget.selected) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 4, height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.accentPrimary.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -406,7 +392,7 @@ class _ChannelListState extends ConsumerState<_ChannelList>
                       decoration: BoxDecoration(
                         color:        AppColors.card,
                         borderRadius: BorderRadius.circular(8),
-                        border:       Border.all(color: AppColors.border, width: 0.5),
+                        border:       Border.all(color: AppColors.glassBorder, width: 0.5),
                       ),
                       child: ch.logoUrl != null
                           ? CachedNetworkImage(

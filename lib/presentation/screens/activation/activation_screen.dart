@@ -140,7 +140,7 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                        border: Border.all(color: AppColors.border, width: 0.5),
+                        border: Border.all(color: AppColors.glassBorder, width: 0.5),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -166,10 +166,13 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                               if (_deviceId != null) {
                                 Clipboard.setData(ClipboardData(text: _deviceId!));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Device ID copied'),
-                                    duration: Duration(seconds: 2),
+                                  SnackBar(
+                                    content: const Text('Device ID copied',
+                                      style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                                    duration: const Duration(seconds: 2),
+                                    behavior: SnackBarBehavior.floating,
                                     backgroundColor: AppColors.card,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
                                 );
                               }

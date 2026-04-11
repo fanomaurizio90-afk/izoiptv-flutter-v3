@@ -37,6 +37,13 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   Timer? _hideTimer;
   Timer? _saveTimer;
 
+  final _playPauseNode = FocusNode();
+  final _backNode      = FocusNode();
+  final _seekBackNode  = FocusNode();
+  final _seekFwdNode   = FocusNode();
+  final _nextEpNode    = FocusNode();
+  final _topNextNode   = FocusNode();
+
   // True when playing a series episode
   bool get _isEpisode => widget.episodes != null;
 
@@ -82,6 +89,12 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     _saveTimer?.cancel();
     _savePositionSync();
     _playerNotifier.stop();
+    _playPauseNode.dispose();
+    _backNode.dispose();
+    _seekBackNode.dispose();
+    _seekFwdNode.dispose();
+    _nextEpNode.dispose();
+    _topNextNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
     super.dispose();
@@ -116,7 +129,10 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   }
 
   void _showControlsTemporarily() {
-    if (mounted) setState(() => _showControls = true);
+    if (mounted) {
+      setState(() => _showControls = true);
+      _playPauseNode.requestFocus();
+    }
     _startHideTimer();
   }
 
@@ -203,34 +219,52 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
           onKeyEvent: (_, event) {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
             final key = event.logicalKey;
-            // Play / pause
-            if (_isActivateKey(event) ||
-                key == LogicalKeyboardKey.mediaPlayPause) {
+
+            // Media keys always work regardless of control visibility
+            if (key == LogicalKeyboardKey.mediaPlayPause) {
               _playerNotifier.togglePlay();
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            // Seek back
-            if (key == LogicalKeyboardKey.arrowLeft ||
-                key == LogicalKeyboardKey.mediaRewind) {
+            if (key == LogicalKeyboardKey.mediaRewind) {
               final pos = ref.read(playerProvider).position;
               _playerNotifier.seek(pos - const Duration(seconds: 10));
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            // Seek forward
-            if (key == LogicalKeyboardKey.arrowRight ||
-                key == LogicalKeyboardKey.mediaFastForward) {
+            if (key == LogicalKeyboardKey.mediaFastForward) {
               final pos = ref.read(playerProvider).position;
               _playerNotifier.seek(pos + const Duration(seconds: 10));
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            // Menu — show/hide controls
-            if (key == LogicalKeyboardKey.contextMenu) {
+
+            // When controls are hidden: D-pad seeks, select toggles play
+            if (!_showControls) {
+              if (_isActivateKey(event)) {
+                _playerNotifier.togglePlay();
+                _showControlsTemporarily();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowLeft) {
+                final pos = ref.read(playerProvider).position;
+                _playerNotifier.seek(pos - const Duration(seconds: 10));
+                _showControlsTemporarily();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowRight) {
+                final pos = ref.read(playerProvider).position;
+                _playerNotifier.seek(pos + const Duration(seconds: 10));
+                _showControlsTemporarily();
+                return KeyEventResult.handled;
+              }
+              // Any other key shows controls
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
+
+            // When controls are visible: let arrows navigate between buttons
+            _startHideTimer();
             return KeyEventResult.ignored;
           },
           child: GestureDetector(
@@ -266,12 +300,29 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                               padding: const EdgeInsets.all(AppSpacing.lg),
                               child: Row(
                                 children: [
-                                  FocusableWidget(
-                                    onTap: () { if (context.canPop()) context.pop(); },
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(4),
-                                      child: Icon(Icons.arrow_back,
-                                          color: AppColors.textPrimary, size: 18),
+                                  Focus(
+                                    skipTraversal: true,
+                                    canRequestFocus: false,
+                                    onKeyEvent: (_, event) {
+                                      if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                                      if (event.logicalKey == LogicalKeyboardKey.arrowRight && _hasNextEpisode) {
+                                        _topNextNode.requestFocus();
+                                        return KeyEventResult.handled;
+                                      }
+                                      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                                        _playPauseNode.requestFocus();
+                                        return KeyEventResult.handled;
+                                      }
+                                      return KeyEventResult.ignored;
+                                    },
+                                    child: FocusableWidget(
+                                      focusNode: _backNode,
+                                      onTap: () { if (context.canPop()) context.pop(); },
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(4),
+                                        child: Icon(Icons.arrow_back,
+                                            color: AppColors.textPrimary, size: 18),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: AppSpacing.md),
@@ -288,24 +339,41 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                                     ),
                                   ),
                                   if (_hasNextEpisode)
-                                    FocusableWidget(
-                                      onTap: _playNextEpisode,
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(4),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'Next',
-                                              style: TextStyle(
-                                                  color: AppColors.textSecondary,
-                                                  fontSize: 12),
-                                            ),
-                                            SizedBox(width: 4),
-                                            Icon(Icons.skip_next_outlined,
-                                                color: AppColors.textPrimary,
-                                                size: 18),
-                                          ],
+                                    Focus(
+                                      skipTraversal: true,
+                                      canRequestFocus: false,
+                                      onKeyEvent: (_, event) {
+                                        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                                        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                                          _backNode.requestFocus();
+                                          return KeyEventResult.handled;
+                                        }
+                                        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                                          _nextEpNode.requestFocus();
+                                          return KeyEventResult.handled;
+                                        }
+                                        return KeyEventResult.ignored;
+                                      },
+                                      child: FocusableWidget(
+                                        focusNode: _topNextNode,
+                                        onTap: _playNextEpisode,
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(4),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'Next',
+                                                style: TextStyle(
+                                                    color: AppColors.textSecondary,
+                                                    fontSize: 12),
+                                              ),
+                                              SizedBox(width: 4),
+                                              Icon(Icons.skip_next_outlined,
+                                                  color: AppColors.textPrimary,
+                                                  size: 18),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -321,6 +389,12 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                             child: _VodControls(
                               hasNext:       _hasNextEpisode,
                               onNextEpisode: _playNextEpisode,
+                              playPauseNode: _playPauseNode,
+                              backNode:      _backNode,
+                              seekBackNode:  _seekBackNode,
+                              seekFwdNode:   _seekFwdNode,
+                              nextEpNode:    _nextEpNode,
+                              topNextNode:   _topNextNode,
                             ),
                           ),
                         ],
@@ -341,9 +415,21 @@ class _VodControls extends ConsumerWidget {
   const _VodControls({
     required this.hasNext,
     required this.onNextEpisode,
+    required this.playPauseNode,
+    required this.backNode,
+    required this.seekBackNode,
+    required this.seekFwdNode,
+    required this.nextEpNode,
+    required this.topNextNode,
   });
   final bool         hasNext;
   final VoidCallback onNextEpisode;
+  final FocusNode    playPauseNode;
+  final FocusNode    backNode;
+  final FocusNode    seekBackNode;
+  final FocusNode    seekFwdNode;
+  final FocusNode    nextEpNode;
+  final FocusNode    topNextNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -384,51 +470,127 @@ class _VodControls extends ConsumerWidget {
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 11)),
               const Spacer(),
-              FocusableWidget(
-                onTap: () {
-                  final p = ref.read(playerProvider).position;
-                  ref.read(playerProvider.notifier).seek(p - const Duration(seconds: 10));
+              Focus(
+                skipTraversal: true,
+                canRequestFocus: false,
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                    playPauseNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    backNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
                 },
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.replay_10,
-                      color: AppColors.textSecondary, size: 26),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                onTap: () => ref.read(playerProvider.notifier).togglePlay(),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    playerState.isPlaying
-                        ? Icons.pause_outlined
-                        : Icons.play_arrow_outlined,
-                    color: AppColors.textPrimary,
-                    size:  AppSpacing.iconMd,
+                child: FocusableWidget(
+                  focusNode: seekBackNode,
+                  onTap: () {
+                    final p = ref.read(playerProvider).position;
+                    ref.read(playerProvider.notifier).seek(p - const Duration(seconds: 10));
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.replay_10,
+                        color: AppColors.textSecondary, size: 26),
                   ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                onTap: () {
-                  final p = ref.read(playerProvider).position;
-                  ref.read(playerProvider.notifier).seek(p + const Duration(seconds: 10));
+              Focus(
+                skipTraversal: true,
+                canRequestFocus: false,
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    seekBackNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                    seekFwdNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    backNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
                 },
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.forward_10,
-                      color: AppColors.textSecondary, size: 26),
+                child: FocusableWidget(
+                  focusNode: playPauseNode,
+                  onTap: () => ref.read(playerProvider.notifier).togglePlay(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      playerState.isPlaying
+                          ? Icons.pause_outlined
+                          : Icons.play_arrow_outlined,
+                      color: AppColors.textPrimary,
+                      size:  AppSpacing.iconMd,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              Focus(
+                skipTraversal: true,
+                canRequestFocus: false,
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    playPauseNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight && hasNext) {
+                    nextEpNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    backNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: FocusableWidget(
+                  focusNode: seekFwdNode,
+                  onTap: () {
+                    final p = ref.read(playerProvider).position;
+                    ref.read(playerProvider.notifier).seek(p + const Duration(seconds: 10));
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.forward_10,
+                        color: AppColors.textSecondary, size: 26),
+                  ),
                 ),
               ),
               const Spacer(),
               if (hasNext)
-                FocusableWidget(
-                  onTap: onNextEpisode,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.skip_next_outlined,
-                        color: AppColors.textSecondary, size: 18),
+                Focus(
+                  skipTraversal: true,
+                  canRequestFocus: false,
+                  onKeyEvent: (_, event) {
+                    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                      seekFwdNode.requestFocus();
+                      return KeyEventResult.handled;
+                    }
+                    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                      topNextNode.requestFocus();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: FocusableWidget(
+                    focusNode: nextEpNode,
+                    onTap: onNextEpisode,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.skip_next_outlined,
+                          color: AppColors.textSecondary, size: 18),
+                    ),
                   ),
                 )
               else

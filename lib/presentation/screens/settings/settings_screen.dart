@@ -21,7 +21,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _syncing = false;
 
   // Explicit D-pad navigation chain
-  final _backNode      = FocusNode();
   final _managePlNode  = FocusNode();
   final _deviceIdNode  = FocusNode();
   final _refreshNode   = FocusNode();
@@ -29,7 +28,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    _backNode.dispose();
     _managePlNode.dispose();
     _deviceIdNode.dispose();
     _refreshNode.dispose();
@@ -59,33 +57,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.tvH, AppSpacing.xl2, AppSpacing.tvH, AppSpacing.xl,
               ),
-              child: FocusableWidget(
-                focusNode:    _backNode,
-                autofocus:    true,
-                borderRadius: AppSpacing.radiusPill,
-                onTap:        () => context.pop(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border:       Border.all(color: AppColors.border, width: 0.5),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
-                      SizedBox(width: 6),
-                      Text(
-                        'Settings',
-                        style: TextStyle(
-                          color:         AppColors.textSecondary,
-                          fontSize:      13,
-                          fontWeight:    FontWeight.w400,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                  ),
+              child: const Text(
+                'Settings',
+                style: TextStyle(
+                  color:         AppColors.textPrimary,
+                  fontSize:      15,
+                  fontWeight:    FontWeight.w500,
+                  letterSpacing: -0.2,
                 ),
               ),
             ),
@@ -100,7 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // Device ID — focusable display row (select copies ID)
                   _DeviceIdRow(
                     focusNode: _deviceIdNode,
-                    upNode:    _backNode,
+                    upNode:    _deviceIdNode,
                     downNode:  _managePlNode,
                   ),
 
@@ -229,13 +207,13 @@ class _SettingsRowState extends State<_SettingsRow> {
         vertical:   AppSpacing.lg,
       ),
       decoration: BoxDecoration(
-        color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+        color: _focused ? AppColors.accentSoft : Colors.transparent,
         border: Border(
           left: BorderSide(
             color: _focused ? AppColors.focusBorder : Colors.transparent,
             width: 2.5,
           ),
-          bottom: const BorderSide(color: AppColors.border, width: 0.5),
+          bottom: const BorderSide(color: AppColors.glassBorder, width: 0.5),
         ),
       ),
       child: Row(
@@ -315,7 +293,7 @@ class _SignOutRowState extends State<_SignOutRow> {
             vertical:   AppSpacing.lg,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+            color: _focused ? AppColors.accentSoft : Colors.transparent,
             border: Border(
               left: BorderSide(
                 color: _focused ? AppColors.focusBorder : Colors.transparent,
@@ -398,7 +376,7 @@ class _LibraryStatusRowState extends ConsumerState<_LibraryStatusRow> {
         vertical:   AppSpacing.lg,
       ),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+        border: Border(bottom: BorderSide(color: AppColors.glassBorder, width: 0.5)),
       ),
       child: Row(
         children: [
@@ -498,6 +476,7 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
   Widget build(BuildContext context) {
     return Focus(
       focusNode:     widget.focusNode,
+      autofocus:     true,
       onFocusChange: (f) { if (mounted) setState(() => _focused = f); },
       onKeyEvent: (_, event) => _rowKeyEvent(
         event, widget.upNode, widget.downNode, _copy,
@@ -511,13 +490,13 @@ class _DeviceIdRowState extends State<_DeviceIdRow> {
             vertical:   AppSpacing.lg,
           ),
           decoration: BoxDecoration(
-            color: _focused ? const Color(0x0AFFFFFF) : Colors.transparent,
+            color: _focused ? AppColors.accentSoft : Colors.transparent,
             border: Border(
               left: BorderSide(
                 color: _focused ? AppColors.focusBorder : Colors.transparent,
                 width: 2.5,
               ),
-              bottom: const BorderSide(color: AppColors.border, width: 0.5),
+              bottom: const BorderSide(color: AppColors.glassBorder, width: 0.5),
             ),
           ),
           child: Row(

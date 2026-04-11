@@ -30,7 +30,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   final _debounce               = Debounce(duration: const Duration(milliseconds: 300));
   final _firstCategoryFocusNode = FocusNode();
   final _searchFocusNode        = FocusNode();
-  final _backFocusNode          = FocusNode();
+  final _searchIconNode         = FocusNode();
   final _contentListKey  = GlobalKey<_ContentListState>();
   final _categoryBarKey  = GlobalKey<_CategoryBarState>();
 
@@ -43,6 +43,7 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
   bool                 _syncing        = false;
   String?              _error;
   bool                 _searching      = false;
+  bool                 _searchActive   = false;
 
   @override
   void initState() {
@@ -58,21 +59,39 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     _debounce.dispose();
     _firstCategoryFocusNode.dispose();
     _searchFocusNode.dispose();
-    _backFocusNode.dispose();
+    _searchIconNode.dispose();
     super.dispose();
   }
 
   void _onSearch() {
-    _debounce(() {
+    _debounce(() async {
       final q = _searchCtrl.text.trim();
       if (!mounted) return;
       if (q.isEmpty) {
         setState(() { _searching = false; _searchResults = []; });
       } else {
+        final results = await ref.read(vodRepositoryProvider).searchVod(q);
+        if (!mounted) return;
         setState(() {
           _searching     = true;
-          _searchResults = _items.where((v) => v.name.toLowerCase().contains(q.toLowerCase())).toList();
+          _searchResults = results;
         });
+      }
+    });
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchActive = !_searchActive;
+      if (_searchActive) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _searchFocusNode.requestFocus();
+        });
+      } else {
+        _searchCtrl.clear();
+        _searching = false;
+        _searchResults = [];
+        _searchFocusNode.unfocus();
       }
     });
   }
@@ -211,8 +230,11 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     final action = await showDialog<String>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          side: BorderSide(color: AppColors.glassBorder, width: 0.5),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Column(
@@ -222,17 +244,29 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
                 autofocus: true,
                 borderRadius: 8,
                 onTap: () => Navigator.of(ctx).pop('favourite'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color:        AppColors.card,
+                    borderRadius: BorderRadius.circular(8),
+                    border:       Border.all(color: AppColors.glassBorder, width: 0.5),
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(vod.isFavourite ? Icons.favorite : Icons.favorite_border,
-                          color: Colors.white, size: 16),
+                      Icon(
+                        vod.isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        color: vod.isFavourite ? AppColors.accentPrimary : AppColors.textSecondary,
+                        size: 15,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         vod.isFavourite ? 'Remove from Favourites' : 'Add to Favourites',
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color:      AppColors.textPrimary,
+                          fontSize:   13,
+                          fontWeight: FontWeight.w300,
+                        ),
                       ),
                     ],
                   ),
@@ -282,65 +316,78 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites'),
-      duration: const Duration(seconds: 2),
-      backgroundColor: const Color(0xFF1A1A1A),
+      content: Text(
+        newVal ? '${vod.name} added to Favourites' : '${vod.name} removed from Favourites',
+        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+      ),
+      duration:  const Duration(seconds: 2),
+      behavior:  SnackBarBehavior.floating,
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: AppColors.background,
-        body: SafeArea(
-          child: Column(
-            children: [
-              _TopBar(
-                searchCtrl:      _searchCtrl,
-                backFocusNode:   _backFocusNode,
-                searchFocusNode: _searchFocusNode,
-                onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
-              ),
-              if (_categories.isNotEmpty) _CategoryBar(
-                key:                _categoryBarKey,
-                categories:         _categories,
-                selectedId:         _selectedCatId,
-                onSelect:           _selectCategory,
-                firstItemFocusNode: _firstCategoryFocusNode,
-                onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
-                onUpArrow:          () => _backFocusNode.requestFocus(),
-                onReorderConfirm:   _onVodCategoryReorder,
-              ),
-              Expanded(child: _buildContent()),
-            ],
-          ),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _TopBar(
+              searchCtrl:      _searchCtrl,
+              searchFocusNode: _searchFocusNode,
+              searchIconNode:  _searchIconNode,
+              searchActive:    _searchActive,
+              onSearchToggle:  _toggleSearch,
+              onDownArrow:     () => _firstCategoryFocusNode.requestFocus(),
+            ),
+            if (_categories.isNotEmpty) _CategoryBar(
+              key:                _categoryBarKey,
+              categories:         _categories,
+              selectedId:         _selectedCatId,
+              onSelect:           _selectCategory,
+              firstItemFocusNode: _firstCategoryFocusNode,
+              onDownArrow:        (x) => _contentListKey.currentState?.focusClosestColumnTo(x ?? 0),
+              onUpArrow:          () => _searchIconNode.requestFocus(),
+              onReorderConfirm:   _onVodCategoryReorder,
+            ),
+            Expanded(child: _buildContent()),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildContent() {
     final cols = MediaQuery.of(context).size.width >= 900 ? 5 : 3;
     if (_syncing || _loading) return SkeletonPosterGrid(columns: cols);
     if (_error != null) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.error_outline_rounded, color: AppColors.error, size: 22),
-        const SizedBox(height: AppSpacing.md),
-        Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
-        const SizedBox(height: AppSpacing.md),
-        FocusableWidget(
-          borderRadius: AppSpacing.radiusCard,
-          onTap: _load,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-            decoration: BoxDecoration(
-              border:       Border.all(color: AppColors.border, width: 0.5),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-            ),
-            child: const Text('Retry',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+          const SizedBox(height: AppSpacing.md),
+          Text(_error!,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w300),
           ),
-        ),
-      ]));
+          const SizedBox(height: AppSpacing.lg),
+          FocusableWidget(
+            borderRadius: 8,
+            onTap: _load,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(8),
+                border:       Border.all(color: AppColors.glassBorder, width: 0.5),
+              ),
+              child: const Text('Retry',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w400),
+              ),
+            ),
+          ),
+        ]),
+      );
     }
     final display = _searching ? _searchResults : _items;
     if (display.isEmpty) {
@@ -357,7 +404,13 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
       focusMemoryKey:   'movies',
       onLongPress:      _showItemPopup,
       progressMap:      _progressMap,
-      onUpFromFirstRow: (x) => _categoryBarKey.currentState?.focusClosestTo(x),
+      onUpFromFirstRow: (x) {
+        if (_searchActive) {
+          _searchFocusNode.requestFocus();
+        } else {
+          _categoryBarKey.currentState?.focusClosestTo(x);
+        }
+      },
       onTap:            (vod) async {
         final cat = _categories.firstWhere(
           (c) => c.id == vod.categoryId,
@@ -377,6 +430,10 @@ class _MoviesScreenState extends ConsumerState<MoviesScreen> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content Grid
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ContentList extends StatefulWidget {
   const _ContentList({
@@ -504,8 +561,8 @@ class _ContentListState extends State<_ContentList> {
     if (target != null) {
       _scrollCtrl.animateTo(
         target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 180),
-        curve:    Curves.easeOut,
+        duration: AppDurations.medium,
+        curve:    AppCurves.easeOut,
       );
     }
   }
@@ -565,15 +622,15 @@ class _ContentListState extends State<_ContentList> {
             ),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount:   widget.columns,
-              crossAxisSpacing: AppSpacing.sm,
-              mainAxisSpacing:  AppSpacing.sm,
+              crossAxisSpacing: AppSpacing.md,
+              mainAxisSpacing:  AppSpacing.md,
               childAspectRatio: 2 / 3,
             ),
             itemCount:   widget.items.length,
             itemBuilder: (_, i) => FocusableWidget(
               focusNode:    _nodeFor(i),
               autofocus:    i == _restoreIndex,
-              borderRadius: AppSpacing.radiusCard,
+              borderRadius: 10,
               onTap:        () {
                 if (widget.focusMemoryKey != null) {
                   FocusMemoryService.instance.save(widget.focusMemoryKey!, i);
@@ -595,7 +652,9 @@ class _ContentListState extends State<_ContentList> {
   }
 }
 
-// ── Poster Card ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Poster Card
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _PosterCard extends StatelessWidget {
   const _PosterCard({required this.vod, this.progress});
@@ -605,77 +664,98 @@ class _PosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+      borderRadius: BorderRadius.circular(10),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Background fill
           Container(color: AppColors.card),
 
-          // Poster image
           if (vod.posterUrl != null)
             CachedNetworkImage(
               imageUrl:       vod.posterUrl!,
               fit:            BoxFit.cover,
               memCacheWidth:  300,
-              fadeInDuration: const Duration(milliseconds: 200),
+              fadeInDuration: AppDurations.medium,
               placeholder:    (_, __) => const SizedBox.shrink(),
               errorWidget:    (_, __, ___) => _PlaceholderArt(name: vod.name),
             )
           else
             _PlaceholderArt(name: vod.name),
 
-          // Bottom gradient + title
+          // Bottom scrim + title
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin:  Alignment.topCenter,
                   end:    Alignment.bottomCenter,
-                  stops:  [0.0, 0.4, 1.0],
-                  colors: [Colors.transparent, Color(0xAA070709), Color(0xF8070709)],
+                  stops:  const [0.0, 0.35, 1.0],
+                  colors: [
+                    Colors.transparent,
+                    AppColors.background.withValues(alpha: 0.6),
+                    AppColors.background.withValues(alpha: 0.95),
+                  ],
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(8, 28, 8, 9),
+              padding: const EdgeInsets.fromLTRB(10, 32, 10, 10),
               child: Text(
                 vod.name,
                 maxLines:  2,
                 overflow:  TextOverflow.ellipsis,
                 textAlign: TextAlign.left,
                 style: const TextStyle(
-                  color:      AppColors.textPrimary,
-                  fontSize:   11,
-                  fontWeight: FontWeight.w400,
-                  height:     1.4,
+                  color:         AppColors.textPrimary,
+                  fontSize:      11,
+                  fontWeight:    FontWeight.w400,
+                  height:        1.35,
                   letterSpacing: -0.1,
                 ),
               ),
             ),
           ),
 
-          // Favourite heart
+          // Favourite indicator
           if (vod.isFavourite)
-            const Positioned(
-              top:   6,
-              right: 6,
-              child: Icon(Icons.favorite, color: Colors.white, size: 12),
+            Positioned(
+              top: 6, right: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  Icons.favorite_rounded,
+                  color: AppColors.accentPrimary.withValues(alpha: 0.8),
+                  size: 10,
+                ),
+              ),
             ),
 
           // Progress bar
           if (progress != null)
             Positioned(
               left: 0, right: 0, bottom: 0,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft:  Radius.circular(AppSpacing.radiusCard),
-                  bottomRight: Radius.circular(AppSpacing.radiusCard),
+              child: Container(
+                height: 2.5,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft:  Radius.circular(10),
+                    bottomRight: Radius.circular(10),
+                  ),
                 ),
-                child: LinearProgressIndicator(
-                  value:           progress!,
-                  minHeight:       3,
-                  backgroundColor: Colors.white24,
-                  valueColor:      const AlwaysStoppedAnimation<Color>(AppColors.accentPrimary),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft:  Radius.circular(10),
+                    bottomRight: Radius.circular(10),
+                  ),
+                  child: LinearProgressIndicator(
+                    value:           progress!,
+                    minHeight:       2.5,
+                    backgroundColor: AppColors.glassBorder,
+                    valueColor:      const AlwaysStoppedAnimation<Color>(AppColors.accentPrimary),
+                  ),
                 ),
               ),
             ),
@@ -694,138 +774,173 @@ class _PlaceholderArt extends StatelessWidget {
     return Container(
       color: AppColors.card,
       child: Center(
-        child: Icon(Icons.movie_outlined, color: AppColors.textMuted.withOpacity(0.35), size: 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.movie_outlined, color: AppColors.textMuted.withValues(alpha: 0.25), size: 24),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                name,
+                maxLines:  2,
+                overflow:  TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color:         AppColors.textMuted.withValues(alpha: 0.5),
+                  fontSize:      9,
+                  fontWeight:    FontWeight.w300,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Top Bar ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Top Bar
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.searchCtrl,
-    required this.backFocusNode,
     required this.searchFocusNode,
+    required this.searchIconNode,
+    required this.searchActive,
+    required this.onSearchToggle,
     this.onDownArrow,
   });
   final TextEditingController searchCtrl;
-  final FocusNode             backFocusNode;
   final FocusNode             searchFocusNode;
+  final FocusNode             searchIconNode;
+  final bool                  searchActive;
+  final VoidCallback          onSearchToggle;
   final VoidCallback?         onDownArrow;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.tvH, AppSpacing.md, AppSpacing.tvH, AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.sm,
+      ),
       child: Row(
         children: [
-          // Back button
-          FocusableWidget(
-            focusNode:    backFocusNode,
-            borderRadius: AppSpacing.radiusPill,
-            onTap:        () => context.pop(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border:       Border.all(color: AppColors.border, width: 0.5),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textMuted, size: 10),
-                  SizedBox(width: 6),
-                  Text(
-                    'Movies',
-                    style: TextStyle(
-                      color:         AppColors.textSecondary,
-                      fontSize:      13,
-                      fontWeight:    FontWeight.w400,
-                      letterSpacing: -0.1,
+          if (searchActive) ...[
+            Expanded(
+              child: Focus(
+                skipTraversal:   true,
+                canRequestFocus: false,
+                onKeyEvent: (_, event) {
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    onDownArrow?.call();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.escape ||
+                      event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    onSearchToggle();
+                    searchIconNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+                      searchCtrl.text.isEmpty) {
+                    onSearchToggle();
+                    searchIconNode.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: AnimatedContainer(
+                  duration: AppDurations.focus,
+                  curve:    AppCurves.easeOut,
+                  height:   36,
+                  decoration: BoxDecoration(
+                    color:        AppColors.card,
+                    borderRadius: BorderRadius.circular(10),
+                    border:       Border.all(
+                      color: AppColors.accentPrimary.withValues(alpha: 0.5),
+                      width: 0.5,
                     ),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          focusNode:       searchFocusNode,
+                          controller:      searchCtrl,
+                          textInputAction: TextInputAction.search,
+                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                          decoration: const InputDecoration(
+                            hintText:       'Search all movies',
+                            hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w300),
+                            border:         InputBorder.none,
+                            enabledBorder:  InputBorder.none,
+                            focusedBorder:  InputBorder.none,
+                            contentPadding: EdgeInsets.only(bottom: 2),
+                            isDense:        true,
+                            filled:         true,
+                            fillColor:      Colors.transparent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-
-          const SizedBox(width: AppSpacing.xl),
-
-          // Search field
-          Expanded(
-            child: Focus(
-              skipTraversal: true,
-              canRequestFocus: false,
+          ] else ...[
+            const Text('Movies',
+              style: TextStyle(
+                color:         AppColors.textPrimary,
+                fontSize:      15,
+                fontWeight:    FontWeight.w500,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const Spacer(),
+            Focus(
               onKeyEvent: (_, event) {
                 if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
                 if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                   onDownArrow?.call();
                   return KeyEventResult.handled;
                 }
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                    event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  searchFocusNode.unfocus();
-                  return KeyEventResult.handled;
-                }
                 return KeyEventResult.ignored;
               },
-              child: AnimatedBuilder(
-              animation: searchFocusNode,
-              builder: (context, _) {
-                final focused = searchFocusNode.hasFocus;
-                return Container(
-                  height: 38,
+              child: FocusableWidget(
+                focusNode:    searchIconNode,
+                autofocus:    true,
+                borderRadius: 8,
+                onTap:        onSearchToggle,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color:        AppColors.card,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                    border:       Border.all(
-                      color: focused ? Colors.white : AppColors.border,
-                      width: focused ? 1.0 : 0.5,
-                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    border:       Border.all(color: AppColors.glassBorder, width: 0.5),
                   ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 14),
-                      const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 14),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          focusNode:  searchFocusNode,
-                          controller: searchCtrl,
-                          style: const TextStyle(
-                            color:      AppColors.textPrimary,
-                            fontSize:   12,
-                            fontWeight: FontWeight.w300,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText:       'Search movies…',
-                            hintStyle:      TextStyle(color: AppColors.textMuted, fontSize: 12),
-                            border:         InputBorder.none,
-                              enabledBorder:  InputBorder.none,
-                              focusedBorder:  InputBorder.none,
-                              contentPadding: EdgeInsets.only(bottom: 2),
-                              isDense:        true,
-                              filled:         true,
-                              fillColor:      Colors.transparent,
-                            ),
-                          ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                  ),
-                );
-              },
+                  child: const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 16),
+                ),
+              ),
             ),
-          ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Category Bar ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Category Bar
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _CategoryBar extends StatefulWidget {
   const _CategoryBar({
@@ -913,8 +1028,8 @@ class _CategoryBarState extends State<_CategoryBar> {
       final ctx = key.currentContext;
       if (ctx != null) {
         Scrollable.ensureVisible(ctx,
-          duration:  const Duration(milliseconds: 150),
-          curve:     Curves.easeOut,
+          duration:  AppDurations.medium,
+          curve:     AppCurves.easeOut,
           alignment: 0.5,
         );
       }
@@ -967,9 +1082,7 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 
   void _moveReorder(int direction) {
-    // direction: -1 = left, +1 = right
     final newIdx = _reorderIdx + direction;
-    // Don't move into virtual category slots (All=0, CW=-1, Fav=-2)
     if (newIdx < 0 || newIdx >= _reorderList.length) return;
     if (_reorderList[newIdx].id <= 0) return;
     setState(() {
@@ -977,7 +1090,6 @@ class _CategoryBarState extends State<_CategoryBar> {
       _reorderList.insert(newIdx, item);
       _reorderIdx = newIdx;
     });
-    // Move focus to follow the reordered item
     final node = newIdx == 0 ? widget.firstItemFocusNode : _nodeFor(newIdx);
     node?.requestFocus();
     if (newIdx < _keys.length) _scrollToKey(_keys[newIdx]);
@@ -1026,102 +1138,112 @@ class _CategoryBarState extends State<_CategoryBar> {
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
           _cancelReorder(); return KeyEventResult.handled;
         }
-        // Let Select/Enter propagate to FocusableWidget.onTap for confirm
         return KeyEventResult.ignored;
       },
-      child: SizedBox(
-        height: 46,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding:         EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-          itemCount:       cats.length,
-          itemBuilder:     (_, i) {
-            final cat          = cats[i];
-            final isSelected   = cat.id == widget.selectedId;
-            final isFocused    = _focusedCatIdx == i;
-            final isReordering = _reorderMode && i == _reorderIdx;
-            final node         = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
-            return Focus(
-              key: _keys[i],
-              onKeyEvent: (_, event) {
-                if (_reorderMode) return KeyEventResult.ignored;
-                if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                  widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                  widget.onUpArrow(); return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: FocusableWidget(
-                autofocus:       i == 0,
-                focusNode:       node,
-                showFocusBorder: false,
-                onTap:           _reorderMode
-                    ? (i == _reorderIdx ? _confirmReorder : () {})
-                    : () => widget.onSelect(cat.id),
-                onLongPress:     (!_reorderMode && cat.id > 0 && widget.onReorderConfirm != null)
-                    ? () => _startReorder(i)
-                    : null,
-                child: Container(
-                  decoration: isReordering ? BoxDecoration(
-                    border:       Border.all(color: AppColors.accentPrimary, width: 1.5),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                  ) : null,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize:      MainAxisSize.min,
+      child: Container(
+        height: 44,
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.borderSubtle, width: 0.5),
+          ),
+        ),
+        child: ScrollConfiguration(
+          behavior: const ScrollBehavior().copyWith(scrollbars: false),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
+            itemCount:       cats.length,
+            itemBuilder:     (_, i) {
+              final cat          = cats[i];
+              final isSelected   = cat.id == widget.selectedId;
+              final isFocused    = _focusedCatIdx == i;
+              final isReordering = _reorderMode && i == _reorderIdx;
+              final node         = i == 0 ? widget.firstItemFocusNode : _nodeFor(i);
+              return Focus(
+                key: _keys[i],
+                onKeyEvent: (_, event) {
+                  if (_reorderMode) return KeyEventResult.ignored;
+                  if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                    if (i < cats.length - 1) _nodeFor(i + 1).requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    if (i > 0) (i == 1 ? widget.firstItemFocusNode : _nodeFor(i - 1))?.requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    widget.onDownArrow(_getCenterX(i)); return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                    widget.onUpArrow(); return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: FocusableWidget(
+                  autofocus:       i == 0,
+                  focusNode:       node,
+                  showFocusBorder: false,
+                  onTap:           _reorderMode
+                      ? (i == _reorderIdx ? _confirmReorder : () {})
+                      : () => widget.onSelect(cat.id),
+                  onLongPress:     (!_reorderMode && cat.id > 0 && widget.onReorderConfirm != null)
+                      ? () => _startReorder(i)
+                      : null,
+                  child: Container(
+                    margin:  const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isReordering
+                          ? AppColors.accentPrimary.withValues(alpha: 0.1)
+                          : isSelected && isFocused
+                              ? AppColors.accentSoft
+                              : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: isReordering
+                          ? Border.all(color: AppColors.accentPrimary.withValues(alpha: 0.5), width: 1)
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text(
-                            cat.name,
-                            style: TextStyle(
-                              color: isReordering
-                                  ? AppColors.accentPrimary
-                                  : isSelected
-                                      ? AppColors.textPrimary
-                                      : isFocused
-                                          ? AppColors.textSecondary
-                                          : AppColors.textMuted,
-                              fontSize:      12,
-                              fontWeight:    (isSelected || isReordering) ? FontWeight.w500 : FontWeight.w300,
-                              letterSpacing: 0.1,
+                        Text(
+                          cat.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isReordering
+                                ? AppColors.accentPrimary
+                                : isSelected
+                                    ? AppColors.textPrimary
+                                    : isFocused
+                                        ? AppColors.textSecondary
+                                        : AppColors.textMuted,
+                            fontSize:      12,
+                            fontWeight:    isSelected ? FontWeight.w500 : FontWeight.w300,
+                            letterSpacing: isSelected ? -0.1 : 0,
+                          ),
+                        ),
+                        if (isSelected && !isReordering) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width:  4,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: AppColors.accentPrimary.withValues(alpha: 0.6),
+                              shape: BoxShape.circle,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        AnimatedContainer(
-                          duration: AppDurations.medium,
-                          curve:    Curves.easeOut,
-                          height:   1.5,
-                          width:    isSelected ? 16 : 0,
-                          decoration: BoxDecoration(
-                            color:        AppColors.accentPrimary,
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
-

@@ -24,7 +24,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       vsync:    this,
       duration: const Duration(milliseconds: 800),
     );
-    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _fade  = CurvedAnimation(parent: _ctrl, curve: AppCurves.easeOut);
     _scale = Tween<double>(begin: 0.95, end: 1.0).animate(_fade);
 
     _ctrl.addStatusListener((status) {

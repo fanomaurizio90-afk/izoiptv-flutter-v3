@@ -39,13 +39,23 @@ class ExpiredScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl3),
                 FocusableWidget(
-                  autofocus: true,
+                  autofocus:    true,
+                  borderRadius: 8,
                   onTap: () => ref.read(authProvider.notifier).logout(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color:        AppColors.card,
+                      borderRadius: BorderRadius.circular(8),
+                      border:       Border.all(color: AppColors.glassBorder, width: 0.5),
+                    ),
                     child: const Text(
                       'Sign out',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      style: TextStyle(
+                        color:      AppColors.textSecondary,
+                        fontSize:   13,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),

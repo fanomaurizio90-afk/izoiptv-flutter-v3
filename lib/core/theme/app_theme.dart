@@ -1,45 +1,46 @@
 import 'package:flutter/material.dart';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Design system — "Obsidian"
+//
+// Near-black OLED surfaces with warm amber accent.
+// Single accent color. Glass-like materiality on surfaces.
+// Custom easing curves for premium motion.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 abstract final class AppColors {
-  // ── Backgrounds ──────────────────────────────────────────────────────────────
-  static const background    = Color(0xFF070709);  // OLED near-black, ghost of warmth
-  static const surface       = Color(0xFF09090E);  // just above background
-  static const card          = Color(0xFF0E0E17);  // card layer
-  static const cardElevated  = Color(0xFF141422);  // elevated surface
+  static const background    = Color(0xFF050507);
+  static const surface       = Color(0xFF08080D);
+  static const card          = Color(0xFF0D0D16);
+  static const cardElevated  = Color(0xFF121220);
 
-  // ── Accent — champagne gold ───────────────────────────────────────────────────
-  static const accentPrimary = Color(0xFFC8A058);  // warm gold
-  static const accentPurple  = Color(0xFF9A7FD4);  // muted lilac (secondary)
-  static const accentSoft    = Color(0x22C8A058);  // gold at 13%
+  static const accentPrimary = Color(0xFFD4A76A);
+  static const accentPurple  = Color(0xFF8A7BC4);
+  static const accentSoft    = Color(0x15D4A76A);
 
-  // ── Borders ──────────────────────────────────────────────────────────────────
-  static const border        = Color(0x14FFFFFF);  // 8% white
-  static const borderSubtle  = Color(0x09FFFFFF);  // 4% white
-  static const borderGold    = Color(0x30C8A058);  // gold border
+  static const border        = Color(0x0DFFFFFF);
+  static const borderSubtle  = Color(0x07FFFFFF);
+  static const borderGold    = Color(0x28D4A76A);
 
-  // ── Text ─────────────────────────────────────────────────────────────────────
-  static const textPrimary   = Color(0xFFF0F0F6);  // soft off-white
-  static const textSecondary = Color(0xFF8888A0);  // cooler grey
-  static const textMuted     = Color(0xFF444456);  // deep muted
+  static const textPrimary   = Color(0xFFECECF4);
+  static const textSecondary = Color(0xFF6A6A80);
+  static const textMuted     = Color(0xFF38384A);
 
-  // ── Focus: gold border + ambient glow ────────────────────────────────────────
-  static const focusBorder      = Color(0xFFC8A058);
-  static const focusBorderWidth = 1.5;
-  static const focusGlow        = Color(0x38C8A058);  // stronger ambient
+  static const focusBorder   = Color(0xFFD4A76A);
+  static const focusGlow     = Color(0x30D4A76A);
 
-  // ── States ───────────────────────────────────────────────────────────────────
-  static const error         = Color(0xFFE06060);
-  static const errorSurface  = Color(0x25E06060);
-  static const success       = Color(0xFF5AB87A);
-  static const warning       = Color(0xFFD4963A);
+  static const error         = Color(0xFFD45B5B);
+  static const errorSurface  = Color(0x20D45B5B);
+  static const success       = Color(0xFF4FA872);
+  static const warning       = Color(0xFFC9903A);
 
-  // ── Player ───────────────────────────────────────────────────────────────────
-  static const playerOverlay = Color(0xEA070709);
+  static const playerOverlay = Color(0xEA050507);
   static const transparent   = Colors.transparent;
 
-  // ── Skeleton shimmer ─────────────────────────────────────────────────────────
-  static const skeleton      = Color(0xFF111119);
-  static const skeletonShine = Color(0xFF1A1A26);
+  static const skeleton      = Color(0xFF0C0C16);
+  static const skeletonShine = Color(0xFF161624);
+
+  static const glassBorder   = Color(0x0AFFFFFF);
 }
 
 abstract final class AppSpacing {
@@ -54,30 +55,32 @@ abstract final class AppSpacing {
   static const double xl5 = 48.0;
   static const double xl6 = 64.0;
 
-  // TV-safe insets — compensate for Fire Stick overscan (~5% of 1080p)
   static const double tvH = 52.0;
   static const double tvV = 28.0;
 
-  // Border radii
-  static const double radiusCard       = 10.0;
+  static const double radiusCard       = 14.0;
   static const double radiusInput      = 8.0;
   static const double radiusPill       = 24.0;
-  static const double focusBorderWidth = 1.5;
+  static const double focusBorderWidth = 1.0;
 
-  // Icon sizes
   static const double iconSm  = 16.0;
   static const double iconMd  = 18.0;
   static const double iconLg  = 24.0;
 }
 
 abstract final class AppDurations {
-  static const fast              = Duration(milliseconds: 100);
-  static const medium            = Duration(milliseconds: 160);
-  static const slow              = Duration(milliseconds: 280);
-  static const press             = Duration(milliseconds: 120);
-  static const focus             = Duration(milliseconds: 140);
+  static const fast              = Duration(milliseconds: 80);
+  static const medium            = Duration(milliseconds: 140);
+  static const slow              = Duration(milliseconds: 240);
+  static const press             = Duration(milliseconds: 100);
+  static const focus             = Duration(milliseconds: 120);
   static const controlsAutoHide  = Duration(seconds: 3);
   static const historyFlushPeriod = Duration(seconds: 10);
+}
+
+abstract final class AppCurves {
+  static const easeOut   = Cubic(0.23, 1.0, 0.32, 1.0);
+  static const easeInOut = Cubic(0.77, 0.0, 0.175, 1.0);
 }
 
 abstract final class AppTheme {
@@ -94,7 +97,7 @@ abstract final class AppTheme {
         labelLarge:  base.textTheme.labelLarge?.copyWith(  fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 14),
         labelMedium: base.textTheme.labelMedium?.copyWith( fontFamily: _fontFamily, color: AppColors.textSecondary, fontWeight: FontWeight.w400, fontSize: 13),
         labelSmall:  base.textTheme.labelSmall?.copyWith(  fontFamily: _fontFamily, color: AppColors.textMuted,     fontWeight: FontWeight.w500, fontSize: 10, letterSpacing: 1.2),
-        titleLarge:  base.textTheme.titleLarge?.copyWith(  fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 20, letterSpacing: -0.5),
+        titleLarge:  base.textTheme.titleLarge?.copyWith(  fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w300, fontSize: 20, letterSpacing: -0.8),
         titleMedium: base.textTheme.titleMedium?.copyWith( fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 15, letterSpacing: -0.2),
         titleSmall:  base.textTheme.titleSmall?.copyWith(  fontFamily: _fontFamily, color: AppColors.textPrimary,   fontWeight: FontWeight.w500, fontSize: 13),
       ),
@@ -109,32 +112,32 @@ abstract final class AppTheme {
         elevation:        0,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: base.textTheme.titleMedium?.copyWith(
-          fontFamily: _fontFamily,
-          color:      AppColors.textPrimary,
-          fontWeight: FontWeight.w500,
-          fontSize:   15,
+          fontFamily:    _fontFamily,
+          color:         AppColors.textPrimary,
+          fontWeight:    FontWeight.w500,
+          fontSize:      15,
           letterSpacing: -0.2,
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 18),
       ),
-      cardTheme: const CardTheme(
+      cardTheme: CardTheme(
         color:     AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusCard)),
-          side:         BorderSide(color: AppColors.border, width: 0.5),
+          borderRadius: const BorderRadius.all(Radius.circular(AppSpacing.radiusCard)),
+          side: BorderSide(color: AppColors.glassBorder, width: 0.5),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        filled:        true,
-        fillColor:     AppColors.card,
-        border:        OutlineInputBorder(
+        filled:    true,
+        fillColor: AppColors.card,
+        border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
-          borderSide:   const BorderSide(color: AppColors.border, width: 0.5),
+          borderSide:   BorderSide(color: AppColors.glassBorder, width: 0.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
-          borderSide:   const BorderSide(color: AppColors.border, width: 0.5),
+          borderSide:   BorderSide(color: AppColors.glassBorder, width: 0.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusInput),
@@ -161,7 +164,7 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-          side:         const BorderSide(color: AppColors.border, width: 0.5),
+          side: BorderSide(color: AppColors.glassBorder, width: 0.5),
         ),
       ),
     );

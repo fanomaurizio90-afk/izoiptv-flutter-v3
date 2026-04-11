@@ -113,12 +113,12 @@ class SkeletonPosterGrid extends StatelessWidget {
       padding:      EdgeInsets.fromLTRB(AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.lg),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount:   columns,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing:  AppSpacing.sm,
+        crossAxisSpacing: AppSpacing.md,
+        mainAxisSpacing:  AppSpacing.md,
         childAspectRatio: 2 / 3,
       ),
       itemCount:   columns * rows,
-      itemBuilder: (_, __) => const SkeletonBox(borderRadius: AppSpacing.radiusCard),
+      itemBuilder: (_, __) => const SkeletonBox(borderRadius: 10),
     );
   }
 }

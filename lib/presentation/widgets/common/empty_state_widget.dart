@@ -26,7 +26,7 @@ class EmptyStateWidget extends StatelessWidget {
             decoration: BoxDecoration(
               color:        AppColors.card,
               borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-              border:       Border.all(color: AppColors.border, width: 0.5),
+              border:       Border.all(color: AppColors.glassBorder, width: 0.5),
             ),
             child: Icon(
               _icon(type),

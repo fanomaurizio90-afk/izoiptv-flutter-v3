@@ -164,25 +164,30 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                              child: Text(
-                                'Xtream Codes',
-                                style: TextStyle(
-                                  color:      _isXtream ? AppColors.textPrimary : AppColors.textMuted,
-                                  fontSize:   13,
-                                  fontWeight: _isXtream ? FontWeight.w500 : FontWeight.w300,
-                                  letterSpacing: 0.1,
-                                ),
-                              ),
-                            ),
-                            AnimatedContainer(
-                              duration: AppDurations.medium,
-                              curve:    Curves.easeOut,
-                              height:   1.5,
-                              width:    _isXtream ? 20 : 0,
-                              decoration: BoxDecoration(
-                                color:        AppColors.accentPrimary,
-                                borderRadius: BorderRadius.circular(1),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Xtream Codes',
+                                    style: TextStyle(
+                                      color:      _isXtream ? AppColors.textPrimary : AppColors.textMuted,
+                                      fontSize:   13,
+                                      fontWeight: _isXtream ? FontWeight.w500 : FontWeight.w300,
+                                      letterSpacing: -0.1,
+                                    ),
+                                  ),
+                                  if (_isXtream) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      width: 4, height: 4,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accentPrimary.withValues(alpha: 0.6),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ],
@@ -199,12 +204,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           setState(() { _isXtream = false; _m3uError = null; });
                           _m3uUrlNode.requestFocus();
                         },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                              child: Text(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
                                 'M3U URL',
                                 style: TextStyle(
                                   color:      !_isXtream ? AppColors.textPrimary : AppColors.textMuted,
@@ -213,18 +218,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                   letterSpacing: 0.1,
                                 ),
                               ),
-                            ),
-                            AnimatedContainer(
-                              duration: AppDurations.medium,
-                              curve:    Curves.easeOut,
-                              height:   1.5,
-                              width:    !_isXtream ? 20 : 0,
-                              decoration: BoxDecoration(
-                                color:        AppColors.accentPrimary,
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            ),
-                          ],
+                              if (!_isXtream) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 4, height: 4,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentPrimary.withValues(alpha: 0.6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -287,10 +292,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin:  Alignment.topLeft,
                           end:    Alignment.bottomRight,
-                          colors: [Color(0xFFC8A058), Color(0xFFB08840)],
+                          colors: [
+                            AppColors.accentPrimary,
+                            AppColors.accentPrimary.withValues(alpha: 0.85),
+                          ],
                         ),
                         borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
                       ),

@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/common/focusable_widget.dart';
-import '../../widgets/common/staggered_list.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -39,48 +37,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _confirmExit(BuildContext context) async {
     final exit = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-          side: const BorderSide(color: AppColors.border, width: 0.5),
-        ),
-        title: const Text(
-          'Exit IZO IPTV?',
-          style: TextStyle(
-            color:         AppColors.textPrimary,
-            fontWeight:    FontWeight.w400,
-            fontSize:      15,
-            letterSpacing: -0.3,
+      barrierColor: const Color(0xCC050507),
+      builder: (ctx) => Center(
+        child: Container(
+          width: 340,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color:        AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+            border:       Border.all(color: AppColors.glassBorder, width: 0.5),
+            boxShadow: [
+              BoxShadow(
+                color:      const Color(0x40000000),
+                blurRadius: 48,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Exit IZO IPTV?',
+                style: TextStyle(
+                  color:         AppColors.textPrimary,
+                  fontWeight:    FontWeight.w400,
+                  fontSize:      16,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Are you sure you want to close the app?',
+                style: TextStyle(
+                  color:    AppColors.textSecondary,
+                  fontSize: 13,
+                  height:   1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FocusableWidget(
+                    autofocus:    true,
+                    borderRadius: 8,
+                    onTap: () => Navigator.of(ctx).pop(false),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      child: Text('Cancel',
+                        style: TextStyle(
+                          color:    AppColors.textSecondary,
+                          fontSize: 13,
+                        )),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FocusableWidget(
+                    borderRadius: 8,
+                    onTap: () => Navigator.of(ctx).pop(true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color:        AppColors.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('Exit',
+                        style: TextStyle(
+                          color:      AppColors.error,
+                          fontSize:   13,
+                          fontWeight: FontWeight.w500,
+                        )),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        content: const Text(
-          'Are you sure you want to close the app?',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.55),
-        ),
-        actionsAlignment: MainAxisAlignment.end,
-        actions: [
-          FocusableWidget(
-            autofocus:    true,
-            borderRadius: AppSpacing.radiusCard,
-            onTap: () => Navigator.of(ctx).pop(false),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            ),
-          ),
-          const SizedBox(width: 4),
-          FocusableWidget(
-            borderRadius: AppSpacing.radiusCard,
-            onTap: () => Navigator.of(ctx).pop(true),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Text('Exit',
-                style: TextStyle(color: AppColors.error, fontSize: 13, fontWeight: FontWeight.w500)),
-            ),
-          ),
-        ],
       ),
     );
     if (exit == true) SystemNavigator.pop();
@@ -97,31 +131,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: AppColors.background,
         body: SafeArea(
           bottom: false,
-          child: Column(
-            children: [
-              _TopBar(settingsNode: _settingsNode),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.tvH, AppSpacing.lg, AppSpacing.tvH, AppSpacing.xl3,
-                  ),
-                  children: [
-                    StaggeredList(
-                      children: [
-                        _ExpiryBanner(),
-                        FocusScope(
-                          node: _heroScope,
-                          child: _HeroTiles(
-                            onUpArrow:    () => _settingsNode.requestFocus(),
-                            settingsNode: _settingsNode,
-                          ),
-                        ),
-                      ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.tvH, 0, AppSpacing.tvH, AppSpacing.xl2,
+            ),
+            child: Column(
+              children: [
+                _TopBar(settingsNode: _settingsNode),
+                _ExpiryBanner(),
+                const SizedBox(height: AppSpacing.md),
+                Expanded(
+                  child: FocusScope(
+                    node: _heroScope,
+                    child: _HeroTiles(
+                      onUpArrow:    () => _settingsNode.requestFocus(),
+                      settingsNode: _settingsNode,
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -129,7 +158,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// ── Expiry Banner ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Expiry Banner
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ExpiryBanner extends ConsumerStatefulWidget {
   @override
@@ -154,7 +185,7 @@ class _ExpiryBannerState extends ConsumerState<_ExpiryBanner> {
         : 'Your subscription expires in $days day${days == 1 ? '' : 's'}';
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
@@ -162,29 +193,32 @@ class _ExpiryBannerState extends ConsumerState<_ExpiryBanner> {
         ),
         decoration: BoxDecoration(
           color:        AppColors.errorSurface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-          border:       Border.all(color: AppColors.error.withOpacity(0.25), width: 0.5),
+          borderRadius: BorderRadius.circular(8),
+          border:       Border.all(
+            color: AppColors.error.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 14),
+            Icon(Icons.info_outline_rounded,
+                color: AppColors.error.withValues(alpha: 0.7), size: 14),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color:      AppColors.error,
+              child: Text(label,
+                style: TextStyle(
+                  color:      AppColors.error.withValues(alpha: 0.85),
                   fontSize:   12,
                   fontWeight: FontWeight.w400,
-                ),
-              ),
+                )),
             ),
             FocusableWidget(
               borderRadius: 4,
               onTap: () => setState(() => _dismissed = true),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.close_rounded, color: AppColors.error, size: 14),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.close_rounded,
+                    color: AppColors.error.withValues(alpha: 0.5), size: 14),
               ),
             ),
           ],
@@ -194,7 +228,9 @@ class _ExpiryBannerState extends ConsumerState<_ExpiryBanner> {
   }
 }
 
-// ── Top Bar ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Top Bar
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.settingsNode});
@@ -202,54 +238,55 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppConstants.homeTopBarHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.tvH),
-        child: Row(
-          children: [
-            const IzoLogo(size: 26),
-            const Spacer(),
-            FocusableWidget(
-              focusNode:    settingsNode,
-              onTap:        () => context.push('/settings'),
-              borderRadius: 8,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color:        AppColors.card,
-                  borderRadius: BorderRadius.circular(8),
-                  border:       Border.all(color: AppColors.border, width: 0.5),
-                ),
-                child: const Icon(
-                  Icons.tune_rounded,
-                  color: AppColors.textMuted,
-                  size:  17,
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: Row(
+        children: [
+          const IzoLogo(size: 24),
+          const Spacer(),
+          FocusableWidget(
+            focusNode:    settingsNode,
+            onTap:        () => context.push('/settings'),
+            borderRadius: 10,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color:        AppColors.card,
+                borderRadius: BorderRadius.circular(10),
+                border:       Border.all(color: AppColors.glassBorder, width: 0.5),
+              ),
+              child: const Icon(
+                Icons.tune_rounded,
+                color: AppColors.textMuted,
+                size:  16,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Hero Tiles ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Hero Tiles
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TileData {
   const _TileData({
     required this.label,
     required this.sublabel,
     required this.route,
-    required this.gradientColors,
+    required this.baseColor,
     required this.glowColor,
+    required this.icon,
   });
-  final String      label;
-  final String      sublabel;
-  final String      route;
-  final List<Color> gradientColors;
-  final Color       glowColor;
+  final String   label;
+  final String   sublabel;
+  final String   route;
+  final Color    baseColor;
+  final Color    glowColor;
+  final IconData icon;
 }
 
 class _HeroTiles extends StatefulWidget {
@@ -262,36 +299,52 @@ class _HeroTiles extends StatefulWidget {
   State<_HeroTiles> createState() => _HeroTilesState();
 }
 
-class _HeroTilesState extends State<_HeroTiles> {
+class _HeroTilesState extends State<_HeroTiles>
+    with SingleTickerProviderStateMixin {
+
   static const _tiles = [
     _TileData(
-      label:    'Live TV',
-      sublabel: 'Live channels',
-      route:    '/live',
-      gradientColors: [Color(0xFF0B2118), Color(0xFF070709)],
-      glowColor:      Color(0x223DD68C),
+      label:     'Live TV',
+      sublabel:  'Live channels',
+      route:     '/live',
+      baseColor: Color(0xFF071A14),
+      glowColor: Color(0xFF3DD68C),
+      icon:      Icons.sensors_rounded,
     ),
     _TileData(
-      label:    'Movies',
-      sublabel: 'On demand',
-      route:    '/movies',
-      gradientColors: [Color(0xFF201108), Color(0xFF070709)],
-      glowColor:      Color(0x22C8A058),
+      label:     'Movies',
+      sublabel:  'On demand',
+      route:     '/movies',
+      baseColor: Color(0xFF1A0E04),
+      glowColor: Color(0xFFD4A76A),
+      icon:      Icons.movie_creation_outlined,
     ),
     _TileData(
-      label:    'Series',
-      sublabel: 'TV shows',
-      route:    '/series',
-      gradientColors: [Color(0xFF0A1322), Color(0xFF070709)],
-      glowColor:      Color(0x226FA3DC),
+      label:     'Series',
+      sublabel:  'TV shows',
+      route:     '/series',
+      baseColor: Color(0xFF070E1A),
+      glowColor: Color(0xFF6B8FC9),
+      icon:      Icons.auto_stories_outlined,
     ),
   ];
 
   final List<FocusNode> _nodes = List.generate(_tiles.length, (_) => FocusNode());
+  late AnimationController _staggerCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _staggerCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
+  }
 
   @override
   void dispose() {
     for (final n in _nodes) n.dispose();
+    _staggerCtrl.dispose();
     super.dispose();
   }
 
@@ -304,14 +357,12 @@ class _HeroTilesState extends State<_HeroTiles> {
 
   @override
   Widget build(BuildContext context) {
-    final screenH    = MediaQuery.of(context).size.height;
-    final tileHeight = (screenH - AppConstants.homeTopBarHeight - AppConstants.homeSafeAreaPadding)
-        .clamp(200.0, 560.0) * 0.62;
-
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
         if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
           widget.onUpArrow?.call();
           return KeyEventResult.handled;
@@ -340,21 +391,39 @@ class _HeroTilesState extends State<_HeroTiles> {
         return KeyEventResult.ignored;
       },
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: _tiles.asMap().entries.map((e) {
+          final i = e.key;
           final t = e.value;
+
+          final beginFraction = (i * 0.12).clamp(0.0, 0.7);
+          final endFraction   = (beginFraction + 0.55).clamp(0.0, 1.0);
+          final itemAnim = CurvedAnimation(
+            parent: _staggerCtrl,
+            curve:  Interval(beginFraction, endFraction, curve: AppCurves.easeOut),
+          );
+
           return Expanded(
             child: Padding(
               padding: EdgeInsets.only(
-                left:  e.key == 0                 ? 0 : 5,
-                right: e.key == _tiles.length - 1 ? 0 : 5,
+                left:  i == 0                 ? 0 : 5,
+                right: i == _tiles.length - 1 ? 0 : 5,
               ),
-              child: FocusableWidget(
-                focusNode:    _nodes[e.key],
-                autofocus:    e.key == 0,
-                borderRadius: AppSpacing.radiusCard,
-                onTap:        () => context.push(t.route),
-                child:        _HeroTile(tile: t, height: tileHeight),
+              child: FadeTransition(
+                opacity: itemAnim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end:   Offset.zero,
+                  ).animate(itemAnim),
+                  child: FocusableWidget(
+                    focusNode:    _nodes[i],
+                    autofocus:    i == 0,
+                    borderRadius: AppSpacing.radiusCard,
+                    onTap:        () => context.push(t.route),
+                    child:        _HeroTile(tile: t),
+                  ),
+                ),
               ),
             ),
           );
@@ -364,116 +433,164 @@ class _HeroTilesState extends State<_HeroTiles> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Single Hero Tile
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _HeroTile extends StatelessWidget {
-  const _HeroTile({required this.tile, required this.height});
+  const _HeroTile({required this.tile});
   final _TileData tile;
-  final double    height;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
       child: Container(
-        height: height,
-        color:  tile.gradientColors[0],
+        color: tile.baseColor,
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // ── Base gradient — deep to void ──────────────────────────────
+            // Layer 1 — base gradient wash
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin:  Alignment.topLeft,
                     end:    Alignment.bottomRight,
-                    stops:  const [0.0, 1.0],
-                    colors: tile.gradientColors,
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Radial glow from top corner ────────────────────────────────
-            Positioned(
-              top:   -height * 0.2,
-              right: -height * 0.2,
-              child: Container(
-                width:  height * 1.0,
-                height: height * 1.0,
-                decoration: BoxDecoration(
-                  shape:  BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [tile.glowColor, Colors.transparent],
-                    stops:  const [0.0, 1.0],
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Subtle dot grid ────────────────────────────────────────────
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _DotGridPainter(color: const Color(0x06FFFFFF)),
-              ),
-            ),
-
-            // ── Bottom scrim ───────────────────────────────────────────────
-            Positioned(
-              left: 0, right: 0, bottom: 0,
-              height: height * 0.65,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin:  Alignment.topCenter,
-                    end:    Alignment.bottomCenter,
-                    stops:  const [0.0, 0.7, 1.0],
+                    stops:  const [0.0, 0.6, 1.0],
                     colors: [
-                      Colors.transparent,
-                      tile.gradientColors[0].withOpacity(0.85),
-                      tile.gradientColors[0].withOpacity(0.98),
+                      tile.baseColor,
+                      Color.lerp(tile.baseColor, AppColors.background, 0.5)!,
+                      AppColors.background,
                     ],
                   ),
                 ),
               ),
             ),
 
-            // ── Label block (bottom) ──────────────────────────────────────
+            // Layer 2 — primary ambient glow (top-right)
             Positioned(
-              left:   AppSpacing.xl,
-              right:  AppSpacing.xl,
-              bottom: AppSpacing.xl2,
+              top:   -80,
+              right: -60,
+              child: Container(
+                width:  320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      tile.glowColor.withValues(alpha: 0.10),
+                      tile.glowColor.withValues(alpha: 0.03),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.4, 1.0],
+                  ),
+                ),
+              ),
+            ),
+
+            // Layer 3 — secondary ambient glow (bottom-center, for depth)
+            Positioned(
+              bottom: -40,
+              left:   20,
+              child: Container(
+                width:  200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      tile.glowColor.withValues(alpha: 0.04),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Layer 4 — large watermark icon
+            Positioned(
+              right:  -12,
+              top:    -12,
+              child: Icon(
+                tile.icon,
+                size:  140,
+                color: tile.glowColor.withValues(alpha: 0.04),
+              ),
+            ),
+
+            // Layer 5 — glass highlight (top edge refraction)
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.0),
+                      Colors.white.withValues(alpha: 0.05),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Layer 6 — bottom scrim for text readability
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              height: 180,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin:  Alignment.topCenter,
+                    end:    Alignment.bottomCenter,
+                    stops:  const [0.0, 0.5, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      AppColors.background.withValues(alpha: 0.6),
+                      AppColors.background.withValues(alpha: 0.92),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Layer 7 — label block
+            Positioned(
+              left:   AppSpacing.xl2,
+              right:  AppSpacing.xl2,
+              bottom: AppSpacing.xl3,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize:       MainAxisSize.min,
                 children: [
-                  // Gold accent bar
                   Container(
-                    width:  20,
-                    height: 2,
+                    width:  16,
+                    height: 1.5,
                     decoration: BoxDecoration(
-                      color:        AppColors.accentPrimary,
+                      color:        AppColors.accentPrimary.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(1),
                     ),
                   ),
-                  const SizedBox(height: 7),
-                  // Sublabel
+                  const SizedBox(height: 10),
                   Text(
                     tile.sublabel.toUpperCase(),
-                    style: const TextStyle(
-                      color:         AppColors.accentPrimary,
+                    style: TextStyle(
+                      color:         AppColors.accentPrimary.withValues(alpha: 0.6),
                       fontSize:      9,
                       fontWeight:    FontWeight.w600,
-                      letterSpacing: 1.8,
+                      letterSpacing: 2.0,
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // Main title
                   Text(
                     tile.label,
                     style: const TextStyle(
                       color:         AppColors.textPrimary,
-                      fontSize:      32,
+                      fontSize:      36,
                       fontWeight:    FontWeight.w200,
-                      letterSpacing: -1.0,
+                      letterSpacing: -1.5,
                       height:        1.0,
                     ),
                   ),
@@ -485,28 +602,4 @@ class _HeroTile extends StatelessWidget {
       ),
     );
   }
-}
-
-// ── Dot grid painter ───────────────────────────────────────────────────────────
-
-class _DotGridPainter extends CustomPainter {
-  const _DotGridPainter({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    const spacing = 24.0;
-    const radius  = 0.8;
-    for (double x = spacing; x < size.width; x += spacing) {
-      for (double y = spacing; y < size.height; y += spacing) {
-        canvas.drawCircle(Offset(x, y), radius, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DotGridPainter old) => old.color != color;
 }
