@@ -975,104 +975,177 @@ class _EpisodeRowState extends State<_EpisodeRow> {
 
   @override
   Widget build(BuildContext context) {
+    final thumb = widget.episode.thumbnailUrl;
     return FocusableWidget(
       focusNode: widget.focusNode,
       onTap:     () => _play(context),
       child: AnimatedContainer(
         duration: AppDurations.fast,
         curve:    AppCurves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin:  const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: _focused ? AppColors.accentSoft : Colors.transparent,
-          border: Border(
-            bottom: const BorderSide(color: AppColors.borderSubtle, width: 0.5),
+          color: _focused ? AppColors.accentSoft : AppColors.card.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _focused ? AppColors.accentPrimary : AppColors.borderSubtle,
+            width: _focused ? 1 : 0.5,
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Episode number
-            SizedBox(
-              width: 28,
-              child: Text(
-                '${widget.episode.episodeNumber}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _focused
-                      ? AppColors.accentPrimary
-                      : _isWatched
-                          ? AppColors.textMuted
-                          : AppColors.textSecondary,
-                  fontSize:   13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Title + duration
-            Expanded(
-              child: Row(
+            // ── Thumbnail with episode number overlay ─────────────────
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Stack(
                 children: [
-                  Expanded(
-                    child: Text(
-                      widget.episode.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _isWatched
-                            ? AppColors.textMuted
-                            : AppColors.textPrimary,
-                        fontSize:   13,
-                        fontWeight: FontWeight.w400,
+                  SizedBox(
+                    width:  168,
+                    height: 94,
+                    child: thumb != null && thumb.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl:      thumb,
+                            width:         168,
+                            height:        94,
+                            fit:           BoxFit.cover,
+                            memCacheWidth: 336,
+                            placeholder:   (_, __) => _ThumbnailPlaceholder(
+                                number: widget.episode.episodeNumber),
+                            errorWidget:   (_, __, ___) => _ThumbnailPlaceholder(
+                                number: widget.episode.episodeNumber),
+                          )
+                        : _ThumbnailPlaceholder(
+                            number: widget.episode.episodeNumber),
+                  ),
+                  // Darkening gradient for legibility
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomLeft,
+                          end:   Alignment.topRight,
+                          colors: [
+                            AppColors.background.withValues(alpha: 0.55),
+                            Colors.transparent,
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  if (_epDuration.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: Text(
-                        _epDuration,
-                        style: const TextStyle(
-                          color:      AppColors.textMuted,
-                          fontSize:   11,
-                          fontWeight: FontWeight.w300,
+                  // Episode number badge (bottom-left, Stremio style)
+                  Positioned(
+                    left: 6, bottom: 4,
+                    child: Text(
+                      'E${widget.episode.episodeNumber}',
+                      style: const TextStyle(
+                        color:         Colors.white,
+                        fontSize:      12,
+                        fontWeight:    FontWeight.w700,
+                        letterSpacing: 0.3,
+                        shadows: [
+                          Shadow(color: Colors.black54, blurRadius: 4),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Play icon on focus
+                  if (_focused)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.play_arrow_rounded,
+                          color: Colors.white, size: 28),
+                      ),
+                    ),
+                  // Watched check
+                  if (_isWatched)
+                    Positioned(
+                      top: 4, right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: AppColors.background.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 12),
+                      ),
+                    ),
+                  // In-progress bar
+                  if (_isInProgress)
+                    Positioned(
+                      left: 0, right: 0, bottom: 0,
+                      child: LinearProgressIndicator(
+                        value:           _progress,
+                        minHeight:       3,
+                        backgroundColor: Colors.black.withValues(alpha: 0.4),
+                        valueColor:      const AlwaysStoppedAnimation(
+                            AppColors.accentPrimary),
                       ),
                     ),
                 ],
               ),
             ),
+            const SizedBox(width: 14),
 
-            // Progress or status
-            if (_isInProgress)
-              Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: SizedBox(
-                  width: 40,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(1),
-                    child: LinearProgressIndicator(
-                      value:           _progress,
-                      minHeight:       2,
-                      backgroundColor: AppColors.accentSoft,
-                      valueColor:      const AlwaysStoppedAnimation(
-                          AppColors.accentPrimary),
+            // ── Episode info ─────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title row: number + title + duration
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${widget.episode.episodeNumber}. ${widget.episode.title}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _isWatched
+                                ? AppColors.textMuted
+                                : AppColors.textPrimary,
+                            fontSize:      14,
+                            fontWeight:    FontWeight.w600,
+                            letterSpacing: -0.1,
+                            height:        1.25,
+                          ),
+                        ),
+                      ),
+                      if (_epDuration.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        Text(
+                          _epDuration,
+                          style: const TextStyle(
+                            color:      AppColors.textMuted,
+                            fontSize:   11,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Plot snippet
+                  Text(
+                    (widget.episode.plot?.trim().isNotEmpty ?? false)
+                        ? widget.episode.plot!
+                        : 'No description available.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color:      AppColors.textSecondary,
+                      fontSize:   11.5,
+                      fontWeight: FontWeight.w300,
+                      height:     1.5,
                     ),
                   ),
-                ),
+                ],
               ),
-            if (_isWatched)
-              const Padding(
-                padding: EdgeInsets.only(left: 12),
-                child: Icon(Icons.check_circle_outline_rounded,
-                  color: AppColors.textMuted, size: 14),
-              ),
-            if (_focused && !_isWatched)
-              const Padding(
-                padding: EdgeInsets.only(left: 12),
-                child: Icon(Icons.play_arrow_rounded,
-                  color: AppColors.accentPrimary, size: 16),
-              ),
+            ),
           ],
         ),
       ),
