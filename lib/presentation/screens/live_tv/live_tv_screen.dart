@@ -827,8 +827,15 @@ class _ChannelListState extends State<_ChannelList> {
     super.didUpdateWidget(old);
     if (widget.channels.length != old.channels.length ||
         !_sameChannelIds(widget.channels, old.channels)) {
+      final prevFocused = _focusedIndex;
       for (final n in _nodes.values) n.dispose();
       _nodes.clear();
+      if (prevFocused >= 0 && widget.channels.isNotEmpty) {
+        final target = prevFocused.clamp(0, widget.channels.length - 1);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _moveTo(target);
+        });
+      }
     }
   }
 

@@ -44,7 +44,9 @@ class VodDao {
     final db   = await _db;
     final rows = await db.query('vod',
         where: 'category_id = ?', whereArgs: [categoryId],
-        orderBy: 'added DESC, id DESC',
+        orderBy:
+            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            'release_date DESC, added DESC, id DESC',
         limit: limit, offset: offset);
     return rows.map(_rowToVod).toList();
   }
@@ -71,7 +73,11 @@ class VodDao {
 
   Future<List<VodItem>> getAllVod({int limit = 500}) async {
     final db   = await _db;
-    final rows = await db.query('vod', orderBy: 'added DESC, id DESC', limit: limit);
+    final rows = await db.query('vod',
+        orderBy:
+            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            'release_date DESC, added DESC, id DESC',
+        limit: limit);
     return rows.map(_rowToVod).toList();
   }
 
@@ -184,7 +190,9 @@ class VodDao {
     final db   = await _db;
     final rows = await db.query('series',
         where: 'category_id = ?', whereArgs: [categoryId],
-        orderBy: 'added DESC, id DESC',
+        orderBy:
+            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            'release_date DESC, added DESC, id DESC',
         limit: limit, offset: offset);
     return rows.map(_rowToSeries).toList();
   }
@@ -211,7 +219,11 @@ class VodDao {
 
   Future<List<SeriesItem>> getAllSeries({int limit = 500}) async {
     final db   = await _db;
-    final rows = await db.query('series', orderBy: 'added DESC, id DESC', limit: limit);
+    final rows = await db.query('series',
+        orderBy:
+            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            'release_date DESC, added DESC, id DESC',
+        limit: limit);
     return rows.map(_rowToSeries).toList();
   }
 
