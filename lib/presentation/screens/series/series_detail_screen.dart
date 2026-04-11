@@ -227,13 +227,13 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Left column: Poster + Info ──────────────────────────────
-            FadeTransition(
+            Expanded(
+              flex: 1,
+              child: FadeTransition(
               opacity: fadeIn,
               child: SlideTransition(
                 position: posterSlide,
-                child: SizedBox(
-                  width: 280,
-                  child: SingleChildScrollView(
+                child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -435,7 +435,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                               ),
                             );
                           }
-                          _rebuildSeasonNodes(seasons.length);
+                          _rebuildSeasonNodes(seasons.length > 1 ? seasons.length : 0);
                           final season = seasons.firstWhere(
                             (s) => s.number == selectedSeason,
                             orElse: () => seasons.first,
