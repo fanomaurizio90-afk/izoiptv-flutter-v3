@@ -41,6 +41,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   bool                  _syncing        = false;
   String?               _error;
   int                   _favouriteCount = 0;
+  DateTime              _ignoreTapUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool                  _searchActive   = false;
   bool                  _searching      = false;
   List<Channel>         _searchResults  = [];
@@ -158,6 +159,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   }
 
   Future<void> _toggleFavourite(Channel ch) async {
+    _ignoreTapUntil = DateTime.now().add(const Duration(milliseconds: 400));
     final repo   = ref.read(channelRepositoryProvider);
     final newVal = !ch.isFavourite;
     await repo.toggleFavourite(ch.id, newVal);
@@ -281,6 +283,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
       },
       onToggleFavourite: _toggleFavourite,
       onChannelTap:      (ch, i) async {
+        if (DateTime.now().isBefore(_ignoreTapUntil)) return;
         final cat = _categories.firstWhere(
           (c) => c.id == ch.categoryId,
           orElse: () => const ChannelCategory(id: 0, name: ''),

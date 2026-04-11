@@ -45,7 +45,8 @@ class VodDao {
     final rows = await db.query('vod',
         where: 'category_id = ?', whereArgs: [categoryId],
         orderBy:
-            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            "CASE WHEN release_date IS NULL OR release_date = '' OR release_date LIKE '0000%' THEN 1 ELSE 0 END, "
+            'CAST(substr(release_date, 1, 4) AS INTEGER) DESC, '
             'release_date DESC, added DESC, id DESC',
         limit: limit, offset: offset);
     return rows.map(_rowToVod).toList();
@@ -75,7 +76,8 @@ class VodDao {
     final db   = await _db;
     final rows = await db.query('vod',
         orderBy:
-            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            "CASE WHEN release_date IS NULL OR release_date = '' OR release_date LIKE '0000%' THEN 1 ELSE 0 END, "
+            'CAST(substr(release_date, 1, 4) AS INTEGER) DESC, '
             'release_date DESC, added DESC, id DESC',
         limit: limit);
     return rows.map(_rowToVod).toList();
@@ -191,7 +193,8 @@ class VodDao {
     final rows = await db.query('series',
         where: 'category_id = ?', whereArgs: [categoryId],
         orderBy:
-            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            "CASE WHEN release_date IS NULL OR release_date = '' OR release_date LIKE '0000%' THEN 1 ELSE 0 END, "
+            'CAST(substr(release_date, 1, 4) AS INTEGER) DESC, '
             'release_date DESC, added DESC, id DESC',
         limit: limit, offset: offset);
     return rows.map(_rowToSeries).toList();
@@ -221,7 +224,8 @@ class VodDao {
     final db   = await _db;
     final rows = await db.query('series',
         orderBy:
-            "CASE WHEN release_date IS NULL OR release_date = '' THEN 1 ELSE 0 END, "
+            "CASE WHEN release_date IS NULL OR release_date = '' OR release_date LIKE '0000%' THEN 1 ELSE 0 END, "
+            'CAST(substr(release_date, 1, 4) AS INTEGER) DESC, '
             'release_date DESC, added DESC, id DESC',
         limit: limit);
     return rows.map(_rowToSeries).toList();
