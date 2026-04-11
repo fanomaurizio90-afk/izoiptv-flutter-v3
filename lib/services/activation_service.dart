@@ -22,6 +22,12 @@ class ActivationCredentials {
   final String? subscriptionPlan;
 }
 
+class ActivationCheckResult {
+  const ActivationCheckResult({this.credentials, this.pin});
+  final ActivationCredentials? credentials;
+  final String? pin;
+}
+
 class ActivationService {
   ActivationService(this._dio);
   final Dio _dio;
@@ -29,27 +35,36 @@ class ActivationService {
   // CRITICAL: www.izoiptv.com — NOT api.izoiptv.com
   static const _baseUrl = AppConstants.activationBaseUrl;
 
-  Future<ActivationCredentials?> checkActivation(String deviceId) async {
+  Future<ActivationCheckResult> checkActivation(String deviceId) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '$_baseUrl/api/activate',
         queryParameters: {'device_id': deviceId},
       );
       final data = response.data;
-      if (data == null || data['activated'] != true) return null;
+      if (data == null) return const ActivationCheckResult();
 
-      return ActivationCredentials(
-        playlistType:     data['playlist_type'] as String? ?? 'xtream',
-        xtreamServer:     data['xtream_server']   as String?,
-        xtreamUsername:   data['xtream_username'] as String?,
-        xtreamPassword:   data['xtream_password'] as String?,
-        m3uUrl:           data['m3u_url']         as String?,
-        expiryDate:       data['expiry_date']     as String?,
-        displayName:      data['display_name']    as String?,
-        subscriptionPlan: data['subscription_plan'] as String?,
+      final pin = data['pin'] as String?;
+
+      if (data['activated'] != true) {
+        return ActivationCheckResult(pin: pin);
+      }
+
+      return ActivationCheckResult(
+        pin: pin,
+        credentials: ActivationCredentials(
+          playlistType:     data['playlist_type'] as String? ?? 'xtream',
+          xtreamServer:     data['xtream_server']   as String?,
+          xtreamUsername:   data['xtream_username'] as String?,
+          xtreamPassword:   data['xtream_password'] as String?,
+          m3uUrl:           data['m3u_url']         as String?,
+          expiryDate:       data['expiry_date']     as String?,
+          displayName:      data['display_name']    as String?,
+          subscriptionPlan: data['subscription_plan'] as String?,
+        ),
       );
     } catch (_) {
-      return null; // Always silent — never show error
+      return const ActivationCheckResult(); // Always silent — never show error
     }
   }
 }

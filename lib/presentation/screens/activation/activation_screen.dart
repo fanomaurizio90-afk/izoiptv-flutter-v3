@@ -24,6 +24,7 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
   late Animation<double>   _pulseAnim;
   Timer?   _pollTimer;
   String?  _deviceId;
+  String?  _pin;
   bool     _loading = true;
 
   @override
@@ -58,35 +59,54 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
   Future<void> _poll() async {
     if (_deviceId == null) return;
     final result = await ref.read(activationServiceProvider).checkActivation(_deviceId!);
-    if (!mounted || result == null) return;
+    if (!mounted) return;
+
+    if (result.pin != null && result.pin != _pin) {
+      setState(() => _pin = result.pin);
+    }
+
+    final creds = result.credentials;
+    if (creds == null) return;
 
     _pollTimer?.cancel();
 
-    // Save activation credentials
     await DeviceService.instance.saveActivationCredentials(
-      playlistType:     result.playlistType,
-      xtreamServer:     result.xtreamServer,
-      xtreamUsername:   result.xtreamUsername,
-      xtreamPassword:   result.xtreamPassword,
-      m3uUrl:           result.m3uUrl,
-      expiryDate:       result.expiryDate,
-      displayName:      result.displayName,
-      subscriptionPlan: result.subscriptionPlan,
+      playlistType:     creds.playlistType,
+      xtreamServer:     creds.xtreamServer,
+      xtreamUsername:   creds.xtreamUsername,
+      xtreamPassword:   creds.xtreamPassword,
+      m3uUrl:           creds.m3uUrl,
+      expiryDate:       creds.expiryDate,
+      displayName:      creds.displayName,
+      subscriptionPlan: creds.subscriptionPlan,
     );
 
-    // Build credentials map for auth provider
-    final creds = <String, String>{};
-    if (result.playlistType == 'xtream') {
-      if (result.xtreamServer   != null) creds[AppConstants.keyServerUrl] = result.xtreamServer!;
-      if (result.xtreamUsername != null) creds[AppConstants.keyUsername]  = result.xtreamUsername!;
-      if (result.xtreamPassword != null) creds[AppConstants.keyPassword]  = result.xtreamPassword!;
+    final loginCreds = <String, String>{};
+    if (creds.playlistType == 'xtream') {
+      if (creds.xtreamServer   != null) loginCreds[AppConstants.keyServerUrl] = creds.xtreamServer!;
+      if (creds.xtreamUsername != null) loginCreds[AppConstants.keyUsername]  = creds.xtreamUsername!;
+      if (creds.xtreamPassword != null) loginCreds[AppConstants.keyPassword]  = creds.xtreamPassword!;
     } else {
-      if (result.m3uUrl != null) creds[AppConstants.keyM3uUrl] = result.m3uUrl!;
+      if (creds.m3uUrl != null) loginCreds[AppConstants.keyM3uUrl] = creds.m3uUrl!;
     }
 
     await ref.read(authProvider.notifier).loginFromActivation(
-      loginType:   result.playlistType,
-      credentials: creds,
+      loginType:   creds.playlistType,
+      credentials: loginCreds,
+    );
+  }
+
+  void _copy(String text, String message) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 
@@ -132,68 +152,29 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                 else
                   ScaleTransition(
                     scale: _pulseAnim,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                        vertical:   AppSpacing.md,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-                        border: Border.all(color: AppColors.glassBorder, width: 0.5),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: SelectableText(
-                              _deviceId ?? '',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color:      AppColors.textPrimary,
-                                fontSize:   18,
-                                fontWeight: FontWeight.w500,
-                                fontFamily: 'monospace',
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          FocusableWidget(
-                            autofocus: true,
-                            borderRadius: 6,
-                            onTap: () {
-                              if (_deviceId != null) {
-                                Clipboard.setData(ClipboardData(text: _deviceId!));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Device ID copied',
-                                      style: TextStyle(color: AppColors.textPrimary, fontSize: 12)),
-                                    duration: const Duration(seconds: 2),
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: AppColors.card,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Padding(
-                              padding: EdgeInsets.all(4),
-                              child: Icon(
-                                Icons.copy_outlined,
-                                color: AppColors.textSecondary,
-                                size:  18,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: Column(
+                      children: [
+                        _CredentialCard(
+                          label: 'MAC ADDRESS',
+                          value: _deviceId ?? '',
+                          autofocus: true,
+                          onCopy: () => _copy(_deviceId!, 'MAC address copied'),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _CredentialCard(
+                          label: 'PIN CODE',
+                          value: _pin ?? '------',
+                          autofocus: false,
+                          bigValue: true,
+                          onCopy: _pin == null ? null : () => _copy(_pin!, 'PIN copied'),
+                        ),
+                      ],
                     ),
                   ),
 
                 const SizedBox(height: AppSpacing.xl2),
                 const Text(
-                  'Go to izoiptv.com/authenticate\nand enter this code to add your playlist',
+                  'Go to izoiptv.com/authenticate\nand enter the PIN code above to activate',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color:    AppColors.textSecondary,
@@ -224,6 +205,85 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
         ),
       ),
     ),
+    );
+  }
+}
+
+class _CredentialCard extends StatelessWidget {
+  const _CredentialCard({
+    required this.label,
+    required this.value,
+    required this.autofocus,
+    required this.onCopy,
+    this.bigValue = false,
+  });
+
+  final String label;
+  final String value;
+  final bool autofocus;
+  final bool bigValue;
+  final VoidCallback? onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical:   AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        border: Border.all(color: AppColors.glassBorder, width: 0.5),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  value,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color:      AppColors.textPrimary,
+                    fontSize:   bigValue ? 28 : 18,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'monospace',
+                    letterSpacing: bigValue ? 6 : 2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              if (onCopy != null)
+                FocusableWidget(
+                  autofocus: autofocus,
+                  borderRadius: 6,
+                  onTap: onCopy!,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.copy_outlined,
+                      color: AppColors.textSecondary,
+                      size:  18,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
