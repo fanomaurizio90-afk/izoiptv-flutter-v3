@@ -232,7 +232,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
               child: SlideTransition(
                 position: posterSlide,
                 child: SizedBox(
-                  width: 280,
+                  width: 182,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,20 +245,20 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                               child: _displaySeries.posterUrl != null
                                   ? CachedNetworkImage(
                                       imageUrl:       _displaySeries.posterUrl!,
-                                      width:          280,
-                                      height:         400,
+                                      width:          182,
+                                      height:         260,
                                       fit:            BoxFit.cover,
-                                      memCacheWidth:  560,
+                                      memCacheWidth:  364,
                                       fadeInDuration: const Duration(milliseconds: 200),
                                       placeholder:    (_, __) => Container(
-                                        width: 280, height: 400,
+                                        width: 182, height: 260,
                                         decoration: BoxDecoration(
                                           color: AppColors.card,
                                           borderRadius: BorderRadius.circular(12),
                                         ),
                                       ),
                                       errorWidget: (_, __, ___) => Container(
-                                        width: 280, height: 400,
+                                        width: 182, height: 260,
                                         decoration: BoxDecoration(
                                           color: AppColors.card,
                                           borderRadius: BorderRadius.circular(12),
@@ -268,7 +268,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                                       ),
                                     )
                                   : Container(
-                                      width: 280, height: 400,
+                                      width: 182, height: 260,
                                       decoration: BoxDecoration(
                                         color: AppColors.card,
                                         borderRadius: BorderRadius.circular(12),
@@ -977,21 +977,14 @@ class _EpisodeRowState extends State<_EpisodeRow> {
   Widget build(BuildContext context) {
     final thumb = widget.episode.thumbnailUrl;
     return FocusableWidget(
-      focusNode: widget.focusNode,
-      onTap:     () => _play(context),
+      focusNode:       widget.focusNode,
+      showFocusBorder: false,
+      onTap:           () => _play(context),
       child: AnimatedContainer(
         duration: AppDurations.fast,
         curve:    AppCurves.easeOut,
-        margin:  const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: _focused ? AppColors.accentSoft : AppColors.card.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: _focused ? AppColors.accentPrimary : AppColors.borderSubtle,
-            width: _focused ? 1 : 0.5,
-          ),
-        ),
+        margin:  const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1105,9 +1098,11 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: _isWatched
-                                ? AppColors.textMuted
-                                : AppColors.textPrimary,
+                            color: _focused
+                                ? AppColors.accentPrimary
+                                : _isWatched
+                                    ? AppColors.textMuted
+                                    : AppColors.textPrimary,
                             fontSize:      14,
                             fontWeight:    FontWeight.w600,
                             letterSpacing: -0.1,
