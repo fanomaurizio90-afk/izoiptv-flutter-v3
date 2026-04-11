@@ -232,7 +232,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
               child: SlideTransition(
                 position: posterSlide,
                 child: SizedBox(
-                  width: 182,
+                  width: 230,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,7 +348,7 @@ class _SeriesDetailBodyState extends ConsumerState<_SeriesDetailBody>
                         if (_displaySeries.plot != null) ...[
                           Text(
                             _displaySeries.plot!,
-                            maxLines: 4,
+                            maxLines: 12,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color:      AppColors.textSecondary,
@@ -983,8 +983,8 @@ class _EpisodeRowState extends State<_EpisodeRow> {
       child: AnimatedContainer(
         duration: AppDurations.fast,
         curve:    AppCurves.easeOut,
-        margin:  const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        margin:  const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -994,15 +994,15 @@ class _EpisodeRowState extends State<_EpisodeRow> {
               child: Stack(
                 children: [
                   SizedBox(
-                    width:  168,
-                    height: 94,
+                    width:  134,
+                    height: 75,
                     child: thumb != null && thumb.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl:      thumb,
-                            width:         168,
-                            height:        94,
+                            width:         134,
+                            height:        75,
                             fit:           BoxFit.cover,
-                            memCacheWidth: 336,
+                            memCacheWidth: 268,
                             placeholder:   (_, __) => _ThumbnailPlaceholder(
                                 number: widget.episode.episodeNumber),
                             errorWidget:   (_, __, ___) => _ThumbnailPlaceholder(
@@ -1028,12 +1028,12 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                   ),
                   // Episode number badge (bottom-left, Stremio style)
                   Positioned(
-                    left: 6, bottom: 4,
+                    left: 5, bottom: 3,
                     child: Text(
                       'E${widget.episode.episodeNumber}',
                       style: const TextStyle(
                         color:         Colors.white,
-                        fontSize:      12,
+                        fontSize:      10,
                         fontWeight:    FontWeight.w700,
                         letterSpacing: 0.3,
                         shadows: [
@@ -1081,7 +1081,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                 ],
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
 
             // ── Episode info ─────────────────────────────────────────
             Expanded(
@@ -1103,7 +1103,7 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                                 : _isWatched
                                     ? AppColors.textMuted
                                     : AppColors.textPrimary,
-                            fontSize:      14,
+                            fontSize:      12,
                             fontWeight:    FontWeight.w600,
                             letterSpacing: -0.1,
                             height:        1.25,
@@ -1111,19 +1111,19 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                         ),
                       ),
                       if (_epDuration.isNotEmpty) ...[
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Text(
                           _epDuration,
                           style: const TextStyle(
                             color:      AppColors.textMuted,
-                            fontSize:   11,
+                            fontSize:   10,
                             fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   // Plot snippet
                   Text(
                     (widget.episode.plot?.trim().isNotEmpty ?? false)
@@ -1133,9 +1133,9 @@ class _EpisodeRowState extends State<_EpisodeRow> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color:      AppColors.textSecondary,
-                      fontSize:   11.5,
+                      fontSize:   10,
                       fontWeight: FontWeight.w300,
-                      height:     1.5,
+                      height:     1.45,
                     ),
                   ),
                 ],
