@@ -24,7 +24,6 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
   late Animation<double>   _pulseAnim;
   Timer?   _pollTimer;
   String?  _deviceId;
-  String?  _pin;
   bool     _loading = true;
 
   @override
@@ -60,10 +59,6 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
     if (_deviceId == null) return;
     final result = await ref.read(activationServiceProvider).checkActivation(_deviceId!);
     if (!mounted) return;
-
-    if (result.pin != null && result.pin != _pin) {
-      setState(() => _pin = result.pin);
-    }
 
     final creds = result.credentials;
     if (creds == null) return;
@@ -152,29 +147,17 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
                 else
                   ScaleTransition(
                     scale: _pulseAnim,
-                    child: Column(
-                      children: [
-                        _CredentialCard(
-                          label: 'MAC ADDRESS',
-                          value: _deviceId ?? '',
-                          autofocus: true,
-                          onCopy: () => _copy(_deviceId!, 'MAC address copied'),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _CredentialCard(
-                          label: 'PIN CODE',
-                          value: _pin ?? '------',
-                          autofocus: false,
-                          bigValue: true,
-                          onCopy: _pin == null ? null : () => _copy(_pin!, 'PIN copied'),
-                        ),
-                      ],
+                    child: _CredentialCard(
+                      label: 'MAC ADDRESS',
+                      value: _deviceId ?? '',
+                      autofocus: true,
+                      onCopy: () => _copy(_deviceId!, 'MAC address copied'),
                     ),
                   ),
 
                 const SizedBox(height: AppSpacing.xl2),
                 const Text(
-                  'Go to izoiptv.com/authenticate\nand enter the PIN code above to activate',
+                  'Go to izoiptv.com/authenticate\nand enter the MAC address above to activate',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color:    AppColors.textSecondary,
