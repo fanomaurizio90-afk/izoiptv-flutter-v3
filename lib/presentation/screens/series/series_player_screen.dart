@@ -104,70 +104,70 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     } catch (_) {}
     if (_disposed) return;
 
-    // ── Try media_kit first (supports subtitle/audio track selection) ────
-    bool mkFailed = false;
+    // ── Try ExoPlayer first ───────────────────────────────────────────────
+    bool exoFailed = false;
     try {
-      final player = mk.Player();
-      final controller = mkv.VideoController(
-        player,
-        configuration: const mkv.VideoControllerConfiguration(
-          enableHardwareAcceleration: false,
-        ),
+      final ctrl = VideoPlayerController.networkUrl(
+        Uri.parse(widget.vod.streamUrl),
       );
-      await player.open(mk.Media(widget.vod.streamUrl));
-      if (_disposed) { player.dispose(); return; }
+      await ctrl.initialize();
+      if (_disposed) { ctrl.dispose(); return; }
 
       if (startPos > Duration.zero) {
-        await player.seek(startPos);
-        if (_disposed) { player.dispose(); return; }
+        await ctrl.seekTo(startPos);
+        if (_disposed) { ctrl.dispose(); return; }
       }
+      await ctrl.play();
 
       if (mounted) {
         setState(() {
-          _mkPlayer      = player;
-          _mkController   = controller;
-          _initialized    = true;
-          _usingMediaKit  = true;
+          _exoController = ctrl;
+          _initialized   = true;
+          _usingMediaKit = false;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _showControls) _playPauseFocusNode.requestFocus();
         });
       } else {
-        player.dispose();
+        ctrl.dispose();
       }
       return;
     } catch (_) {
-      mkFailed = true;
+      exoFailed = true;
     }
     if (_disposed) return;
 
-    // ── Fallback to ExoPlayer ─────────────────────────────────────────────
-    if (mkFailed) {
+    // ── Fallback to media_kit ─────────────────────────────────────────────
+    if (exoFailed) {
       _showToast('Switching to backup player…');
       try {
-        final ctrl = VideoPlayerController.networkUrl(
-          Uri.parse(widget.vod.streamUrl),
+        final player = mk.Player();
+        final controller = mkv.VideoController(
+          player,
+          configuration: const mkv.VideoControllerConfiguration(
+            enableHardwareAcceleration: false,
+          ),
         );
-        await ctrl.initialize();
-        if (_disposed) { ctrl.dispose(); return; }
+        await player.open(mk.Media(widget.vod.streamUrl));
+        if (_disposed) { player.dispose(); return; }
 
         if (startPos > Duration.zero) {
-          await ctrl.seekTo(startPos);
-          if (_disposed) { ctrl.dispose(); return; }
+          await player.seek(startPos);
+          if (_disposed) { player.dispose(); return; }
         }
-        await ctrl.play();
 
         if (mounted) {
           setState(() {
-            _exoController = ctrl;
-            _initialized   = true;
-            _usingMediaKit = false;
+            _mkPlayer      = player;
+            _mkController   = controller;
+            _initialized    = true;
+            _usingMediaKit  = true;
           });
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _showControls) _playPauseFocusNode.requestFocus();
           });
         } else {
-          ctrl.dispose();
+          player.dispose();
         }
       } catch (_) {
         if (mounted) _showToast('Unable to play this stream');
@@ -553,52 +553,45 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
             final key = event.logicalKey;
 
-            // Play / pause
-            if (key == LogicalKeyboardKey.mediaPlayPause ||
-                _isActivateKey(event)) {
+            // Dedicated media keys always work regardless of OSD state
+            if (key == LogicalKeyboardKey.mediaPlayPause) {
               _togglePlay();
               return KeyEventResult.handled;
             }
-            // Seek backward
-            if (key == LogicalKeyboardKey.arrowLeft ||
-                key == LogicalKeyboardKey.mediaRewind) {
+            if (key == LogicalKeyboardKey.mediaRewind) {
+              _seek(const Duration(seconds: -10));
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.mediaFastForward) {
+              _seek(const Duration(seconds: 10));
+              return KeyEventResult.handled;
+            }
+
+            // Controls visible — let D-pad navigate between on-screen buttons
+            if (_showControls) {
+              _startHideTimer(); // reset auto-hide on any activity
+              return KeyEventResult.ignored;
+            }
+
+            // Controls hidden — direct actions + show OSD
+            if (_isActivateKey(event)) {
+              _togglePlay();
+              _showControlsTemporarily();
+              return KeyEventResult.handled;
+            }
+            if (key == LogicalKeyboardKey.arrowLeft) {
               _seek(const Duration(seconds: -10));
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            // Seek forward
-            if (key == LogicalKeyboardKey.arrowRight ||
-                key == LogicalKeyboardKey.mediaFastForward) {
+            if (key == LogicalKeyboardKey.arrowRight) {
               _seek(const Duration(seconds: 10));
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            // Up — show controls / subtitle picker
-            if (key == LogicalKeyboardKey.arrowUp) {
-              if (_showControls) {
-                _showSubtitlePicker();
-              } else {
-                _showControlsTemporarily();
-              }
-              return KeyEventResult.handled;
-            }
-            // Down — show controls / next episode
-            if (key == LogicalKeyboardKey.arrowDown) {
-              if (_showControls && _hasNext) {
-                _playNextEpisode();
-              } else if (_showControls) {
-                _showAudioPicker();
-              } else {
-                _showControlsTemporarily();
-              }
-              return KeyEventResult.handled;
-            }
-            // Menu — show controls
-            if (key == LogicalKeyboardKey.contextMenu) {
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
+            // Any other key — just show controls
+            _showControlsTemporarily();
+            return KeyEventResult.handled;
           },
           child: GestureDetector(
             onTap: _showControlsTemporarily,
