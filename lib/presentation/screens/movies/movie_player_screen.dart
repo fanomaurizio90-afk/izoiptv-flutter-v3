@@ -49,7 +49,23 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
   int get _vodId => widget.vod.id;
 
   final _topFocusNode       = FocusNode(debugLabel: 'player-root');
+  final _backFocusNode      = FocusNode(debugLabel: 'back');
+  final _subtitleFocusNode  = FocusNode(debugLabel: 'subtitle');
+  final _audioFocusNode     = FocusNode(debugLabel: 'audio');
+  final _rewindFocusNode    = FocusNode(debugLabel: 'rewind');
   final _playPauseFocusNode = FocusNode(debugLabel: 'play-pause');
+  final _forwardFocusNode   = FocusNode(debugLabel: 'forward');
+  final _speedFocusNode     = FocusNode(debugLabel: 'speed');
+
+  /// Ordered list of focusable nodes in the bottom control bar.
+  List<FocusNode> get _bottomNodes => [
+    if (_usingMediaKit) _subtitleFocusNode,
+    if (_usingMediaKit) _audioFocusNode,
+    _rewindFocusNode,
+    _playPauseFocusNode,
+    _forwardFocusNode,
+    _speedFocusNode,
+  ];
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -167,7 +183,13 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
     _exoController?.dispose();
     _mkPlayer?.dispose();
     _topFocusNode.dispose();
+    _backFocusNode.dispose();
+    _subtitleFocusNode.dispose();
+    _audioFocusNode.dispose();
+    _rewindFocusNode.dispose();
     _playPauseFocusNode.dispose();
+    _forwardFocusNode.dispose();
+    _speedFocusNode.dispose();
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
@@ -532,18 +554,30 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
               _startHideTimer();
               // SELECT → let FocusableWidget handle it
               if (_isActivateKey(event)) return KeyEventResult.ignored;
-              // D-pad → explicit directional focus traversal
+
+              // D-pad → explicit index-based focus navigation
+              // (focusInDirection is broken inside Stack/Positioned overlays)
               final pf = FocusManager.instance.primaryFocus;
-              if (pf != null) {
-                TraversalDirection? dir;
-                if (key == LogicalKeyboardKey.arrowLeft)  dir = TraversalDirection.left;
-                if (key == LogicalKeyboardKey.arrowRight) dir = TraversalDirection.right;
-                if (key == LogicalKeyboardKey.arrowUp)    dir = TraversalDirection.up;
-                if (key == LogicalKeyboardKey.arrowDown)  dir = TraversalDirection.down;
-                if (dir != null) {
-                  pf.focusInDirection(dir);
-                  return KeyEventResult.handled;
+              final nodes = _bottomNodes;
+              final idx = pf != null ? nodes.indexOf(pf) : -1;
+
+              if (key == LogicalKeyboardKey.arrowLeft) {
+                if (idx > 0) nodes[idx - 1].requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowRight) {
+                if (idx >= 0 && idx < nodes.length - 1) {
+                  nodes[idx + 1].requestFocus();
                 }
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowUp) {
+                if (idx >= 0) _backFocusNode.requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowDown) {
+                if (pf == _backFocusNode) _playPauseFocusNode.requestFocus();
+                return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
             }
@@ -635,6 +669,7 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
       child: Row(
         children: [
           FocusableWidget(
+            focusNode: _backFocusNode,
             onTap: () { if (context.canPop()) context.pop(); },
             child: const Padding(
               padding: EdgeInsets.all(4),
@@ -682,7 +717,12 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
       onSubtitles:        _showSubtitlePicker,
       onAudio:            _showAudioPicker,
       onSpeed:            _showSpeedPicker,
+      subtitleFocusNode:  _subtitleFocusNode,
+      audioFocusNode:     _audioFocusNode,
+      rewindFocusNode:    _rewindFocusNode,
       playPauseFocusNode: _playPauseFocusNode,
+      forwardFocusNode:   _forwardFocusNode,
+      speedFocusNode:     _speedFocusNode,
     );
   }
 }
@@ -701,7 +741,12 @@ class _MovieControls extends StatelessWidget {
     required this.onSubtitles,
     required this.onAudio,
     required this.onSpeed,
+    this.subtitleFocusNode,
+    this.audioFocusNode,
+    this.rewindFocusNode,
     this.playPauseFocusNode,
+    this.forwardFocusNode,
+    this.speedFocusNode,
   });
   final bool                    isPlaying;
   final Duration                position;
@@ -713,7 +758,12 @@ class _MovieControls extends StatelessWidget {
   final VoidCallback            onSubtitles;
   final VoidCallback            onAudio;
   final VoidCallback            onSpeed;
+  final FocusNode?              subtitleFocusNode;
+  final FocusNode?              audioFocusNode;
+  final FocusNode?              rewindFocusNode;
   final FocusNode?              playPauseFocusNode;
+  final FocusNode?              forwardFocusNode;
+  final FocusNode?              speedFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -749,83 +799,86 @@ class _MovieControls extends StatelessWidget {
               ),
             ),
           ),
-          FocusTraversalGroup(
-            child: Row(
-              children: [
-                Text(_fmt(pos),
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 11)),
-                const Spacer(),
-                // Subtitle button (media_kit only)
-                if (usingMediaKit) ...[
-                  FocusableWidget(
-                    onTap: onSubtitles,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.subtitles_outlined,
-                          color: AppColors.textSecondary, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  // Audio button
-                  FocusableWidget(
-                    onTap: onAudio,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.audiotrack_outlined,
-                          color: AppColors.textSecondary, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                ],
+          Row(
+            children: [
+              Text(_fmt(pos),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
+              const Spacer(),
+              // Subtitle button (media_kit only)
+              if (usingMediaKit) ...[
                 FocusableWidget(
-                  onTap: () => onSeek(const Duration(seconds: -10)),
+                  focusNode: subtitleFocusNode,
+                  onTap: onSubtitles,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.replay_10,
-                        color: AppColors.textSecondary, size: 26),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xl2),
-                FocusableWidget(
-                  focusNode: playPauseFocusNode,
-                  onTap: onToggle,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      isPlaying
-                          ? Icons.pause_outlined
-                          : Icons.play_arrow_outlined,
-                      color: AppColors.textPrimary,
-                      size:  AppSpacing.iconMd,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xl2),
-                FocusableWidget(
-                  onTap: () => onSeek(const Duration(seconds: 10)),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.forward_10,
-                        color: AppColors.textSecondary, size: 26),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                // Speed button
-                FocusableWidget(
-                  onTap: onSpeed,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.speed,
+                    child: Icon(Icons.subtitles_outlined,
                         color: AppColors.textSecondary, size: 20),
                   ),
                 ),
-                const Spacer(),
-                Text(_fmt(dur),
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 11)),
+                const SizedBox(width: AppSpacing.md),
+                // Audio button
+                FocusableWidget(
+                  focusNode: audioFocusNode,
+                  onTap: onAudio,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.audiotrack_outlined,
+                        color: AppColors.textSecondary, size: 20),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
               ],
-            ),
+              FocusableWidget(
+                focusNode: rewindFocusNode,
+                onTap: () => onSeek(const Duration(seconds: -10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.replay_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                focusNode: playPauseFocusNode,
+                onTap: onToggle,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    isPlaying
+                        ? Icons.pause_outlined
+                        : Icons.play_arrow_outlined,
+                    color: AppColors.textPrimary,
+                    size:  AppSpacing.iconMd,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                focusNode: forwardFocusNode,
+                onTap: () => onSeek(const Duration(seconds: 10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.forward_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              // Speed button
+              FocusableWidget(
+                focusNode: speedFocusNode,
+                onTap: onSpeed,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.speed,
+                      color: AppColors.textSecondary, size: 20),
+                ),
+              ),
+              const Spacer(),
+              Text(_fmt(dur),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
+            ],
           ),
         ],
       ),

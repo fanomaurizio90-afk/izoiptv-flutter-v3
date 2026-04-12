@@ -65,7 +65,32 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
   int get _episodeId => widget.vod.id;
 
   final _topFocusNode       = FocusNode(debugLabel: 'player-root');
+  final _backFocusNode      = FocusNode(debugLabel: 'back');
+  final _nextEpFocusNode    = FocusNode(debugLabel: 'next-ep');
+  final _subtitleFocusNode  = FocusNode(debugLabel: 'subtitle');
+  final _audioFocusNode     = FocusNode(debugLabel: 'audio');
+  final _rewindFocusNode    = FocusNode(debugLabel: 'rewind');
   final _playPauseFocusNode = FocusNode(debugLabel: 'play-pause');
+  final _forwardFocusNode   = FocusNode(debugLabel: 'forward');
+  final _speedFocusNode     = FocusNode(debugLabel: 'speed');
+  final _nextEpBotFocusNode = FocusNode(debugLabel: 'next-ep-bottom');
+
+  /// Ordered list of focusable nodes in the bottom control bar.
+  List<FocusNode> get _bottomNodes => [
+    if (_usingMediaKit) _subtitleFocusNode,
+    if (_usingMediaKit) _audioFocusNode,
+    _rewindFocusNode,
+    _playPauseFocusNode,
+    _forwardFocusNode,
+    _speedFocusNode,
+    if (_hasNext) _nextEpBotFocusNode,
+  ];
+
+  /// Ordered list of focusable nodes in the top bar.
+  List<FocusNode> get _topNodes => [
+    _backFocusNode,
+    if (_hasNext) _nextEpFocusNode,
+  ];
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -187,7 +212,15 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     _exoController?.dispose();
     _mkPlayer?.dispose();
     _topFocusNode.dispose();
+    _backFocusNode.dispose();
+    _nextEpFocusNode.dispose();
+    _subtitleFocusNode.dispose();
+    _audioFocusNode.dispose();
+    _rewindFocusNode.dispose();
     _playPauseFocusNode.dispose();
+    _forwardFocusNode.dispose();
+    _speedFocusNode.dispose();
+    _nextEpBotFocusNode.dispose();
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
@@ -572,18 +605,32 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
               _startHideTimer();
               // SELECT → let FocusableWidget handle it
               if (_isActivateKey(event)) return KeyEventResult.ignored;
-              // D-pad → explicit directional focus traversal
+
+              // D-pad → explicit index-based focus navigation
+              // (focusInDirection is broken inside Stack/Positioned overlays)
               final pf = FocusManager.instance.primaryFocus;
-              if (pf != null) {
-                TraversalDirection? dir;
-                if (key == LogicalKeyboardKey.arrowLeft)  dir = TraversalDirection.left;
-                if (key == LogicalKeyboardKey.arrowRight) dir = TraversalDirection.right;
-                if (key == LogicalKeyboardKey.arrowUp)    dir = TraversalDirection.up;
-                if (key == LogicalKeyboardKey.arrowDown)  dir = TraversalDirection.down;
-                if (dir != null) {
-                  pf.focusInDirection(dir);
-                  return KeyEventResult.handled;
-                }
+              final bottom = _bottomNodes;
+              final top    = _topNodes;
+              final bIdx   = pf != null ? bottom.indexOf(pf) : -1;
+              final tIdx   = pf != null ? top.indexOf(pf) : -1;
+
+              if (key == LogicalKeyboardKey.arrowLeft) {
+                if (bIdx > 0) bottom[bIdx - 1].requestFocus();
+                else if (tIdx > 0) top[tIdx - 1].requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowRight) {
+                if (bIdx >= 0 && bIdx < bottom.length - 1) bottom[bIdx + 1].requestFocus();
+                else if (tIdx >= 0 && tIdx < top.length - 1) top[tIdx + 1].requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowUp) {
+                if (bIdx >= 0) _backFocusNode.requestFocus();
+                return KeyEventResult.handled;
+              }
+              if (key == LogicalKeyboardKey.arrowDown) {
+                if (tIdx >= 0) _playPauseFocusNode.requestFocus();
+                return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
             }
@@ -670,6 +717,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
       child: Row(
         children: [
           FocusableWidget(
+            focusNode: _backFocusNode,
             onTap: () { if (context.canPop()) context.pop(); },
             child: const Padding(
               padding: EdgeInsets.all(4),
@@ -702,6 +750,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
             ),
           if (_hasNext)
             FocusableWidget(
+              focusNode: _nextEpFocusNode,
               onTap: _playNextEpisode,
               child: const Padding(
                 padding: EdgeInsets.all(4),
@@ -757,90 +806,94 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
               ),
             ),
           ),
-          FocusTraversalGroup(
-            child: Row(
-              children: [
-                Text(_fmt(pos),
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 11)),
-                const Spacer(),
-                if (_usingMediaKit) ...[
-                  FocusableWidget(
-                    onTap: _showSubtitlePicker,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.subtitles_outlined,
-                          color: AppColors.textSecondary, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  FocusableWidget(
-                    onTap: _showAudioPicker,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.audiotrack_outlined,
-                          color: AppColors.textSecondary, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                ],
+          Row(
+            children: [
+              Text(_fmt(pos),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 11)),
+              const Spacer(),
+              if (_usingMediaKit) ...[
                 FocusableWidget(
-                  onTap: () => _seek(const Duration(seconds: -10)),
+                  focusNode: _subtitleFocusNode,
+                  onTap: _showSubtitlePicker,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.replay_10,
-                        color: AppColors.textSecondary, size: 26),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xl2),
-                FocusableWidget(
-                  focusNode: _playPauseFocusNode,
-                  onTap: _togglePlay,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      _isPlaying
-                          ? Icons.pause_outlined
-                          : Icons.play_arrow_outlined,
-                      color: AppColors.textPrimary,
-                      size:  AppSpacing.iconMd,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xl2),
-                FocusableWidget(
-                  onTap: () => _seek(const Duration(seconds: 10)),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.forward_10,
-                        color: AppColors.textSecondary, size: 26),
+                    child: Icon(Icons.subtitles_outlined,
+                        color: AppColors.textSecondary, size: 20),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 FocusableWidget(
-                  onTap: _showSpeedPicker,
+                  focusNode: _audioFocusNode,
+                  onTap: _showAudioPicker,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.speed,
+                    child: Icon(Icons.audiotrack_outlined,
                         color: AppColors.textSecondary, size: 20),
                   ),
                 ),
-                const Spacer(),
-                if (_hasNext)
-                  FocusableWidget(
-                    onTap: _playNextEpisode,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.skip_next_outlined,
-                          color: AppColors.textSecondary, size: 18),
-                    ),
-                  )
-                else
-                  Text(_fmt(dur),
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 11)),
+                const SizedBox(width: AppSpacing.md),
               ],
-            ),
+              FocusableWidget(
+                focusNode: _rewindFocusNode,
+                onTap: () => _seek(const Duration(seconds: -10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.replay_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                focusNode: _playPauseFocusNode,
+                onTap: _togglePlay,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    _isPlaying
+                        ? Icons.pause_outlined
+                        : Icons.play_arrow_outlined,
+                    color: AppColors.textPrimary,
+                    size:  AppSpacing.iconMd,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl2),
+              FocusableWidget(
+                focusNode: _forwardFocusNode,
+                onTap: () => _seek(const Duration(seconds: 10)),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.forward_10,
+                      color: AppColors.textSecondary, size: 26),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              FocusableWidget(
+                focusNode: _speedFocusNode,
+                onTap: _showSpeedPicker,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.speed,
+                      color: AppColors.textSecondary, size: 20),
+                ),
+              ),
+              const Spacer(),
+              if (_hasNext)
+                FocusableWidget(
+                  focusNode: _nextEpBotFocusNode,
+                  onTap: _playNextEpisode,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.skip_next_outlined,
+                        color: AppColors.textSecondary, size: 18),
+                  ),
+                )
+              else
+                Text(_fmt(dur),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11)),
+            ],
           ),
         ],
       ),
