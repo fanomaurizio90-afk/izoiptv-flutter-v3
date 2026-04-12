@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'presentation/widgets/broadcast_overlay.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +31,9 @@ class IzoApp extends ConsumerWidget {
       routerConfig:      router,
       debugShowCheckedModeBanner: false,
       // _BackKeyHandler runs inside MaterialApp so GoRouter.of(context) is valid.
-      builder: (context, child) => _BackKeyHandler(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => BroadcastOverlay(
+        child: _BackKeyHandler(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

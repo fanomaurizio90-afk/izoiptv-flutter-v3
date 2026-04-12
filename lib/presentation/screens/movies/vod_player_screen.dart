@@ -144,7 +144,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     if (!mounted) return;
     final pos = ref.read(playerProvider).position.inSeconds;
     final dur = ref.read(playerProvider).duration.inSeconds;
-    if (pos <= 0) return;
+    if (pos <= 0 || dur <= 0) return;
     try {
       await ref.read(historyRepositoryProvider).savePosition(
         contentId:    _contentId,
@@ -161,7 +161,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   void _savePositionSync() {
     final pos = _playerNotifier.currentPosition.inSeconds;
     final dur = _playerNotifier.currentDuration.inSeconds;
-    if (pos <= 0) return;
+    if (pos <= 0 || dur <= 0) return;
     _historyRepo.savePosition(
       contentId:    _contentId,
       contentType:  _contentType,

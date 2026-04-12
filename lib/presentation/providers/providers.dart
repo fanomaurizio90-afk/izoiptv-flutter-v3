@@ -7,6 +7,7 @@ import '../../data/local/database/daos/vod_dao.dart';
 import '../../data/remote/api/xtream_api.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../services/activation_service.dart';
+import '../../services/broadcast_service.dart';
 import '../../data/repositories/channel_repository_impl.dart';
 import '../../data/repositories/favourites_repository_impl.dart';
 import '../../data/repositories/history_repository_impl.dart';
@@ -42,6 +43,10 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((_) {
 final xtreamApiProvider = Provider<XtreamApi>((ref) => XtreamApi(ref.read(dioProvider)));
 
 final activationServiceProvider = Provider<ActivationService>((ref) => ActivationService(ref.read(dioProvider)));
+
+final broadcastServiceProvider = Provider<BroadcastService>((ref) {
+  return BroadcastService(ref.read(dioProvider), ref.read(secureStorageProvider));
+});
 
 // ─── DAOs ─────────────────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/common/focusable_widget.dart';
+import '../../../services/activation_service.dart';
 import '../../../services/device_id_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/device_service.dart';
@@ -60,6 +61,7 @@ class _IzoActivationScreenState extends ConsumerState<IzoActivationScreen>
     final result = await ref.read(activationServiceProvider).checkActivation(_deviceId!);
     if (!mounted) return;
 
+    if (result.status != ActivationStatus.active) return;
     final creds = result.credentials;
     if (creds == null) return;
 

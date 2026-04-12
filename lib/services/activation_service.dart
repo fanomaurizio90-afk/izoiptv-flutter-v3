@@ -22,10 +22,26 @@ class ActivationCredentials {
   final String? subscriptionPlan;
 }
 
+enum ActivationStatus {
+  /// Network/server error — do not act on this result.
+  unknown,
+  /// Server responded and device is NOT active (pending/suspended/expired/deleted).
+  inactive,
+  /// Server responded and device is active with credentials.
+  active,
+}
+
 class ActivationCheckResult {
-  const ActivationCheckResult({this.credentials, this.pin});
+  const ActivationCheckResult({
+    required this.status,
+    this.credentials,
+  });
+
+  const ActivationCheckResult.unknown()  : status = ActivationStatus.unknown,  credentials = null;
+  const ActivationCheckResult.inactive() : status = ActivationStatus.inactive, credentials = null;
+
+  final ActivationStatus status;
   final ActivationCredentials? credentials;
-  final String? pin;
 }
 
 class ActivationService {
@@ -42,16 +58,14 @@ class ActivationService {
         queryParameters: {'device_id': deviceId},
       );
       final data = response.data;
-      if (data == null) return const ActivationCheckResult();
-
-      final pin = data['pin'] as String?;
+      if (data == null) return const ActivationCheckResult.unknown();
 
       if (data['activated'] != true) {
-        return ActivationCheckResult(pin: pin);
+        return const ActivationCheckResult.inactive();
       }
 
       return ActivationCheckResult(
-        pin: pin,
+        status: ActivationStatus.active,
         credentials: ActivationCredentials(
           playlistType:     data['playlist_type'] as String? ?? 'xtream',
           xtreamServer:     data['xtream_server']   as String?,
@@ -64,7 +78,7 @@ class ActivationService {
         ),
       );
     } catch (_) {
-      return const ActivationCheckResult(); // Always silent — never show error
+      return const ActivationCheckResult.unknown(); // Network error — do nothing
     }
   }
 }

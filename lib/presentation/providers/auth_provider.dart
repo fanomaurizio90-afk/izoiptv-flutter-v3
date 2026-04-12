@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/device_service.dart';
 import '../../domain/entities/user_info.dart';
+import '../../services/activation_service.dart';
+import '../../services/device_id_service.dart';
 import 'providers.dart';
 
 // ─── Auth States ─────────────────────────────────────────────────────────────
@@ -26,6 +29,49 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._ref) : super(const AuthUnknown()); // MUST be AuthUnknown
 
   final Ref _ref;
+  Timer? _heartbeatTimer;
+
+  static const _heartbeatInterval = Duration(minutes: 2);
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) => _heartbeat());
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  Future<void> _heartbeat() async {
+    if (state is! AuthAuthenticated) return;
+    try {
+      final deviceId = await DeviceIdService.instance.getDeviceId();
+      final result = await _ref.read(activationServiceProvider).checkActivation(deviceId);
+      // Only act on an explicit inactive response — ignore network errors.
+      if (result.status == ActivationStatus.inactive) {
+        await logout();
+      }
+    } catch (_) {
+      // Transient failure — leave user authenticated.
+    }
+  }
+
+  @override
+  set state(AuthState value) {
+    super.state = value;
+    if (value is AuthAuthenticated) {
+      _startHeartbeat();
+    } else {
+      _stopHeartbeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopHeartbeat();
+    super.dispose();
+  }
 
   /// Called by splash screen once on start
   Future<void> tryAutoLogin() async {

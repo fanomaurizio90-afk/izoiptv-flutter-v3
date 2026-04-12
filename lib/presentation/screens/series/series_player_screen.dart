@@ -42,6 +42,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
   bool   _usingMediaKit = false;
   Timer? _hideTimer;
   Timer? _saveTimer;
+  Timer? _uiRefreshTimer;
 
   // ExoPlayer (video_player)
   VideoPlayerController? _exoController;
@@ -80,7 +81,15 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     ]);
     _startHideTimer();
     _startSaveTimer();
+    _startUiRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayer());
+  }
+
+  void _startUiRefresh() {
+    _uiRefreshTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) { if (mounted && _initialized) setState(() {}); },
+    );
   }
 
   Future<void> _initPlayer() async {
@@ -115,6 +124,9 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
           _exoController = ctrl;
           _initialized   = true;
           _usingMediaKit = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _showControls) _playPauseFocusNode.requestFocus();
         });
       } else {
         ctrl.dispose();
@@ -151,6 +163,9 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
             _initialized    = true;
             _usingMediaKit  = true;
           });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _showControls) _playPauseFocusNode.requestFocus();
+          });
         } else {
           player.dispose();
         }
@@ -167,6 +182,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     _mkPlayer?.pause();
     _hideTimer?.cancel();
     _saveTimer?.cancel();
+    _uiRefreshTimer?.cancel();
     try { _savePositionSync(); } catch (_) {}
     _exoController?.dispose();
     _mkPlayer?.dispose();
@@ -250,7 +266,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     if (!mounted || !_initialized) return;
     final pos = _position.inSeconds;
     final dur = _duration.inSeconds;
-    if (pos <= 0) return;
+    if (pos <= 0 || dur <= 0) return;
     try {
       await _historyRepo.savePosition(
         contentId:    _seriesId,
@@ -268,7 +284,7 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
     if (!_initialized) return;
     final pos = _position.inSeconds;
     final dur = _duration.inSeconds;
-    if (pos <= 0) return;
+    if (pos <= 0 || dur <= 0) return;
     _historyRepo.savePosition(
       contentId:    _seriesId,
       contentType:  'episode',
