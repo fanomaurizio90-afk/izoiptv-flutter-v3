@@ -86,68 +86,68 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
     } catch (_) {}
     if (_disposed) return;
 
-    // ── Try ExoPlayer first ───────────────────────────────────────────────
-    bool exoFailed = false;
+    // ── Try media_kit first (supports subtitle/audio track selection) ────
+    bool mkFailed = false;
     try {
-      final ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.vod.streamUrl));
-      await ctrl.initialize();
-      if (_disposed) { ctrl.dispose(); return; }
+      final player = mk.Player();
+      final controller = mkv.VideoController(
+        player,
+        configuration: const mkv.VideoControllerConfiguration(
+          enableHardwareAcceleration: false,
+        ),
+      );
+      await player.open(mk.Media(widget.vod.streamUrl));
+      if (_disposed) { player.dispose(); return; }
 
       if (startPos > Duration.zero) {
-        await ctrl.seekTo(startPos);
-        if (_disposed) { ctrl.dispose(); return; }
+        await player.seek(startPos);
+        if (_disposed) { player.dispose(); return; }
       }
-      await ctrl.play();
 
       if (mounted) {
         setState(() {
-          _exoController = ctrl;
-          _initialized   = true;
-          _usingMediaKit = false;
+          _mkPlayer      = player;
+          _mkController   = controller;
+          _initialized    = true;
+          _usingMediaKit  = true;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _showControls) _playPauseFocusNode.requestFocus();
         });
       } else {
-        ctrl.dispose();
+        player.dispose();
       }
       return;
     } catch (_) {
-      exoFailed = true;
+      mkFailed = true;
     }
     if (_disposed) return;
 
-    // ── Fallback to media_kit ─────────────────────────────────────────────
-    if (exoFailed) {
+    // ── Fallback to ExoPlayer ─────────────────────────────────────────────
+    if (mkFailed) {
       _showToast('Switching to backup player…');
       try {
-        final player = mk.Player();
-        final controller = mkv.VideoController(
-          player,
-          configuration: const mkv.VideoControllerConfiguration(
-            enableHardwareAcceleration: false,
-          ),
-        );
-        await player.open(mk.Media(widget.vod.streamUrl));
-        if (_disposed) { player.dispose(); return; }
+        final ctrl = VideoPlayerController.networkUrl(Uri.parse(widget.vod.streamUrl));
+        await ctrl.initialize();
+        if (_disposed) { ctrl.dispose(); return; }
 
         if (startPos > Duration.zero) {
-          await player.seek(startPos);
-          if (_disposed) { player.dispose(); return; }
+          await ctrl.seekTo(startPos);
+          if (_disposed) { ctrl.dispose(); return; }
         }
+        await ctrl.play();
 
         if (mounted) {
           setState(() {
-            _mkPlayer      = player;
-            _mkController   = controller;
-            _initialized    = true;
-            _usingMediaKit  = true;
+            _exoController = ctrl;
+            _initialized   = true;
+            _usingMediaKit = false;
           });
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && _showControls) _playPauseFocusNode.requestFocus();
           });
         } else {
-          player.dispose();
+          ctrl.dispose();
         }
       } catch (_) {
         if (mounted) _showToast('Unable to play this stream');
@@ -247,7 +247,7 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
     if (!mounted || !_initialized) return;
     final pos = _position.inSeconds;
     final dur = _duration.inSeconds;
-    if (pos <= 0 || dur <= 0) return;
+    if (pos <= 0) return;
     try {
       await _historyRepo.savePosition(
         contentId:    _vodId,
@@ -264,7 +264,7 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
     if (!_initialized) return;
     final pos = _position.inSeconds;
     final dur = _duration.inSeconds;
-    if (pos <= 0 || dur <= 0) return;
+    if (pos <= 0) return;
     _historyRepo.savePosition(
       contentId:    _vodId,
       contentType:  'movie',
@@ -513,45 +513,50 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
             final key = event.logicalKey;
 
-            // Dedicated media keys always work
-            if (key == LogicalKeyboardKey.mediaPlayPause) {
+            // Play / pause
+            if (key == LogicalKeyboardKey.mediaPlayPause ||
+                _isActivateKey(event)) {
               _togglePlay();
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.mediaRewind) {
+            // Seek backward
+            if (key == LogicalKeyboardKey.arrowLeft ||
+                key == LogicalKeyboardKey.mediaRewind) {
               _seek(const Duration(seconds: -10));
+              _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.mediaFastForward) {
+            // Seek forward
+            if (key == LogicalKeyboardKey.arrowRight ||
+                key == LogicalKeyboardKey.mediaFastForward) {
               _seek(const Duration(seconds: 10));
+              _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-
-            // Controls visible — let focused buttons handle D-pad input
-            if (_showControls) {
-              _startHideTimer();
-              return KeyEventResult.ignored;
-            }
-
-            // Controls hidden — D-pad shortcuts
-            if (_isActivateKey(event)) {
-              _togglePlay();
+            // Up — show controls / subtitle picker
+            if (key == LogicalKeyboardKey.arrowUp) {
+              if (_showControls) {
+                _showSubtitlePicker();
+              } else {
+                _showControlsTemporarily();
+              }
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.arrowLeft) {
-              _seek(const Duration(seconds: -10));
+            // Down — show controls / audio picker
+            if (key == LogicalKeyboardKey.arrowDown) {
+              if (_showControls) {
+                _showAudioPicker();
+              } else {
+                _showControlsTemporarily();
+              }
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.arrowRight) {
-              _seek(const Duration(seconds: 10));
-              return KeyEventResult.handled;
-            }
+            // Menu — show controls
             if (key == LogicalKeyboardKey.contextMenu) {
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
+            return KeyEventResult.ignored;
           },
           child: GestureDetector(
             onTap: _showControlsTemporarily,
@@ -723,22 +728,26 @@ class _MovieControls extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight:        1.0,
-              thumbShape:         const RoundSliderThumbShape(enabledThumbRadius: 4),
-              activeTrackColor:   AppColors.textPrimary,
-              inactiveTrackColor: AppColors.accentSoft,
-              thumbColor:         AppColors.textPrimary,
-              overlayShape:       SliderComponentShape.noOverlay,
-            ),
-            child: Slider(
-              value: progress.toDouble(),
-              onChanged: (v) {
-                if (dur.inMilliseconds <= 0) return;
-                onSeekTo(Duration(
-                    milliseconds: (v * dur.inMilliseconds).round()));
-              },
+          Focus(
+            canRequestFocus: false,
+            descendantsAreFocusable: false,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight:        1.0,
+                thumbShape:         const RoundSliderThumbShape(enabledThumbRadius: 4),
+                activeTrackColor:   AppColors.textPrimary,
+                inactiveTrackColor: AppColors.accentSoft,
+                thumbColor:         AppColors.textPrimary,
+                overlayShape:       SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: progress.toDouble(),
+                onChanged: (v) {
+                  if (dur.inMilliseconds <= 0) return;
+                  onSeekTo(Duration(
+                      milliseconds: (v * dur.inMilliseconds).round()));
+                },
+              ),
             ),
           ),
           Row(

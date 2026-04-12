@@ -356,8 +356,7 @@ class VodDao {
       LEFT JOIN vod v ON v.id = wh.content_id
       WHERE wh.content_type = 'movie'
         AND wh.position_secs > 30
-        AND wh.duration_secs > 0
-        AND wh.position_secs < (wh.duration_secs * 9 / 10)
+        AND (wh.duration_secs = 0 OR wh.position_secs < (wh.duration_secs * 9 / 10))
       ORDER BY wh.updated_at DESC
       LIMIT $limit
     ''');
@@ -384,8 +383,7 @@ class VodDao {
       LEFT JOIN episodes e ON e.id = wh.episode_id
       WHERE wh.content_type = 'episode'
         AND wh.position_secs > 30
-        AND wh.duration_secs > 0
-        AND wh.position_secs < (wh.duration_secs * 9 / 10)
+        AND (wh.duration_secs = 0 OR wh.position_secs < (wh.duration_secs * 9 / 10))
       ORDER BY wh.updated_at DESC
       LIMIT $limit
     ''');
