@@ -527,29 +527,33 @@ class _MoviePlayerScreenState extends ConsumerState<MoviePlayerScreen> {
               return KeyEventResult.handled;
             }
 
-            // Controls visible — let D-pad navigate between on-screen buttons
+            // Controls visible — navigate between on-screen buttons
             if (_showControls) {
-              _startHideTimer(); // reset auto-hide on any activity
+              _startHideTimer();
+              // SELECT → let FocusableWidget handle it
+              if (_isActivateKey(event)) return KeyEventResult.ignored;
+              // D-pad → explicit directional focus traversal
+              final pf = FocusManager.instance.primaryFocus;
+              if (pf != null) {
+                TraversalDirection? dir;
+                if (key == LogicalKeyboardKey.arrowLeft)  dir = TraversalDirection.left;
+                if (key == LogicalKeyboardKey.arrowRight) dir = TraversalDirection.right;
+                if (key == LogicalKeyboardKey.arrowUp)    dir = TraversalDirection.up;
+                if (key == LogicalKeyboardKey.arrowDown)  dir = TraversalDirection.down;
+                if (dir != null) {
+                  pf.focusInDirection(dir);
+                  return KeyEventResult.handled;
+                }
+              }
               return KeyEventResult.ignored;
             }
 
-            // Controls hidden — direct actions + show OSD
+            // Controls hidden — first press shows OSD
             if (_isActivateKey(event)) {
               _togglePlay();
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.arrowLeft) {
-              _seek(const Duration(seconds: -10));
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            }
-            if (key == LogicalKeyboardKey.arrowRight) {
-              _seek(const Duration(seconds: 10));
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            }
-            // Any other key — just show controls
             _showControlsTemporarily();
             return KeyEventResult.handled;
           },
@@ -745,81 +749,83 @@ class _MovieControls extends StatelessWidget {
               ),
             ),
           ),
-          Row(
-            children: [
-              Text(_fmt(pos),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 11)),
-              const Spacer(),
-              // Subtitle button (media_kit only)
-              if (usingMediaKit) ...[
+          FocusTraversalGroup(
+            child: Row(
+              children: [
+                Text(_fmt(pos),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11)),
+                const Spacer(),
+                // Subtitle button (media_kit only)
+                if (usingMediaKit) ...[
+                  FocusableWidget(
+                    onTap: onSubtitles,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.subtitles_outlined,
+                          color: AppColors.textSecondary, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  // Audio button
+                  FocusableWidget(
+                    onTap: onAudio,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.audiotrack_outlined,
+                          color: AppColors.textSecondary, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                ],
                 FocusableWidget(
-                  onTap: onSubtitles,
+                  onTap: () => onSeek(const Duration(seconds: -10)),
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.subtitles_outlined,
-                        color: AppColors.textSecondary, size: 20),
+                    child: Icon(Icons.replay_10,
+                        color: AppColors.textSecondary, size: 26),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xl2),
+                FocusableWidget(
+                  focusNode: playPauseFocusNode,
+                  onTap: onToggle,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      isPlaying
+                          ? Icons.pause_outlined
+                          : Icons.play_arrow_outlined,
+                      color: AppColors.textPrimary,
+                      size:  AppSpacing.iconMd,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xl2),
+                FocusableWidget(
+                  onTap: () => onSeek(const Duration(seconds: 10)),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.forward_10,
+                        color: AppColors.textSecondary, size: 26),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                // Audio button
+                // Speed button
                 FocusableWidget(
-                  onTap: onAudio,
+                  onTap: onSpeed,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.audiotrack_outlined,
+                    child: Icon(Icons.speed,
                         color: AppColors.textSecondary, size: 20),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const Spacer(),
+                Text(_fmt(dur),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11)),
               ],
-              FocusableWidget(
-                onTap: () => onSeek(const Duration(seconds: -10)),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.replay_10,
-                      color: AppColors.textSecondary, size: 26),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                focusNode: playPauseFocusNode,
-                onTap: onToggle,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    isPlaying
-                        ? Icons.pause_outlined
-                        : Icons.play_arrow_outlined,
-                    color: AppColors.textPrimary,
-                    size:  AppSpacing.iconMd,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                onTap: () => onSeek(const Duration(seconds: 10)),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.forward_10,
-                      color: AppColors.textSecondary, size: 26),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              // Speed button
-              FocusableWidget(
-                onTap: onSpeed,
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.speed,
-                      color: AppColors.textSecondary, size: 20),
-                ),
-              ),
-              const Spacer(),
-              Text(_fmt(dur),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 11)),
-            ],
+            ),
           ),
         ],
       ),

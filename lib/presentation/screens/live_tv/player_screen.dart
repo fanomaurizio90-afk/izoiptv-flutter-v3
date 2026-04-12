@@ -31,9 +31,6 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   // ExoPlayer (video_player)
   VideoPlayerController? _exoController;
 
-  // Focus
-  final _playPauseFocusNode = FocusNode(debugLabel: 'live-play-pause');
-
   // EPG
   String? _epgNow;
   String? _epgNext;
@@ -61,7 +58,6 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     WakelockPlus.disable();
     _hideTimer?.cancel();
     _exoController?.dispose();
-    _playPauseFocusNode.dispose();
     _playerNotifier.stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([]);
@@ -271,14 +267,8 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   }
 
   void _showControlsTemporarily() {
-    final wasHidden = !_showControls;
     setState(() => _showControls = true);
     _startHideTimer();
-    if (wasHidden) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _showControls) _playPauseFocusNode.requestFocus();
-      });
-    }
   }
 
   void _togglePlay() {
@@ -347,72 +337,45 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
         onKeyEvent: (_, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
           final key = event.logicalKey;
-
-          // Dedicated media keys always work regardless of OSD state
-          if (key == LogicalKeyboardKey.mediaPlayPause) {
+          // Play / pause
+          if (key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.numpadEnter ||
+              key == LogicalKeyboardKey.gameButtonA ||
+              key == LogicalKeyboardKey.mediaPlayPause) {
             _togglePlay();
             return KeyEventResult.handled;
           }
-          if (key == LogicalKeyboardKey.mediaRewind) {
-            _seek(const Duration(seconds: -10));
-            return KeyEventResult.handled;
-          }
-          if (key == LogicalKeyboardKey.mediaFastForward) {
-            _seek(const Duration(seconds: 10));
-            return KeyEventResult.handled;
-          }
-          if (key == LogicalKeyboardKey.channelUp ||
+          // Channel navigation
+          if (key == LogicalKeyboardKey.arrowUp ||
+              key == LogicalKeyboardKey.channelUp ||
               key == LogicalKeyboardKey.mediaTrackPrevious) {
             _previousChannel();
             return KeyEventResult.handled;
           }
-          if (key == LogicalKeyboardKey.channelDown ||
+          if (key == LogicalKeyboardKey.arrowDown ||
+              key == LogicalKeyboardKey.channelDown ||
               key == LogicalKeyboardKey.mediaTrackNext) {
             _nextChannel();
             return KeyEventResult.handled;
           }
-
-          // Controls visible — let D-pad navigate between buttons
-          if (_showControls) {
-            _startHideTimer();
-            return KeyEventResult.ignored;
-          }
-
-          // Controls hidden — D-pad shortcuts
-          if (key == LogicalKeyboardKey.select ||
-              key == LogicalKeyboardKey.enter ||
-              key == LogicalKeyboardKey.numpadEnter ||
-              key == LogicalKeyboardKey.gameButtonA) {
-            _togglePlay();
-            return KeyEventResult.handled;
-          }
-          if (key == LogicalKeyboardKey.arrowUp) {
-            _previousChannel();
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
-          }
-          if (key == LogicalKeyboardKey.arrowDown) {
-            _nextChannel();
-            _showControlsTemporarily();
-            return KeyEventResult.handled;
-          }
-          if (key == LogicalKeyboardKey.arrowLeft) {
+          // Seek
+          if (key == LogicalKeyboardKey.arrowLeft ||
+              key == LogicalKeyboardKey.mediaRewind) {
             _seek(const Duration(seconds: -10));
-            _showControlsTemporarily();
             return KeyEventResult.handled;
           }
-          if (key == LogicalKeyboardKey.arrowRight) {
+          if (key == LogicalKeyboardKey.arrowRight ||
+              key == LogicalKeyboardKey.mediaFastForward) {
             _seek(const Duration(seconds: 10));
-            _showControlsTemporarily();
             return KeyEventResult.handled;
           }
+          // Menu — show/hide controls
           if (key == LogicalKeyboardKey.contextMenu) {
             _showControlsTemporarily();
             return KeyEventResult.handled;
           }
-          // Any other key — show controls
-          _showControlsTemporarily();
-          return KeyEventResult.handled;
+          return KeyEventResult.ignored;
         },
         child: GestureDetector(
           onTap: _showControlsTemporarily,
@@ -457,7 +420,6 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
                         : ref.watch(playerProvider.select((s) => s.isPlaying)),
                     epgNow:      _epgNow,
                     epgNext:     _epgNext,
-                    playPauseFocusNode: _playPauseFocusNode,
                   ),
                 ),
               ),
@@ -482,7 +444,6 @@ class _ControlsOverlay extends StatelessWidget {
     required this.isPlaying,
     this.epgNow,
     this.epgNext,
-    this.playPauseFocusNode,
   });
   final Channel?    channel;
   final bool        usingExo;
@@ -495,7 +456,6 @@ class _ControlsOverlay extends StatelessWidget {
   final bool         isPlaying;
   final String?      epgNow;
   final String?      epgNext;
-  final FocusNode?   playPauseFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -640,7 +600,6 @@ class _ControlsOverlay extends StatelessWidget {
                   _CtrlBtn(icon: Icons.skip_previous_outlined, onTap: onPrev),
                   const SizedBox(width: AppSpacing.xl2),
                   FocusableWidget(
-                    focusNode: playPauseFocusNode,
                     onTap: onTogglePlay,
                     child: Padding(
                       padding: const EdgeInsets.all(4),

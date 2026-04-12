@@ -567,29 +567,33 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
               return KeyEventResult.handled;
             }
 
-            // Controls visible — let D-pad navigate between on-screen buttons
+            // Controls visible — navigate between on-screen buttons
             if (_showControls) {
-              _startHideTimer(); // reset auto-hide on any activity
+              _startHideTimer();
+              // SELECT → let FocusableWidget handle it
+              if (_isActivateKey(event)) return KeyEventResult.ignored;
+              // D-pad → explicit directional focus traversal
+              final pf = FocusManager.instance.primaryFocus;
+              if (pf != null) {
+                TraversalDirection? dir;
+                if (key == LogicalKeyboardKey.arrowLeft)  dir = TraversalDirection.left;
+                if (key == LogicalKeyboardKey.arrowRight) dir = TraversalDirection.right;
+                if (key == LogicalKeyboardKey.arrowUp)    dir = TraversalDirection.up;
+                if (key == LogicalKeyboardKey.arrowDown)  dir = TraversalDirection.down;
+                if (dir != null) {
+                  pf.focusInDirection(dir);
+                  return KeyEventResult.handled;
+                }
+              }
               return KeyEventResult.ignored;
             }
 
-            // Controls hidden — direct actions + show OSD
+            // Controls hidden — first press shows OSD
             if (_isActivateKey(event)) {
               _togglePlay();
               _showControlsTemporarily();
               return KeyEventResult.handled;
             }
-            if (key == LogicalKeyboardKey.arrowLeft) {
-              _seek(const Duration(seconds: -10));
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            }
-            if (key == LogicalKeyboardKey.arrowRight) {
-              _seek(const Duration(seconds: 10));
-              _showControlsTemporarily();
-              return KeyEventResult.handled;
-            }
-            // Any other key — just show controls
             _showControlsTemporarily();
             return KeyEventResult.handled;
           },
@@ -753,88 +757,90 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
               ),
             ),
           ),
-          Row(
-            children: [
-              Text(_fmt(pos),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 11)),
-              const Spacer(),
-              if (_usingMediaKit) ...[
-                FocusableWidget(
-                  onTap: _showSubtitlePicker,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.subtitles_outlined,
-                        color: AppColors.textSecondary, size: 20),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                FocusableWidget(
-                  onTap: _showAudioPicker,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.audiotrack_outlined,
-                        color: AppColors.textSecondary, size: 20),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-              ],
-              FocusableWidget(
-                onTap: () => _seek(const Duration(seconds: -10)),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.replay_10,
-                      color: AppColors.textSecondary, size: 26),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                focusNode: _playPauseFocusNode,
-                onTap: _togglePlay,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    _isPlaying
-                        ? Icons.pause_outlined
-                        : Icons.play_arrow_outlined,
-                    color: AppColors.textPrimary,
-                    size:  AppSpacing.iconMd,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xl2),
-              FocusableWidget(
-                onTap: () => _seek(const Duration(seconds: 10)),
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.forward_10,
-                      color: AppColors.textSecondary, size: 26),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              FocusableWidget(
-                onTap: _showSpeedPicker,
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.speed,
-                      color: AppColors.textSecondary, size: 20),
-                ),
-              ),
-              const Spacer(),
-              if (_hasNext)
-                FocusableWidget(
-                  onTap: _playNextEpisode,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.skip_next_outlined,
-                        color: AppColors.textSecondary, size: 18),
-                  ),
-                )
-              else
-                Text(_fmt(dur),
+          FocusTraversalGroup(
+            child: Row(
+              children: [
+                Text(_fmt(pos),
                     style: const TextStyle(
                         color: AppColors.textSecondary, fontSize: 11)),
-            ],
+                const Spacer(),
+                if (_usingMediaKit) ...[
+                  FocusableWidget(
+                    onTap: _showSubtitlePicker,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.subtitles_outlined,
+                          color: AppColors.textSecondary, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  FocusableWidget(
+                    onTap: _showAudioPicker,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.audiotrack_outlined,
+                          color: AppColors.textSecondary, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                ],
+                FocusableWidget(
+                  onTap: () => _seek(const Duration(seconds: -10)),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.replay_10,
+                        color: AppColors.textSecondary, size: 26),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xl2),
+                FocusableWidget(
+                  focusNode: _playPauseFocusNode,
+                  onTap: _togglePlay,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      _isPlaying
+                          ? Icons.pause_outlined
+                          : Icons.play_arrow_outlined,
+                      color: AppColors.textPrimary,
+                      size:  AppSpacing.iconMd,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xl2),
+                FocusableWidget(
+                  onTap: () => _seek(const Duration(seconds: 10)),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.forward_10,
+                        color: AppColors.textSecondary, size: 26),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                FocusableWidget(
+                  onTap: _showSpeedPicker,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.speed,
+                        color: AppColors.textSecondary, size: 20),
+                  ),
+                ),
+                const Spacer(),
+                if (_hasNext)
+                  FocusableWidget(
+                    onTap: _playNextEpisode,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.skip_next_outlined,
+                          color: AppColors.textSecondary, size: 18),
+                    ),
+                  )
+                else
+                  Text(_fmt(dur),
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 11)),
+              ],
+            ),
           ),
         ],
       ),
