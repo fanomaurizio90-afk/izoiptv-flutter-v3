@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/vod.dart';
 import '../../../domain/entities/series.dart';
 import '../../../domain/repositories/history_repository.dart';
+import '../../../core/services/exo_track_service.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/focusable_widget.dart';
 
@@ -77,8 +78,8 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
 
   /// Ordered list of focusable nodes in the bottom control bar.
   List<FocusNode> get _bottomNodes => [
-    if (_usingMediaKit) _subtitleFocusNode,
-    if (_usingMediaKit) _audioFocusNode,
+    _subtitleFocusNode,
+    _audioFocusNode,
     _rewindFocusNode,
     _playPauseFocusNode,
     _forwardFocusNode,
@@ -382,53 +383,171 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
 
   // ── Track selection (media_kit only) ──────────────────────────────────────
 
-  void _showSubtitlePicker() {
-    if (!_usingMediaKit || _mkPlayer == null) {
-      _showToast('Subtitles not available with this player');
+  void _showSubtitlePicker() async {
+    if (_usingMediaKit && _mkPlayer != null) {
+      final tracks = _mkPlayer!.state.tracks.subtitle;
+      if (tracks.isEmpty) {
+        _showToast('No subtitle tracks found');
+        return;
+      }
+      _showTrackDialog<mk.SubtitleTrack>(
+        title: 'Subtitles',
+        items: [mk.SubtitleTrack.no(), ...tracks],
+        labelOf: (t) {
+          if (t.id == 'no') return 'Off';
+          final parts = <String>[];
+          if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
+          if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
+          return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
+        },
+        selectedId: _mkPlayer!.state.track.subtitle.id,
+        onSelect: (t) => _mkPlayer!.setSubtitleTrack(t),
+      );
       return;
     }
-    final tracks = _mkPlayer!.state.tracks.subtitle;
+
+    final tid = _exoController?.playerId;
+    if (tid == null) return;
+    final tracks = await ExoTrackService.getSubtitleTracks(tid);
+    if (!mounted) return;
     if (tracks.isEmpty) {
       _showToast('No subtitle tracks found');
       return;
     }
-    _showTrackDialog<mk.SubtitleTrack>(
+    _showExoTrackDialog(
       title: 'Subtitles',
-      items: [mk.SubtitleTrack.no(), ...tracks],
-      labelOf: (t) {
-        if (t.id == 'no') return 'Off';
-        final parts = <String>[];
-        if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
-        if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
-        return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
-      },
-      selectedId: _mkPlayer!.state.track.subtitle.id,
-      onSelect: (t) => _mkPlayer!.setSubtitleTrack(t),
+      tracks: tracks,
+      onSelect: (t) => ExoTrackService.selectSubtitleTrack(tid, t.groupIndex, t.trackIndex),
+      onOff: () => ExoTrackService.disableSubtitles(tid),
     );
   }
 
-  void _showAudioPicker() {
-    if (!_usingMediaKit || _mkPlayer == null) {
-      _showToast('Audio tracks not available with this player');
+  void _showAudioPicker() async {
+    if (_usingMediaKit && _mkPlayer != null) {
+      final tracks = _mkPlayer!.state.tracks.audio;
+      if (tracks.length <= 1) {
+        _showToast('Only one audio track available');
+        return;
+      }
+      _showTrackDialog<mk.AudioTrack>(
+        title: 'Audio',
+        items: tracks,
+        labelOf: (t) {
+          final parts = <String>[];
+          if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
+          if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
+          return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
+        },
+        selectedId: _mkPlayer!.state.track.audio.id,
+        onSelect: (t) => _mkPlayer!.setAudioTrack(t),
+      );
       return;
     }
-    final tracks = _mkPlayer!.state.tracks.audio;
+
+    final tid = _exoController?.playerId;
+    if (tid == null) return;
+    final tracks = await ExoTrackService.getAudioTracks(tid);
+    if (!mounted) return;
     if (tracks.length <= 1) {
       _showToast('Only one audio track available');
       return;
     }
-    _showTrackDialog<mk.AudioTrack>(
+    _showExoTrackDialog(
       title: 'Audio',
-      items: tracks,
-      labelOf: (t) {
-        final parts = <String>[];
-        if (t.title != null && t.title!.isNotEmpty) parts.add(t.title!);
-        if (t.language != null && t.language!.isNotEmpty) parts.add(t.language!);
-        return parts.isNotEmpty ? parts.join(' — ') : 'Track ${t.id}';
-      },
-      selectedId: _mkPlayer!.state.track.audio.id,
-      onSelect: (t) => _mkPlayer!.setAudioTrack(t),
+      tracks: tracks,
+      onSelect: (t) => ExoTrackService.selectAudioTrack(tid, t.groupIndex, t.trackIndex),
     );
+  }
+
+  void _showExoTrackDialog({
+    required String title,
+    required List<ExoTrackInfo> tracks,
+    required Future<bool> Function(ExoTrackInfo) onSelect,
+    Future<bool> Function()? onOff,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onOff != null)
+                          FocusableWidget(
+                            autofocus: !tracks.any((t) => t.selected),
+                            borderRadius: 8,
+                            onTap: () {
+                              onOff();
+                              Navigator.of(ctx).pop();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!tracks.any((t) => t.selected))
+                                    const Icon(Icons.check, color: Colors.white, size: 14)
+                                  else
+                                    const SizedBox(width: 14),
+                                  const SizedBox(width: 8),
+                                  const Text('Off',
+                                      style: TextStyle(color: Colors.white, fontSize: 14)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ...tracks.map((t) => FocusableWidget(
+                          autofocus: t.selected,
+                          borderRadius: 8,
+                          onTap: () {
+                            onSelect(t);
+                            Navigator.of(ctx).pop();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (t.selected)
+                                  const Icon(Icons.check, color: Colors.white, size: 14)
+                                else
+                                  const SizedBox(width: 14),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(t.displayName,
+                                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    _showControlsTemporarily();
   }
 
   void _showSpeedPicker() {
@@ -812,28 +931,26 @@ class _SeriesPlayerScreenState extends ConsumerState<SeriesPlayerScreen> {
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 11)),
               const Spacer(),
-              if (_usingMediaKit) ...[
-                FocusableWidget(
-                  focusNode: _subtitleFocusNode,
-                  onTap: _showSubtitlePicker,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.subtitles_outlined,
-                        color: AppColors.textSecondary, size: 20),
-                  ),
+              FocusableWidget(
+                focusNode: _subtitleFocusNode,
+                onTap: _showSubtitlePicker,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.subtitles_outlined,
+                      color: AppColors.textSecondary, size: 20),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                FocusableWidget(
-                  focusNode: _audioFocusNode,
-                  onTap: _showAudioPicker,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.audiotrack_outlined,
-                        color: AppColors.textSecondary, size: 20),
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              FocusableWidget(
+                focusNode: _audioFocusNode,
+                onTap: _showAudioPicker,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.audiotrack_outlined,
+                      color: AppColors.textSecondary, size: 20),
                 ),
-                const SizedBox(width: AppSpacing.md),
-              ],
+              ),
+              const SizedBox(width: AppSpacing.md),
               FocusableWidget(
                 focusNode: _rewindFocusNode,
                 onTap: () => _seek(const Duration(seconds: -10)),
